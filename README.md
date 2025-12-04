@@ -1,22 +1,14 @@
 <div align="center">
 
-<h1>KALK</h1>
+# KALK
 
-<p><strong>Your academic dashboard in the terminal.</strong></p>
+**Your academic dashboard in the terminal.**
 
-<p>Manage courses, track grades, and automatically calculate the exact threshold needed to pass — all without touching the mouse.</p>
-
-<br>
+Manage courses, track grades by categories, and automatically calculate the exact score needed to pass — all without touching the mouse.
 
 [![Rust](https://img.shields.io/badge/Made_with-Rust-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![TUI](https://img.shields.io/badge/Interface-Ratatui-green?style=for-the-badge)](https://github.com/ratatui-org/ratatui)
 [![License](https://img.shields.io/badge/License-AGPL_v3-blue?style=for-the-badge)](LICENSE)
-
-<br>
-
-![Kalk Demo](https://via.placeholder.com/800x400.png?text=TUI+Screenshot+Placeholder)
-
-<sub><i>(Coming soon: Actual screenshot)</i></sub>
 
 </div>
 
@@ -24,110 +16,137 @@
 
 ## Features
 
-<table>
-  <tr>
-    <td><strong>Terminal User Interface (TUI)</strong></td>
-    <td>Fast, lightweight, and 100% keyboard-driven.</td>
-  </tr>
-  <tr>
-    <td><strong>Real-time Calculation</strong></td>
-    <td>Algorithm that tells you: <i>"You need a 5.8 in the remaining 30%"</i>.</td>
-  </tr>
-  <tr>
-    <td><strong>Automatic Persistence</strong></td>
-    <td>Your data is saved locally (<code>XDG_DATA_HOME</code>) and persists across restarts.</td>
-  </tr>
-  <tr>
-    <td><strong>Cross-platform</strong></td>
-    <td>Native compilation on Linux and macOS.</td>
-  </tr>
-  <tr>
-    <td><strong>Nix-Ready</strong></td>
-    <td>Reproducible development environment included.</td>
-  </tr>
-</table>
+| Feature | Description |
+|---------|-------------|
+| **Hierarchical Grade System** | Course → Categories → Evaluations structure with weighted categories |
+| **Real-time Calculation** | Shows exactly what grade you need in each evaluation to pass |
+| **Course Templates** | Pre-built templates for common course structures (Certamenes + Controles, Labs, etc.) |
+| **Weight Validation** | Visual indicators when category weights don't sum to 100% |
+| **Auto-balance** | Automatically distribute weights equally across categories |
+| **Automatic Persistence** | Data saved locally (`XDG_DATA_HOME/kalk`) and persists across restarts |
+| **Keyboard-driven** | Fast, lightweight TUI — no mouse needed |
 
 ---
 
-## Installation & Usage
+## Grade Calculation
+
+- **Scale**: 0-100 points
+- **Default passing grade**: 55
+- **Rounding**: 0.5+ rounds up (so 54.5 → 55 = pass)
+- **Per-evaluation hints**: Shows "Need X+ in this eval to pass" when editing
+
+---
+
+## Installation
 
 ### Requirements
 
-- [Rust & Cargo](https://rustup.rs/) (or Nix)
+- [Rust & Cargo](https://rustup.rs/) or [Nix](https://nixos.org/)
 
-### Option A: Using Cargo (Standard)
+### Using Cargo
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/kalk.git
-cd kalk
-
-# 2. Run
+git clone https://codeberg.org/Kyronix/Kalk.git
+cd Kalk
 cargo run --release
 ```
 
-### Option B: Using Nix (Recommended)
-
-If you have Nix installed, the environment is ready to use:
+### Using Nix
 
 ```bash
-# Enter the development environment
 nix develop
-
-# Run
 cargo run
 ```
 
+The Nix environment includes `cargo-audit` for security scanning.
+
 ---
 
-## Controls (Keybindings)
+## Keybindings
 
-<div align="center">
-
-Designed to be intuitive and fast.
+### Navigation
 
 | Key | Action |
-| :---: | :--- |
-| `Tab` | Switch focus between **Courses** and **Evaluations** |
-| `↑` / `k` | Move up |
-| `↓` / `j` | Move down |
-| `n` | **New** Course or Evaluation (depending on focus) |
-| `Enter` | **Edit** selected item |
-| `d` | **Delete** selected item |
-| `Esc` | Cancel / Close popup |
-| `q` | Quit application |
+|:---:|--------|
+| `Tab` | Cycle focus between panels |
+| `h` / `←` | Focus left panel |
+| `l` / `→` | Focus right panel |
+| `j` / `↓` | Move down in list |
+| `k` / `↑` | Move up in list |
 
-</div>
+### Actions
+
+| Key | Action |
+|:---:|--------|
+| `n` | Create new item (course/category/evaluation) |
+| `Enter` | Edit selected item |
+| `d` | Delete selected item |
+| `b` | Auto-balance category weights |
+| `q` | Quit |
+
+### In Popups
+
+| Key | Action |
+|:---:|--------|
+| `Tab` | Switch between input fields |
+| `Enter` | Confirm |
+| `Esc` | Cancel |
+
+---
+
+## Project Structure
+
+```
+src/
+├── main.rs        # Entry point, terminal setup
+├── app.rs         # Application state and logic
+├── model.rs       # Data structures (Course, Category, Evaluation)
+├── ui.rs          # Ratatui rendering
+├── events.rs      # Keyboard event handling
+└── persistence.rs # JSON storage
+```
 
 ---
 
 ## Tech Stack
 
-<div align="center">
+| Tool | Purpose |
+|------|---------|
+| [Ratatui](https://github.com/ratatui-org/ratatui) | TUI rendering |
+| [Crossterm](https://github.com/crossterm-rs/crossterm) | Terminal backend |
+| [Serde](https://serde.rs/) | JSON serialization |
+| [color-eyre](https://github.com/yaahc/color-eyre) | Error handling |
 
-This project is built with the best tools in the Rust ecosystem for CLI/TUI:
+---
 
-| Tool | Description |
-| :---: | :--- |
-| [**Ratatui**](https://github.com/ratatui-org/ratatui) | Interface rendering engine |
-| [**Crossterm**](https://github.com/crossterm-rs/crossterm) | Terminal event handling and backend |
-| [**Serde**](https://serde.rs/) | Data serialization (JSON) |
-| [**Directories**](https://github.com/dirs-dev/directories-rs) | Standard system path management |
+## Development
 
-</div>
+```bash
+# Enter dev environment
+nix develop
+
+# Run tests
+cargo test
+
+# Lint
+cargo clippy
+
+# Security audit
+cargo audit
+```
 
 ---
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+**GNU Affero General Public License v3.0 (AGPL-3.0)**
 
-Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed. See the [LICENSE](LICENSE) file for details.
+See [LICENSE](LICENSE) for details.
 
 ---
 
 <div align="center">
 
-<sub>Built with ❤️, 🦀 Rust and ❄️ Nix</sub>
+Built with ❤️, 🦀 Rust and ❄️ Nix
 
 </div>
