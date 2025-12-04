@@ -2,7 +2,7 @@
 
 [![Rust](https://img.shields.io/badge/Made_with-Rust-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![TUI](https://img.shields.io/badge/Interface-Ratatui-green?style=for-the-badge)](https://github.com/ratatui-org/ratatui)
-[![License](https://img.shields.io/badge/License-AGPL_v3-blue?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](#license)
 
 > **Your academic dashboard in the terminal.**
 > Manage courses, track grades, and automatically calculate the exact threshold needed to pass, all without touching the mouse.
@@ -77,10 +77,5 @@ This project is built with the best tools in the Rust ecosystem for CLI/TUI:
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
-Everyone is permitted to copy and distribute verbatim copies of this license document, but changing it is not allowed. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - feel free to use and modify it.
 
-
-<div align="center">
-  <sub>Built with ❤️, 🦀 Rust and ❄️ Nix</sub>
-</div>
