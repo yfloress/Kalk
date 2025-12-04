@@ -130,8 +130,4 @@ Everyone is permitted to copy and distribute verbatim copies of this license doc
 
 <sub>Built with ❤️, 🦀 Rust and ❄️ Nix</sub>
 
-<br>
-
-<b>Star this repo if you find it useful!</b>
-
 </div>
