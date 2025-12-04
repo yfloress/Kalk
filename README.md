@@ -12,6 +12,8 @@ Manage courses, track grades by categories, and automatically calculate the exac
 
 </div>
 
+![IMG](./img/img.png)
+
 ---
 
 ## Features
