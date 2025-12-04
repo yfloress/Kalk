@@ -133,8 +133,8 @@ impl WeightValidation {
     pub fn message(&self) -> String {
         match self {
             WeightValidation::Valid => "Weights OK (100%)".to_string(),
-            WeightValidation::Under(total) => format!("Warning: Only {:.1}% assigned", total),
-            WeightValidation::Over(total) => format!("Error: {:.1}% exceeds 100%", total),
+            WeightValidation::Under(total) => format!("Warning: Only {total:.1}% assigned"),
+            WeightValidation::Over(total) => format!("Error: {total:.1}% exceeds 100%"),
             WeightValidation::Empty => "No categories".to_string(),
         }
     }
@@ -186,7 +186,7 @@ impl Course {
         let contributions: Vec<f64> = self
             .categories
             .iter()
-            .filter_map(|c| c.weighted_contribution())
+            .filter_map(Category::weighted_contribution)
             .collect();
 
         if contributions.is_empty() {
@@ -231,9 +231,9 @@ impl Course {
             Some(grade) => {
                 let rounded = Self::round_grade(grade);
                 if self.is_passing_grade(grade) {
-                    format!("Current: {:.1} -> {:.0} (PASSED)", grade, rounded)
+                    format!("Current: {grade:.1} -> {rounded:.0} (PASSED)")
                 } else {
-                    format!("Current: {:.1} -> {:.0} (FAILED)", grade, rounded)
+                    format!("Current: {grade:.1} -> {rounded:.0} (FAILED)")
                 }
             }
             None => "No grades yet".to_string(),
@@ -264,16 +264,16 @@ impl Course {
         let remaining_weight = self.remaining_weight();
 
         // Check if all categories are complete
-        let all_complete = self.categories.iter().all(|c| c.is_complete());
+        let all_complete = self.categories.iter().all(Category::is_complete);
 
         if all_complete || remaining_weight <= 0.0 {
             return match self.current_grade() {
                 Some(grade) => {
                     let rounded = Self::round_grade(grade);
                     if self.is_passing_grade(grade) {
-                        format!("Passed: {:.1} -> {:.0}", grade, rounded)
+                        format!("Passed: {grade:.1} -> {rounded:.0}")
                     } else {
-                        format!("Failed: {:.1} -> {:.0}", grade, rounded)
+                        format!("Failed: {grade:.1} -> {rounded:.0}")
                     }
                 }
                 None => "No evaluations".to_string(),
@@ -290,21 +290,16 @@ impl Course {
                     (self.passing_grade - current_contribution) * 100.0 / remaining_weight;
 
                 if required <= 0.0 {
-                    format!("Current: {:.1} | Already passing!", current)
+                    format!("Current: {current:.1} | Already passing!")
                 } else if required > MAX_GRADE {
-                    format!(
-                        "Current: {:.1} | Cannot pass (need {:.1})",
-                        current, required
-                    )
+                    format!("Current: {current:.1} | Cannot pass (need {required:.1})")
                 } else {
-                    format!(
-                        "Current: {:.1} | Need {:.1} in {:.0}%",
-                        current, required, remaining_weight
-                    )
+                    format!("Current: {current:.1} | Need {required:.1} in {remaining_weight:.0}%")
                 }
             }
             None => {
-                format!("No grades | Need {:.1} to pass", self.passing_grade)
+                let passing = self.passing_grade;
+                format!("No grades | Need {passing:.1} to pass")
             }
         }
     }
@@ -322,11 +317,11 @@ impl Course {
 
         // If already graded, show that info
         if let Some(grade) = eval.grade {
+            let name = &eval.name;
             if grade >= self.passing_grade {
-                return format!("{}: {:.0} (passing)", eval.name, grade);
-            } else {
-                return format!("{}: {:.0} (below passing)", eval.name, grade);
+                return format!("{name}: {grade:.0} (passing)");
             }
+            return format!("{name}: {grade:.0} (below passing)");
         }
 
         // Calculate current contributions from all categories
@@ -388,9 +383,9 @@ impl Course {
         if needed_grade <= 0.0 {
             "Need: 0+ (already passing with any grade)".to_string()
         } else if needed_grade > MAX_GRADE {
-            format!("Need: {:.0}+ (impossible, max is 100)", needed_grade)
+            format!("Need: {needed_grade:.0}+ (impossible, max is 100)")
         } else {
-            format!("Need {:.0}+ in this eval to pass", needed_grade)
+            format!("Need {needed_grade:.0}+ in this eval to pass")
         }
     }
 

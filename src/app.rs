@@ -97,10 +97,10 @@ impl App {
         // If we have a course selected, also select first category if exists
         let selected_category = if let Some(idx) = selected_course {
             if let Some(course) = courses.get(idx) {
-                if !course.categories.is_empty() {
-                    Some(0)
-                } else {
+                if course.categories.is_empty() {
                     None
+                } else {
+                    Some(0)
                 }
             } else {
                 None
@@ -292,8 +292,7 @@ impl App {
 
     pub fn focus_left(&mut self) {
         self.focus = match self.focus {
-            Focus::Courses => Focus::Courses,
-            Focus::Categories => Focus::Courses,
+            Focus::Courses | Focus::Categories => Focus::Courses,
             Focus::Evaluations => Focus::Categories,
         };
     }
@@ -301,8 +300,7 @@ impl App {
     pub fn focus_right(&mut self) {
         self.focus = match self.focus {
             Focus::Courses => Focus::Categories,
-            Focus::Categories => Focus::Evaluations,
-            Focus::Evaluations => Focus::Evaluations,
+            Focus::Categories | Focus::Evaluations => Focus::Evaluations,
         };
     }
 
@@ -319,7 +317,7 @@ impl App {
         self.screen = Screen::EditingCourse { is_new: true };
         self.input_field = InputField::Name;
         self.edit_name.clear();
-        self.edit_passing_grade = format!("{:.0}", DEFAULT_PASSING_GRADE);
+        self.edit_passing_grade = format!("{DEFAULT_PASSING_GRADE:.0}");
     }
 
     pub fn start_edit_course(&mut self) {
@@ -333,7 +331,8 @@ impl App {
         self.screen = Screen::EditingCourse { is_new: false };
         self.input_field = InputField::Name;
         self.edit_name = course.name.clone();
-        self.edit_passing_grade = format!("{:.0}", course.passing_grade);
+        let pg = course.passing_grade;
+        self.edit_passing_grade = format!("{pg:.0}");
     }
 
     pub fn confirm_course(&mut self) {
@@ -415,7 +414,7 @@ impl App {
         self.screen = Screen::EditingCategory { is_new: false };
         self.input_field = InputField::Name;
         self.edit_name = name;
-        self.edit_weight = format!("{:.1}", weight);
+        self.edit_weight = format!("{weight:.1}");
     }
 
     pub fn confirm_category(&mut self) {
@@ -484,7 +483,7 @@ impl App {
         self.screen = Screen::EditingEvaluation { is_new: false };
         self.input_field = InputField::Grade; // Start with grade field
         self.edit_name = name;
-        self.edit_grade = grade.map(|g| format!("{:.0}", g)).unwrap_or_default();
+        self.edit_grade = grade.map(|g| format!("{g:.0}")).unwrap_or_default();
     }
 
     pub fn confirm_evaluation(&mut self) {
