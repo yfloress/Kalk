@@ -11,21 +11,22 @@ use std::time::Duration;
 /// Returns true if the application should quit.
 pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
     if event::poll(Duration::from_millis(100))?
-        && let Event::Key(key) = event::read()? {
-            // Only handle key press events, not release
-            if key.kind != KeyEventKind::Press {
-                return Ok(false);
-            }
-
-            match &app.screen {
-                Screen::Main => handle_main_keys(app, key.code),
-                Screen::SelectingTemplate => handle_template_keys(app, key.code),
-                Screen::EditingCourse { .. } => handle_edit_course_keys(app, key.code),
-                Screen::EditingCategory { .. } => handle_edit_category_keys(app, key.code),
-                Screen::EditingEvaluation { .. } => handle_edit_evaluation_keys(app, key.code),
-                Screen::ConfirmDelete => handle_delete_keys(app, key.code),
-            }
+        && let Event::Key(key) = event::read()?
+    {
+        // Only handle key press events, not release
+        if key.kind != KeyEventKind::Press {
+            return Ok(false);
         }
+
+        match &app.screen {
+            Screen::Main => handle_main_keys(app, key.code),
+            Screen::SelectingTemplate => handle_template_keys(app, key.code),
+            Screen::EditingCourse { .. } => handle_edit_course_keys(app, key.code),
+            Screen::EditingCategory { .. } => handle_edit_category_keys(app, key.code),
+            Screen::EditingEvaluation { .. } => handle_edit_evaluation_keys(app, key.code),
+            Screen::ConfirmDelete => handle_delete_keys(app, key.code),
+        }
+    }
     Ok(app.should_quit)
 }
 

@@ -373,17 +373,20 @@ impl Course {
         // total_contribution + (needed * eval_weight / 100) + (other_remaining) = passing_grade
         // Simplified: what grade here to reach passing assuming other remaining are at passing level
 
+        // Due to rounding rules (54.5 rounds to 55), we only need 54.5 to pass
+        let effective_passing = self.passing_grade - 0.5;
+
         // Grade needed in this eval to reach passing (assuming remaining evals get passing grade)
         let other_remaining_weight = remaining_weight - eval_weight;
-        let other_remaining_contribution = self.passing_grade * other_remaining_weight / 100.0;
+        let other_remaining_contribution = effective_passing * other_remaining_weight / 100.0;
 
-        // needed * eval_weight / 100 = passing_grade - total_contribution - other_remaining_contribution
+        // needed * eval_weight / 100 = effective_passing - total_contribution - other_remaining_contribution
         let needed_contribution =
-            self.passing_grade - total_contribution - other_remaining_contribution;
+            effective_passing - total_contribution - other_remaining_contribution;
         let needed_grade = needed_contribution * 100.0 / eval_weight;
 
         if needed_grade <= 0.0 {
-            format!("Need: 0+ (already passing with any grade)")
+            "Need: 0+ (already passing with any grade)".to_string()
         } else if needed_grade > MAX_GRADE {
             format!("Need: {:.0}+ (impossible, max is 100)", needed_grade)
         } else {

@@ -348,7 +348,7 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
 
             Row::new(vec![
                 Cell::from(format!("{}", i + 1)),
-                Cell::from(e.name.clone()),
+                Cell::from(e.name.as_str()),
                 Cell::from(grade_str).style(grade_style),
             ])
             .style(style)
@@ -419,9 +419,8 @@ fn draw_template_popup(frame: &mut Frame, app: &App) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
-    frame.render_widget(block.clone(), area);
-
     let inner = block.inner(area);
+    frame.render_widget(block, area);
 
     let items: Vec<ListItem> = app
         .templates

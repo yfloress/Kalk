@@ -3,7 +3,9 @@
 //! This module contains the main App struct that holds all application state,
 //! as well as methods for navigation, form handling, and state management.
 
-use crate::model::{Category, Course, CourseTemplate, DEFAULT_PASSING_GRADE, Evaluation};
+use crate::model::{
+    Category, Course, CourseTemplate, DEFAULT_PASSING_GRADE, Evaluation, MAX_GRADE, MIN_GRADE,
+};
 use crate::persistence;
 
 /// Which panel is currently focused.
@@ -83,7 +85,13 @@ impl Default for App {
 impl App {
     /// Load application state from disk, or create empty state if file doesn't exist.
     pub fn load() -> Self {
-        let courses = persistence::load_data().unwrap_or_default();
+        let courses = match persistence::load_data() {
+            Ok(courses) => courses,
+            Err(err) => {
+                eprintln!("Warning: failed to load saved data, starting fresh: {err}");
+                Vec::new()
+            }
+        };
         let selected_course = if courses.is_empty() { None } else { Some(0) };
 
         // If we have a course selected, also select first category if exists
@@ -322,21 +330,19 @@ impl App {
             return;
         };
 
-        let name = course.name.clone();
-        let passing_grade = format!("{:.0}", course.passing_grade);
-
         self.screen = Screen::EditingCourse { is_new: false };
         self.input_field = InputField::Name;
-        self.edit_name = name;
-        self.edit_passing_grade = passing_grade;
+        self.edit_name = course.name.clone();
+        self.edit_passing_grade = format!("{:.0}", course.passing_grade);
     }
 
     pub fn confirm_course(&mut self) {
         let name = self.edit_name.trim().to_string();
         let passing_grade: f64 = self
             .edit_passing_grade
-            .parse()
-            .unwrap_or(DEFAULT_PASSING_GRADE);
+            .parse::<f64>()
+            .unwrap_or(DEFAULT_PASSING_GRADE)
+            .clamp(MIN_GRADE, MAX_GRADE);
 
         if name.is_empty() {
             return;
@@ -382,7 +388,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        let _ = self.save();
+        self.persist();
     }
 
     // ==========================================================================
@@ -399,19 +405,26 @@ impl App {
     }
 
     pub fn start_edit_category(&mut self) {
-        let Some(category) = self.current_category().cloned() else {
+        let Some((name, weight)) = self
+            .current_category()
+            .map(|category| (category.name.clone(), category.weight))
+        else {
             return;
         };
 
         self.screen = Screen::EditingCategory { is_new: false };
         self.input_field = InputField::Name;
-        self.edit_name = category.name;
-        self.edit_weight = format!("{:.1}", category.weight);
+        self.edit_name = name;
+        self.edit_weight = format!("{:.1}", weight);
     }
 
     pub fn confirm_category(&mut self) {
         let name = self.edit_name.trim().to_string();
-        let weight: f64 = self.edit_weight.parse().unwrap_or(20.0);
+        let weight: f64 = self
+            .edit_weight
+            .parse::<f64>()
+            .unwrap_or(20.0)
+            .clamp(MIN_GRADE, MAX_GRADE);
 
         if name.is_empty() {
             return;
@@ -444,7 +457,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        let _ = self.save();
+        self.persist();
     }
 
     // ==========================================================================
@@ -461,14 +474,17 @@ impl App {
     }
 
     pub fn start_edit_evaluation(&mut self) {
-        let Some(eval) = self.current_evaluation().cloned() else {
+        let Some((name, grade)) = self
+            .current_evaluation()
+            .map(|eval| (eval.name.clone(), eval.grade))
+        else {
             return;
         };
 
         self.screen = Screen::EditingEvaluation { is_new: false };
         self.input_field = InputField::Grade; // Start with grade field
-        self.edit_name = eval.name;
-        self.edit_grade = eval.grade.map(|g| format!("{:.0}", g)).unwrap_or_default();
+        self.edit_name = name;
+        self.edit_grade = grade.map(|g| format!("{:.0}", g)).unwrap_or_default();
     }
 
     pub fn confirm_evaluation(&mut self) {
@@ -477,9 +493,9 @@ impl App {
             None
         } else {
             self.edit_grade
-                .parse()
+                .parse::<f64>()
                 .ok()
-                .map(|g: f64| g.clamp(0.0, 100.0))
+                .map(|g: f64| g.clamp(MIN_GRADE, MAX_GRADE))
         };
 
         if name.is_empty() {
@@ -519,7 +535,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        let _ = self.save();
+        self.persist();
     }
 
     // ==========================================================================
@@ -589,7 +605,7 @@ impl App {
             }
         }
         self.screen = Screen::Main;
-        let _ = self.save();
+        self.persist();
     }
 
     // ==========================================================================
@@ -602,7 +618,7 @@ impl App {
             && let Some(course) = self.courses.get_mut(course_idx)
         {
             course.auto_balance_weights();
-            let _ = self.save();
+            self.persist();
         }
     }
 
@@ -633,5 +649,12 @@ impl App {
 
     pub fn cancel_edit(&mut self) {
         self.screen = Screen::Main;
+    }
+
+    /// Persist state and log (without panicking) on failure.
+    fn persist(&self) {
+        if let Err(err) = self.save() {
+            eprintln!("Warning: failed to save data: {err}");
+        }
     }
 }

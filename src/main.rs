@@ -21,14 +21,14 @@ use std::io::{self, stdout};
 /// Initialize panic hooks to restore terminal on panic.
 /// This is critical for ensuring the terminal is usable after a crash.
 fn init_panic_hook() -> Result<()> {
+    color_eyre::install()?;
+
     let hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         // Restore terminal before printing panic
         let _ = restore_terminal();
         hook(panic_info);
     }));
-
-    color_eyre::install()?;
     Ok(())
 }
 

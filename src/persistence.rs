@@ -3,8 +3,11 @@
 use crate::model::Course;
 use color_eyre::eyre::{Context, Result};
 use directories::ProjectDirs;
-use std::fs;
-use std::path::PathBuf;
+use std::{
+    fs::{self, File},
+    io::{BufReader, BufWriter, Write},
+    path::PathBuf,
+};
 
 /// Get the data file path using XDG directories.
 fn data_path() -> Option<PathBuf> {
@@ -22,9 +25,10 @@ pub fn load_data() -> Result<Vec<Course>> {
         return Ok(Vec::new());
     }
 
-    let content = fs::read_to_string(&path).context("Failed to read data file")?;
+    let file = File::open(&path).context("Failed to open data file")?;
+    let reader = BufReader::new(file);
 
-    let courses: Vec<Course> = serde_json::from_str(&content).context("Failed to parse data")?;
+    let courses: Vec<Course> = serde_json::from_reader(reader).context("Failed to parse data")?;
 
     Ok(courses)
 }
@@ -40,9 +44,22 @@ pub fn save_data(courses: &[Course]) -> Result<()> {
         fs::create_dir_all(parent).context("Failed to create data directory")?;
     }
 
-    let content = serde_json::to_string_pretty(courses).context("Failed to serialize data")?;
+    let tmp_path = path.with_extension("tmp");
+    let file = File::create(&tmp_path).context("Failed to create temp data file")?;
+    let mut writer = BufWriter::new(file);
 
-    fs::write(&path, content).context("Failed to write data file")?;
+    serde_json::to_writer_pretty(&mut writer, courses).context("Failed to serialize data")?;
+    writer.flush().context("Failed to flush data to disk")?;
+    drop(writer);
+
+    if let Err(err) = fs::rename(&tmp_path, &path) {
+        if path.exists() {
+            fs::remove_file(&path).context("Failed to remove existing data file")?;
+            fs::rename(&tmp_path, &path).context("Failed to write data file")?;
+        } else {
+            return Err(err).context("Failed to write data file");
+        }
+    }
 
     Ok(())
 }
