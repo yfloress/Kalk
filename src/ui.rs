@@ -54,6 +54,12 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::ConfirmDelete => {
             draw_delete_popup(frame, app);
         }
+        Screen::ConfirmDeleteTemplate => {
+            draw_delete_template_popup(frame, app);
+        }
+        Screen::SavingTemplate => {
+            draw_save_template_popup(frame, app);
+        }
         Screen::Main => {}
     }
 }
@@ -379,7 +385,7 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let keys = match &app.screen {
         Screen::Main => match app.focus {
             Focus::Courses => {
-                "q: Quit | n: New | Enter: Edit | d: Delete | Tab/Arrows: Navigate | b: Balance weights"
+                "q: Quit | n: New | Enter: Edit | d: Delete | t: Save as Template | b: Balance"
             }
             Focus::Categories => {
                 "q: Quit | n: New Category | Enter: Edit | d: Delete | Tab/Arrows: Navigate"
@@ -388,11 +394,18 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 "q: Quit | n: New Eval | Enter: Edit | d: Delete | Tab/Arrows: Navigate"
             }
         },
-        Screen::SelectingTemplate => "Up/Down: Select | Enter: Confirm | Esc: Cancel",
+        Screen::SelectingTemplate => {
+            if app.is_user_template_selected() {
+                "Up/Down/Tab: Select | Enter: Confirm | d: Delete | Esc: Cancel"
+            } else {
+                "Up/Down/Tab: Select | Enter: Confirm | Esc: Cancel"
+            }
+        }
         Screen::EditingCourse { .. }
         | Screen::EditingCategory { .. }
-        | Screen::EditingEvaluation { .. } => "Tab: Next field | Enter: Confirm | Esc: Cancel",
-        Screen::ConfirmDelete => "Enter/y: Confirm | Esc/n: Cancel",
+        | Screen::EditingEvaluation { .. }
+        | Screen::SavingTemplate => "Tab: Next field | Enter: Confirm | Esc: Cancel",
+        Screen::ConfirmDelete | Screen::ConfirmDeleteTemplate => "Enter/y: Confirm | Esc/n: Cancel",
     };
 
     let footer = Paragraph::new(keys)
@@ -422,18 +435,30 @@ fn draw_template_popup(frame: &mut Frame, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let items: Vec<ListItem> = app
-        .templates
+    // Combine built-in and user templates
+    let all_templates = app.all_templates();
+    let built_in_count = app.built_in_templates.len();
+
+    let items: Vec<ListItem> = all_templates
         .iter()
-        .map(|t| {
+        .enumerate()
+        .map(|(i, t)| {
+            // Mark user templates with a different style
+            let is_user_template = i >= built_in_count;
+            let prefix = if is_user_template { "★ " } else { "" };
+
             ListItem::new(vec![
                 Line::from(Span::styled(
-                    &t.name,
+                    format!("{}{}", prefix, t.name),
                     Style::default().add_modifier(Modifier::BOLD),
                 )),
                 Line::from(Span::styled(
                     format!("  {}", t.description),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(if is_user_template {
+                        Color::Yellow
+                    } else {
+                        Color::DarkGray
+                    }),
                 )),
             ])
         })
@@ -632,6 +657,88 @@ fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
             .block(info_block);
         frame.render_widget(info_widget, inner[4]);
     }
+}
+
+fn draw_save_template_popup(frame: &mut Frame, app: &App) {
+    let area = centered_rect(60, 40, frame.size());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(" Save as Template ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    frame.render_widget(block, area);
+
+    let inner = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([
+            Constraint::Length(3), // Name field
+            Constraint::Length(1), // Spacing
+            Constraint::Length(3), // Description field
+            Constraint::Length(1), // Spacing
+            Constraint::Length(2), // Info text
+        ])
+        .split(area);
+
+    render_input_field(
+        frame,
+        "Template Name",
+        &app.edit_name,
+        app.input_field == InputField::Name,
+        inner[0],
+    );
+
+    render_input_field(
+        frame,
+        "Description",
+        &app.edit_description,
+        app.input_field == InputField::Description,
+        inner[2],
+    );
+
+    // Show info about what will be saved
+    if let Some(course) = app.current_course() {
+        let info = format!(
+            "Will save {} categories from '{}'",
+            course.categories.len(),
+            course.name
+        );
+        let info_widget = Paragraph::new(info).style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(info_widget, inner[4]);
+    }
+}
+
+fn draw_delete_template_popup(frame: &mut Frame, app: &App) {
+    let area = centered_rect(50, 25, frame.size());
+    frame.render_widget(Clear, area);
+
+    let template_name = app
+        .current_template()
+        .map(|t| t.name.as_str())
+        .unwrap_or("Unknown");
+
+    let block = Block::default()
+        .title(" Delete Template ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Red));
+
+    let text = vec![
+        Line::from(Span::styled(
+            format!("Delete '{}'?", template_name),
+            Style::default().add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "This action cannot be undone.",
+            Style::default().fg(Color::Yellow),
+        )),
+    ];
+
+    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
 }
 
 fn draw_delete_popup(frame: &mut Frame, app: &App) {

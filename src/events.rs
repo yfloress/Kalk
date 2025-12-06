@@ -25,6 +25,8 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             Screen::EditingCategory { .. } => handle_edit_category_keys(app, key.code),
             Screen::EditingEvaluation { .. } => handle_edit_evaluation_keys(app, key.code),
             Screen::ConfirmDelete => handle_delete_keys(app, key.code),
+            Screen::ConfirmDeleteTemplate => handle_delete_template_keys(app, key.code),
+            Screen::SavingTemplate => handle_save_template_keys(app, key.code),
         }
     }
     Ok(app.should_quit)
@@ -77,6 +79,13 @@ fn handle_main_keys(app: &mut App, key: KeyCode) {
             }
         }
 
+        // Save current course as template
+        KeyCode::Char('t') => {
+            if app.current_course().is_some() {
+                app.start_save_as_template();
+            }
+        }
+
         _ => {}
     }
 }
@@ -86,8 +95,20 @@ fn handle_template_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Esc => app.cancel_edit(),
         KeyCode::Up | KeyCode::Char('k') => app.previous_template(),
-        KeyCode::Down | KeyCode::Char('j') => app.next_template(),
+        KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => app.next_template(),
         KeyCode::Enter => app.confirm_template_selection(),
+        KeyCode::Char('d') => app.request_delete_template(),
+        _ => {}
+    }
+}
+
+/// Handle keys in the delete template confirmation screen.
+fn handle_delete_template_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Enter | KeyCode::Char('y') => app.delete_current_template(),
+        KeyCode::Esc | KeyCode::Char('n') => {
+            app.screen = Screen::SelectingTemplate;
+        }
         _ => {}
     }
 }
@@ -145,6 +166,22 @@ fn handle_delete_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Enter | KeyCode::Char('y') => app.delete_current(),
         KeyCode::Esc | KeyCode::Char('n') => app.cancel_edit(),
+        _ => {}
+    }
+}
+
+/// Handle keys in the save template screen.
+fn handle_save_template_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.cancel_edit(),
+        KeyCode::Tab => app.next_input_field(),
+        KeyCode::Enter => app.confirm_save_template(),
+        KeyCode::Backspace => {
+            app.current_input_buffer().pop();
+        }
+        KeyCode::Char(c) => {
+            app.current_input_buffer().push(c);
+        }
         _ => {}
     }
 }

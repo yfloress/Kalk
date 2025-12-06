@@ -409,6 +409,19 @@ impl Course {
             last.weight += 100.0 - total;
         }
     }
+
+    /// Convert this course's structure to a reusable template.
+    /// Only preserves the category structure (name, weight, evaluation count),
+    /// not the actual grades.
+    pub fn to_template(&self, template_name: String, description: String) -> CourseTemplate {
+        let categories = self
+            .categories
+            .iter()
+            .map(|cat| CategoryTemplate::new(&cat.name, cat.weight, cat.evaluations.len()))
+            .collect();
+
+        CourseTemplate::new(&template_name, &description, categories)
+    }
 }
 
 /// Template for a category when creating a course from template.
@@ -444,69 +457,6 @@ impl CourseTemplate {
             description: description.to_string(),
             categories,
         }
-    }
-
-    /// Returns the list of built-in templates.
-    pub fn built_in_templates() -> Vec<CourseTemplate> {
-        vec![
-            // Chilean university standard formats
-            CourseTemplate::new(
-                "Certamenes + Controles (80/20)",
-                "3 Certamenes (80%) + 3 Controles (20%)",
-                vec![
-                    CategoryTemplate::new("Certamen", 80.0, 3),
-                    CategoryTemplate::new("Control", 20.0, 3),
-                ],
-            ),
-            CourseTemplate::new(
-                "Certamenes + Controles (70/30)",
-                "3 Certamenes (70%) + 3 Controles (30%)",
-                vec![
-                    CategoryTemplate::new("Certamen", 70.0, 3),
-                    CategoryTemplate::new("Control", 30.0, 3),
-                ],
-            ),
-            CourseTemplate::new(
-                "Certamenes + Tareas + Controles",
-                "3 Certamenes (60%) + 4 Tareas (25%) + 3 Controles (15%)",
-                vec![
-                    CategoryTemplate::new("Certamen", 60.0, 3),
-                    CategoryTemplate::new("Tarea", 25.0, 4),
-                    CategoryTemplate::new("Control", 15.0, 3),
-                ],
-            ),
-            CourseTemplate::new(
-                "Certamenes + Labs",
-                "3 Certamenes (70%) + 6 Labs (30%)",
-                vec![
-                    CategoryTemplate::new("Certamen", 70.0, 3),
-                    CategoryTemplate::new("Lab", 30.0, 6),
-                ],
-            ),
-            CourseTemplate::new(
-                "Proyecto + Certamenes",
-                "Proyecto (40%) + 2 Certamenes (60%)",
-                vec![
-                    CategoryTemplate::new("Proyecto", 40.0, 1),
-                    CategoryTemplate::new("Certamen", 60.0, 2),
-                ],
-            ),
-            CourseTemplate::new(
-                "Solo Certamenes",
-                "3 Certamenes (100%)",
-                vec![CategoryTemplate::new("Certamen", 100.0, 3)],
-            ),
-            CourseTemplate::new(
-                "Evaluacion Continua",
-                "10 Evaluaciones semanales (100%)",
-                vec![CategoryTemplate::new("Evaluacion", 100.0, 10)],
-            ),
-            CourseTemplate::new(
-                "Custom (Empty)",
-                "Start with no categories - add your own",
-                vec![],
-            ),
-        ]
     }
 }
 
@@ -597,11 +547,18 @@ mod tests {
 
     #[test]
     fn test_from_template() {
-        let templates = CourseTemplate::built_in_templates();
-        let template = &templates[0]; // Certamenes + Controles (80/20)
+        // Create a test template directly
+        let template = CourseTemplate::new(
+            "Test Template",
+            "3 Certamenes (80%) + 3 Controles (20%)",
+            vec![
+                CategoryTemplate::new("Certamen", 80.0, 3),
+                CategoryTemplate::new("Control", 20.0, 3),
+            ],
+        );
 
         let course =
-            Course::from_template("Matematicas".to_string(), DEFAULT_PASSING_GRADE, template);
+            Course::from_template("Matematicas".to_string(), DEFAULT_PASSING_GRADE, &template);
 
         // Should have 2 categories
         assert_eq!(course.categories.len(), 2);

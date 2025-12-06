@@ -7,6 +7,7 @@ use crate::model::{
     Category, Course, CourseTemplate, DEFAULT_PASSING_GRADE, Evaluation, MAX_GRADE, MIN_GRADE,
 };
 use crate::persistence;
+use crate::templates;
 
 /// Which panel is currently focused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,6 +26,8 @@ pub enum Screen {
     EditingCategory { is_new: bool },
     EditingEvaluation { is_new: bool },
     ConfirmDelete,
+    ConfirmDeleteTemplate,
+    SavingTemplate,
 }
 
 /// Input field being edited.
@@ -34,13 +37,15 @@ pub enum InputField {
     PassingGrade,
     Weight,
     Grade,
+    Description,
 }
 
 /// Main application state.
 #[derive(Debug)]
 pub struct App {
     pub courses: Vec<Course>,
-    pub templates: Vec<CourseTemplate>,
+    pub built_in_templates: Vec<CourseTemplate>,
+    pub user_templates: Vec<CourseTemplate>,
 
     // Selection state
     pub selected_course: Option<usize>,
@@ -59,13 +64,15 @@ pub struct App {
     pub edit_passing_grade: String,
     pub edit_weight: String,
     pub edit_grade: String,
+    pub edit_description: String,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
             courses: Vec::new(),
-            templates: CourseTemplate::built_in_templates(),
+            built_in_templates: templates::built_in_templates(),
+            user_templates: Vec::new(),
             selected_course: None,
             selected_category: None,
             selected_evaluation: None,
@@ -78,6 +85,7 @@ impl Default for App {
             edit_passing_grade: String::new(),
             edit_weight: String::new(),
             edit_grade: String::new(),
+            edit_description: String::new(),
         }
     }
 }
@@ -92,6 +100,15 @@ impl App {
                 Vec::new()
             }
         };
+
+        let user_templates = match persistence::load_user_templates() {
+            Ok(templates) => templates,
+            Err(err) => {
+                eprintln!("Warning: failed to load user templates: {err}");
+                Vec::new()
+            }
+        };
+
         let selected_course = if courses.is_empty() { None } else { Some(0) };
 
         // If we have a course selected, also select first category if exists
@@ -111,6 +128,7 @@ impl App {
 
         Self {
             courses,
+            user_templates,
             selected_course,
             selected_category,
             ..Default::default()
@@ -143,9 +161,22 @@ impl App {
             .and_then(|c| self.selected_evaluation.and_then(|i| c.evaluations.get(i)))
     }
 
+    /// Get all templates combined: built-in first, then user templates.
+    pub fn all_templates(&self) -> Vec<&CourseTemplate> {
+        self.built_in_templates
+            .iter()
+            .chain(self.user_templates.iter())
+            .collect()
+    }
+
     /// Get the currently selected template.
     pub fn current_template(&self) -> Option<&CourseTemplate> {
-        self.templates.get(self.selected_template)
+        self.all_templates().get(self.selected_template).copied()
+    }
+
+    /// Get the total number of templates.
+    pub fn templates_count(&self) -> usize {
+        self.built_in_templates.len() + self.user_templates.len()
     }
 
     // ==========================================================================
@@ -267,15 +298,17 @@ impl App {
     }
 
     pub fn next_template(&mut self) {
-        if !self.templates.is_empty() {
-            self.selected_template = (self.selected_template + 1) % self.templates.len();
+        let count = self.templates_count();
+        if count > 0 {
+            self.selected_template = (self.selected_template + 1) % count;
         }
     }
 
     pub fn previous_template(&mut self) {
-        if !self.templates.is_empty() {
+        let count = self.templates_count();
+        if count > 0 {
             self.selected_template = if self.selected_template == 0 {
-                self.templates.len() - 1
+                count - 1
             } else {
                 self.selected_template - 1
             };
@@ -633,6 +666,8 @@ impl App {
             (Screen::EditingCategory { .. }, InputField::Weight) => InputField::Name,
             (Screen::EditingEvaluation { .. }, InputField::Grade) => InputField::Name,
             (Screen::EditingEvaluation { .. }, InputField::Name) => InputField::Grade,
+            (Screen::SavingTemplate, InputField::Name) => InputField::Description,
+            (Screen::SavingTemplate, InputField::Description) => InputField::Name,
             _ => self.input_field,
         };
     }
@@ -643,6 +678,7 @@ impl App {
             InputField::PassingGrade => &mut self.edit_passing_grade,
             InputField::Weight => &mut self.edit_weight,
             InputField::Grade => &mut self.edit_grade,
+            InputField::Description => &mut self.edit_description,
         }
     }
 
@@ -650,10 +686,107 @@ impl App {
         self.screen = Screen::Main;
     }
 
+    /// Check if current selected template is a user template (can be deleted).
+    pub fn is_user_template_selected(&self) -> bool {
+        self.selected_template >= self.built_in_templates.len()
+    }
+
+    /// Request deletion of current user template.
+    pub fn request_delete_template(&mut self) {
+        if self.is_user_template_selected() {
+            self.screen = Screen::ConfirmDeleteTemplate;
+        }
+    }
+
+    /// Delete the currently selected user template.
+    pub fn delete_current_template(&mut self) {
+        if !self.is_user_template_selected() {
+            self.screen = Screen::SelectingTemplate;
+            return;
+        }
+
+        let user_template_idx = self.selected_template - self.built_in_templates.len();
+        self.user_templates.remove(user_template_idx);
+
+        // Adjust selection
+        let total = self.templates_count();
+        if total == 0 {
+            self.selected_template = 0;
+        } else if self.selected_template >= total {
+            self.selected_template = total - 1;
+        }
+
+        // Save updated user templates
+        if let Err(err) = persistence::save_user_templates(&self.user_templates) {
+            eprintln!("Warning: failed to save user templates: {err}");
+        }
+
+        self.screen = Screen::SelectingTemplate;
+    }
+
     /// Persist state and log (without panicking) on failure.
     fn persist(&self) {
         if let Err(err) = self.save() {
             eprintln!("Warning: failed to save data: {err}");
         }
+    }
+
+    // ==========================================================================
+    // Save as Template
+    // ==========================================================================
+
+    /// Start the "save as template" flow for current course.
+    pub fn start_save_as_template(&mut self) {
+        let Some(course) = self.current_course() else {
+            return;
+        };
+
+        // Pre-fill with course name and description
+        let name = format!("{} Template", course.name);
+        let description = self.generate_template_description(course);
+
+        self.edit_name = name;
+        self.edit_description = description;
+        self.input_field = InputField::Name;
+        self.screen = Screen::SavingTemplate;
+    }
+
+    /// Generate a description based on course structure.
+    fn generate_template_description(&self, course: &Course) -> String {
+        if course.categories.is_empty() {
+            return "Empty template".to_string();
+        }
+
+        course
+            .categories
+            .iter()
+            .map(|c| format!("{} {}x ({:.0}%)", c.evaluations.len(), c.name, c.weight))
+            .collect::<Vec<_>>()
+            .join(" + ")
+    }
+
+    /// Confirm saving the current course as a user template.
+    pub fn confirm_save_template(&mut self) {
+        let name = self.edit_name.trim().to_string();
+        let description = self.edit_description.trim().to_string();
+
+        if name.is_empty() {
+            return;
+        }
+
+        let Some(course) = self.current_course() else {
+            self.screen = Screen::Main;
+            return;
+        };
+
+        let template = course.to_template(name, description);
+        self.user_templates.push(template);
+
+        // Save user templates to disk
+        if let Err(err) = persistence::save_user_templates(&self.user_templates) {
+            eprintln!("Warning: failed to save user templates: {err}");
+        }
+
+        self.screen = Screen::Main;
     }
 }

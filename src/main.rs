@@ -7,6 +7,7 @@ mod app;
 mod events;
 mod model;
 mod persistence;
+mod templates;
 mod ui;
 
 use app::App;

@@ -24,7 +24,7 @@ Manage courses, track grades by categories, and automatically calculate the exac
 |---------|-------------|
 | **Hierarchical Grade System** | Course → Categories → Evaluations structure with weighted categories |
 | **Real-time Calculation** | Shows exactly what grade you need in each evaluation to pass |
-| **Course Templates** | Pre-built templates for common course structures (Certamenes + Controles, Labs, etc.) |
+| **Course Templates** | Pre-built templates + create your own reusable templates with `t` |
 | **Weight Validation** | Visual indicators when category weights don't sum to 100% |
 | **Auto-balance** | Automatically distribute weights equally across categories |
 | **Automatic Persistence** | Data saved locally (`XDG_DATA_HOME/kalk`) and persists across restarts |
@@ -85,6 +85,7 @@ The Nix environment includes `cargo-audit` for security scanning.
 | `n` | Create new item (course/category/evaluation) |
 | `Enter` | Edit selected item |
 | `d` | Delete selected item |
+| `t` | Save current course as template |
 | `b` | Auto-balance category weights |
 | `q` | Quit |
 
@@ -105,9 +106,14 @@ src/
 ├── main.rs        # Entry point, terminal setup
 ├── app.rs         # Application state and logic
 ├── model.rs       # Data structures (Course, Category, Evaluation)
+├── templates.rs   # Built-in course templates (easy to modify)
 ├── ui.rs          # Ratatui rendering
 ├── events.rs      # Keyboard event handling
 └── persistence.rs # JSON storage
+
+~/.local/share/kalk/
+├── data.json           # Your courses data
+└── user_templates.json # Your custom templates
 ```
 
 ---

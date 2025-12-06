@@ -22,7 +22,7 @@ Gestiona ramos, registra notas por categorías y calcula automáticamente la not
 |----------------|-------------|
 | **Sistema jerárquico de notas** | Estructura Ramo → Categorías → Evaluaciones con ponderaciones |
 | **Cálculo en tiempo real** | Muestra exactamente qué nota necesitas en cada evaluación para aprobar |
-| **Plantillas de ramos** | Plantillas predefinidas para estructuras comunes (Certámenes + Controles, Labs, etc.) |
+| **Plantillas de ramos** | Plantillas predefinidas + crea tus propias plantillas reutilizables con `t` |
 | **Validación de pesos** | Indicadores visuales cuando los pesos no suman 100% |
 | **Auto-balance** | Distribuye automáticamente los pesos equitativamente entre categorías |
 | **Persistencia automática** | Los datos se guardan localmente (`XDG_DATA_HOME/kalk`) y persisten entre sesiones |
@@ -83,6 +83,7 @@ El entorno Nix incluye `cargo-audit` para análisis de seguridad.
 | `n` | Crear nuevo item (ramo/categoría/evaluación) |
 | `Enter` | Editar item seleccionado |
 | `d` | Eliminar item seleccionado |
+| `t` | Guardar ramo actual como plantilla |
 | `b` | Auto-balancear pesos de categorías |
 | `q` | Salir |
 
@@ -103,9 +104,14 @@ src/
 ├── main.rs        # Punto de entrada, configuración del terminal
 ├── app.rs         # Estado y lógica de la aplicación
 ├── model.rs       # Estructuras de datos (Course, Category, Evaluation)
+├── templates.rs   # Plantillas de ramos predefinidas (fácil de modificar)
 ├── ui.rs          # Renderizado con Ratatui
 ├── events.rs      # Manejo de eventos de teclado
 └── persistence.rs # Almacenamiento JSON
+
+~/.local/share/kalk/
+├── data.json           # Tus datos de ramos
+└── user_templates.json # Tus plantillas personalizadas
 ```
 
 ---
