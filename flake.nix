@@ -40,8 +40,7 @@
           ];
 
           shellHook = ''
-            echo "📟 Entorno Kalk TUI activado"
-            echo "🔒 cargo audit disponible para verificar seguridad"
+            echo "> Entorno Kalk TUI activado"
           '';
         };
       }
