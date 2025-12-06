@@ -529,17 +529,14 @@ impl App {
     }
 
     pub fn start_edit_evaluation(&mut self) {
-        let Some((name, grade)) = self
-            .current_evaluation()
-            .map(|eval| (eval.name.clone(), eval.grade))
-        else {
+        let Some(name) = self.current_evaluation().map(|eval| eval.name.clone()) else {
             return;
         };
 
         self.screen = Screen::EditingEvaluation { is_new: false };
         self.input_field = InputField::Grade; // Start with grade field
         self.edit_name = name;
-        self.edit_grade = grade.map(|g| format!("{g:.0}")).unwrap_or_default();
+        self.edit_grade.clear(); // Always start with empty grade field
     }
 
     pub fn confirm_evaluation(&mut self) {

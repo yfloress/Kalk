@@ -79,15 +79,19 @@ impl Category {
         }
     }
 
-    /// Calculate the average grade of all graded evaluations in this category.
-    /// Returns None if no evaluations have been graded.
+    /// Calculate the average grade of all evaluations in this category.
+    /// Ungraded evaluations are treated as 0.
+    /// Returns None if there are no evaluations.
     pub fn average_grade(&self) -> Option<f64> {
-        let graded: Vec<f64> = self.evaluations.iter().filter_map(|e| e.grade).collect();
-
-        if graded.is_empty() {
+        if self.evaluations.is_empty() {
             None
         } else {
-            Some(graded.iter().sum::<f64>() / graded.len() as f64)
+            let total: f64 = self
+                .evaluations
+                .iter()
+                .map(|e| e.grade.unwrap_or(0.0))
+                .sum();
+            Some(total / self.evaluations.len() as f64)
         }
     }
 
@@ -103,11 +107,6 @@ impl Category {
             .iter()
             .filter(|e| e.grade.is_some())
             .count()
-    }
-
-    /// Returns true if all evaluations in this category have been graded.
-    pub fn is_complete(&self) -> bool {
-        !self.evaluations.is_empty() && self.graded_count() == self.evaluations.len()
     }
 
     /// Check if category average is passing
@@ -169,34 +168,25 @@ impl Course {
         }
     }
 
-    /// Calculate the current weighted grade based on graded evaluations.
-    /// Only considers categories that have at least one graded evaluation.
+    /// Calculate the current weighted grade based on all evaluations.
+    /// Ungraded evaluations are treated as 0.
+    /// Returns None if there are no categories with evaluations.
     pub fn current_grade(&self) -> Option<f64> {
-        let contributions: Vec<f64> = self
+        let categories_with_evals: Vec<&Category> = self
             .categories
             .iter()
-            .filter_map(Category::weighted_contribution)
+            .filter(|c| !c.evaluations.is_empty())
             .collect();
 
-        if contributions.is_empty() {
+        if categories_with_evals.is_empty() {
             None
         } else {
-            Some(contributions.iter().sum())
+            let total: f64 = categories_with_evals
+                .iter()
+                .filter_map(|c| c.weighted_contribution())
+                .sum();
+            Some(total)
         }
-    }
-
-    /// Calculate the total weight of categories that have been graded.
-    pub fn graded_weight(&self) -> f64 {
-        self.categories
-            .iter()
-            .filter(|c| c.average_grade().is_some())
-            .map(|c| c.weight)
-            .sum()
-    }
-
-    /// Calculate the remaining weight percentage not yet graded.
-    pub fn remaining_weight(&self) -> f64 {
-        100.0 - self.graded_weight()
     }
 
     /// Get total weight of all categories.
@@ -314,10 +304,29 @@ mod tests {
             .push(Evaluation::with_grade("Test 1".to_string(), 70.0));
         cat.evaluations
             .push(Evaluation::with_grade("Test 2".to_string(), 80.0));
-        cat.evaluations.push(Evaluation::new("Test 3".to_string())); // Not graded
+        cat.evaluations.push(Evaluation::new("Test 3".to_string())); // Not graded = 0
 
-        // Average of graded evaluations: (70 + 80) / 2 = 75
+        // Average with ungraded as 0: (70 + 80 + 0) / 3 = 50
+        assert!((cat.average_grade().unwrap() - 50.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_category_average_all_graded() {
+        let mut cat = Category::new("Tests".to_string(), 60.0);
+        cat.evaluations
+            .push(Evaluation::with_grade("Test 1".to_string(), 70.0));
+        cat.evaluations
+            .push(Evaluation::with_grade("Test 2".to_string(), 80.0));
+
+        // Average: (70 + 80) / 2 = 75
         assert!((cat.average_grade().unwrap() - 75.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_category_average_empty() {
+        let cat = Category::new("Tests".to_string(), 60.0);
+        // No evaluations = None
+        assert!(cat.average_grade().is_none());
     }
 
     #[test]

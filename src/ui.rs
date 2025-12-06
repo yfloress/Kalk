@@ -50,7 +50,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             draw_category_popup(frame, app, *is_new);
         }
         Screen::EditingEvaluation { is_new } => {
-            draw_evaluation_popup(frame, app, *is_new);
+            draw_evaluation_popup(frame, app, *is_new, !*is_new);
         }
         Screen::ConfirmDelete => {
             draw_delete_popup(frame, app);
@@ -637,7 +637,7 @@ fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     }
 }
 
-fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
+fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool, is_editing: bool) {
     let m = app.messages();
     let area = centered_rect(60, 50, frame.size());
     frame.render_widget(Clear, area);
@@ -690,7 +690,7 @@ fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
         let info = if let (Some(cat_idx), Some(eval_idx)) =
             (app.selected_category, app.selected_evaluation)
         {
-            format_needed_for_evaluation(course, cat_idx, eval_idx, m)
+            format_needed_for_evaluation(course, cat_idx, eval_idx, m, is_editing)
         } else {
             format_course_status(course, m)
         };
@@ -947,44 +947,29 @@ use crate::model::Course;
 
 /// Format course status message with translations.
 fn format_course_status(course: &Course, m: &Messages) -> String {
-    let remaining_weight = course.remaining_weight();
-    let all_complete = course.categories.iter().all(|c| c.is_complete());
+    // Check if there are any evaluations at all
+    let has_evaluations = course.categories.iter().any(|c| !c.evaluations.is_empty());
 
-    if all_complete || remaining_weight <= 0.0 {
-        return match course.current_grade() {
-            Some(grade) => {
-                let rounded = Course::round_grade(grade);
-                if course.is_passing_grade(grade) {
-                    format!("{}: {:.1} → {:.0} ({})", m.passed, grade, rounded, m.passed)
-                } else {
-                    format!("{}: {:.1} → {:.0} ({})", m.failed, grade, rounded, m.failed)
-                }
-            }
-            None => m.no_evaluations.to_string(),
-        };
+    if !has_evaluations {
+        return m.no_evaluations.to_string();
     }
 
     match course.current_grade() {
-        Some(current) => {
-            let required = (course.passing_grade - current) * 100.0 / remaining_weight;
-
-            if required <= 0.0 {
-                format!("{}: {:.1} | {}", m.current, current, m.already_passing)
-            } else if required > 100.0 {
+        Some(grade) => {
+            let rounded = Course::round_grade(grade);
+            if course.is_passing_grade(grade) {
                 format!(
-                    "{}: {:.1} | {} ({:.1})",
-                    m.current, current, m.cannot_pass, required
+                    "{}: {:.1} → {:.0} ({})",
+                    m.current, grade, rounded, m.passed
                 )
             } else {
                 format!(
-                    "{}: {:.1} | {} {:.1} ({:.0}%)",
-                    m.current, current, m.need, required, remaining_weight
+                    "{}: {:.1} → {:.0} ({})",
+                    m.current, grade, rounded, m.failed
                 )
             }
         }
-        None => {
-            format!("{} {:.1} {}", m.need, course.passing_grade, m.to_pass)
-        }
+        None => m.no_evaluations.to_string(),
     }
 }
 
@@ -1025,6 +1010,7 @@ fn format_needed_for_evaluation(
     category_idx: usize,
     eval_idx: usize,
     m: &Messages,
+    is_editing: bool,
 ) -> String {
     let Some(category) = course.categories.get(category_idx) else {
         return m.invalid_category.to_string();
@@ -1034,64 +1020,75 @@ fn format_needed_for_evaluation(
         return m.invalid_evaluation.to_string();
     };
 
-    // If already graded, show that info
-    if let Some(grade) = eval.grade {
-        if grade >= course.passing_grade {
-            return format!("{}: {:.0} ({})", eval.name, grade, m.passing);
+    // If already graded and NOT editing, show that info
+    // When editing, we ignore the current grade to show what's needed
+    if !is_editing {
+        if let Some(grade) = eval.grade {
+            if grade >= course.passing_grade {
+                return format!("{}: {:.0} ({})", eval.name, grade, m.passing);
+            }
+            return format!("{}: {:.0} ({})", eval.name, grade, m.below_passing);
         }
-        return format!("{}: {:.0} ({})", eval.name, grade, m.below_passing);
     }
 
-    // Calculate current contributions from all categories
+    // Calculate total contribution from all categories, treating ungraded evals as 0
+    // except for the current evaluation we're calculating for
     let mut total_contribution = 0.0;
-    let mut total_weight_graded = 0.0;
 
     for (ci, cat) in course.categories.iter().enumerate() {
         if ci == category_idx {
-            let other_grades: Vec<f64> = cat
+            // For the current category, sum all other evaluations (ungraded = 0)
+            // When editing, we also treat the current evaluation as 0
+            let other_sum: f64 = cat
                 .evaluations
                 .iter()
                 .enumerate()
-                .filter(|(ei, e)| *ei != eval_idx && e.grade.is_some())
-                .filter_map(|(_, e)| e.grade)
-                .collect();
-
-            if !other_grades.is_empty() {
-                let other_avg = other_grades.iter().sum::<f64>() / other_grades.len() as f64;
-                let graded_count = other_grades.len();
-                let total_evals = cat.evaluations.len();
-                let partial_weight = cat.weight * (graded_count as f64 / total_evals as f64);
-                total_contribution += other_avg * partial_weight / 100.0;
-                total_weight_graded += partial_weight;
+                .map(|(ei, e)| {
+                    if ei == eval_idx {
+                        0.0 // Always treat current eval as 0 for calculation
+                    } else {
+                        e.grade.unwrap_or(0.0)
+                    }
+                })
+                .sum();
+            // This will be added later with the needed grade
+            total_contribution += other_sum * cat.weight / (100.0 * cat.evaluations.len() as f64);
+        } else {
+            // For other categories, all ungraded evals count as 0
+            if !cat.evaluations.is_empty() {
+                let sum: f64 = cat.evaluations.iter().map(|e| e.grade.unwrap_or(0.0)).sum();
+                let avg = sum / cat.evaluations.len() as f64;
+                total_contribution += avg * cat.weight / 100.0;
             }
-        } else if let Some(avg) = cat.average_grade() {
-            total_contribution += avg * cat.weight / 100.0;
-            total_weight_graded += cat.weight;
         }
     }
 
-    let eval_weight = category.weight / category.evaluations.len() as f64;
-    let remaining_weight = 100.0 - total_weight_graded;
+    // Weight of this single evaluation in the final grade
+    let eval_weight = category.weight / (100.0 * category.evaluations.len() as f64);
 
-    if remaining_weight <= 0.0 {
-        return m.all_evaluations_graded.to_string();
-    }
-
-    let effective_passing = course.passing_grade - 0.5;
-    let other_remaining_weight = remaining_weight - eval_weight;
-    let other_remaining_contribution = effective_passing * other_remaining_weight / 100.0;
-
-    let needed_contribution = effective_passing - total_contribution - other_remaining_contribution;
-    let needed_grade = needed_contribution * 100.0 / eval_weight;
+    // We need: total_contribution + (needed_grade * eval_weight) >= 54.5
+    // So: needed_grade = (54.5 - total_contribution) / eval_weight
+    let effective_passing = course.passing_grade - 0.5; // 54.5
+    let needed_grade = (effective_passing - total_contribution) / eval_weight;
 
     if needed_grade <= 0.0 {
         format!("{}: 0+ ({})", m.need, m.need_grade_any)
     } else if needed_grade > 100.0 {
+        let rounded_up = needed_grade.ceil() as i32;
         format!(
-            "{}: {:.0}+ ({})",
-            m.need, needed_grade, m.need_grade_impossible
+            "{}: {:.2} → {} ({})",
+            m.need, needed_grade, rounded_up, m.need_grade_impossible
         )
     } else {
-        format!("{} {:.0}+ {}", m.need, needed_grade, m.need_grade_in_eval)
+        let rounded_up = needed_grade.ceil() as i32;
+        // Only show arrow if there are decimals
+        if (needed_grade - needed_grade.floor()).abs() < 0.01 {
+            format!("{} {} {}", m.need, rounded_up, m.need_grade_in_eval)
+        } else {
+            format!(
+                "{} {:.2} → {} {}",
+                m.need, needed_grade, rounded_up, m.need_grade_in_eval
+            )
+        }
     }
 }

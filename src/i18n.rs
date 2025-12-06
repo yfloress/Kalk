@@ -46,11 +46,9 @@ pub struct Messages {
     pub failed: &'static str,
     pub current: &'static str,
     pub need: &'static str,
-    pub to_pass: &'static str,
     pub already_passing: &'static str,
     pub cannot_pass: &'static str,
     pub no_evaluations: &'static str,
-    pub all_evaluations_graded: &'static str,
 
     // Weight validation
     pub weights_ok: &'static str,
@@ -160,11 +158,9 @@ pub const EN: Messages = Messages {
     failed: "FAILED",
     current: "Current",
     need: "Need",
-    to_pass: "to pass",
     already_passing: "Already passing!",
     cannot_pass: "Cannot pass",
     no_evaluations: "No evaluations",
-    all_evaluations_graded: "All evaluations graded",
 
     // Weight validation
     weights_ok: "Weights OK (100%)",
@@ -274,11 +270,9 @@ pub const ES: Messages = Messages {
     failed: "REPROBADO",
     current: "Actual",
     need: "Necesitas",
-    to_pass: "para aprobar",
     already_passing: "¡Ya estás aprobando!",
     cannot_pass: "No puedes aprobar",
     no_evaluations: "Sin evaluaciones",
-    all_evaluations_graded: "Todas las evaluaciones calificadas",
 
     // Weight validation
     weights_ok: "Pesos OK (100%)",
