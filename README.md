@@ -4,6 +4,8 @@
 
 **Your academic dashboard in the terminal.**
 
+[![Español](https://img.shields.io/badge/README-Español-blue?style=flat-square)](README.es.md)
+
 Manage courses, track grades by categories, and automatically calculate the exact score needed to pass — all without touching the mouse.
 
 [![Rust](https://img.shields.io/badge/Made_with-Rust-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
