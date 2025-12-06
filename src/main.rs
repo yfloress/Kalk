@@ -20,6 +20,23 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::{self, stdout};
 
+/// RAII guard that ensures the terminal is restored even if setup fails.
+struct TerminalGuard;
+
+impl TerminalGuard {
+    fn new() -> Result<Self> {
+        enable_raw_mode()?;
+        execute!(stdout(), EnterAlternateScreen)?;
+        Ok(Self)
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = restore_terminal();
+    }
+}
+
 /// Initialize panic hooks to restore terminal on panic.
 /// This is critical for ensuring the terminal is usable after a crash.
 fn init_panic_hook() -> Result<()> {
@@ -35,13 +52,11 @@ fn init_panic_hook() -> Result<()> {
 }
 
 /// Setup terminal for TUI rendering.
-fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
-    enable_raw_mode()?;
-    let mut stdout = stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
+fn setup_terminal() -> Result<(Terminal<CrosstermBackend<io::Stdout>>, TerminalGuard)> {
+    let guard = TerminalGuard::new()?;
+    let backend = CrosstermBackend::new(stdout());
     let terminal = Terminal::new(backend)?;
-    Ok(terminal)
+    Ok((terminal, guard))
 }
 
 /// Restore terminal to normal state.
@@ -68,7 +83,7 @@ fn main() -> Result<()> {
     init_panic_hook()?;
 
     // Setup terminal
-    let mut terminal = setup_terminal()?;
+    let (mut terminal, _terminal_guard) = setup_terminal()?;
 
     // Load application state
     let mut app = App::load();
@@ -76,9 +91,6 @@ fn main() -> Result<()> {
     // Run the application
     let result = run_app(&mut terminal, &mut app);
 
-    // Always restore terminal (even on error)
-    restore_terminal()?;
-
-    // Propagate any errors from the main loop
+    // Propagate any errors from the main loop (terminal restoration handled by guard)
     result
 }

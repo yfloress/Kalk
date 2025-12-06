@@ -81,8 +81,12 @@ pub fn save_data(courses: &[Course]) -> Result<()> {
     if let Err(err) = fs::rename(&tmp_path, &path) {
         if path.exists() {
             fs::remove_file(&path).context("Failed to remove existing data file")?;
-            fs::rename(&tmp_path, &path).context("Failed to write data file")?;
+            if let Err(rename_err) = fs::rename(&tmp_path, &path) {
+                let _ = fs::remove_file(&tmp_path);
+                return Err(rename_err).context("Failed to write data file");
+            }
         } else {
+            let _ = fs::remove_file(&tmp_path);
             return Err(err).context("Failed to write data file");
         }
     }
@@ -135,8 +139,12 @@ pub fn save_user_templates(templates: &[CourseTemplate]) -> Result<()> {
     if let Err(err) = fs::rename(&tmp_path, &path) {
         if path.exists() {
             fs::remove_file(&path).context("Failed to remove existing user templates file")?;
-            fs::rename(&tmp_path, &path).context("Failed to write user templates file")?;
+            if let Err(rename_err) = fs::rename(&tmp_path, &path) {
+                let _ = fs::remove_file(&tmp_path);
+                return Err(rename_err).context("Failed to write user templates file");
+            }
         } else {
+            let _ = fs::remove_file(&tmp_path);
             return Err(err).context("Failed to write user templates file");
         }
     }
@@ -155,12 +163,22 @@ pub fn load_config() -> Config {
         return Config::default();
     }
 
-    let Ok(file) = File::open(&path) else {
-        return Config::default();
+    let file = match File::open(&path) {
+        Ok(file) => file,
+        Err(err) => {
+            eprintln!("Warning: failed to open config file, using defaults: {err}");
+            return Config::default();
+        }
     };
 
     let reader = BufReader::new(file);
-    serde_json::from_reader(reader).unwrap_or_default()
+    match serde_json::from_reader(reader) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            eprintln!("Warning: failed to parse config file, using defaults: {err}");
+            Config::default()
+        }
+    }
 }
 
 /// Save configuration to disk.
@@ -185,8 +203,12 @@ pub fn save_config(config: &Config) -> Result<()> {
     if let Err(err) = fs::rename(&tmp_path, &path) {
         if path.exists() {
             fs::remove_file(&path).context("Failed to remove existing config file")?;
-            fs::rename(&tmp_path, &path).context("Failed to write config file")?;
+            if let Err(rename_err) = fs::rename(&tmp_path, &path) {
+                let _ = fs::remove_file(&tmp_path);
+                return Err(rename_err).context("Failed to write config file");
+            }
         } else {
+            let _ = fs::remove_file(&tmp_path);
             return Err(err).context("Failed to write config file");
         }
     }

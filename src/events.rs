@@ -42,6 +42,22 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
     Ok(app.should_quit)
 }
 
+/// Shared form input handler (Esc, Tab, Enter, Backspace, Char).
+fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: fn(&mut App)) {
+    match key {
+        KeyCode::Esc => cancel(app),
+        KeyCode::Tab => app.next_input_field(),
+        KeyCode::Enter => confirm(app),
+        KeyCode::Backspace => {
+            app.current_input_buffer().pop();
+        }
+        KeyCode::Char(c) => {
+            app.current_input_buffer().push(c);
+        }
+        _ => {}
+    }
+}
+
 /// Handle keys in the main screen.
 fn handle_main_keys(app: &mut App, key: KeyCode) {
     match key {
@@ -125,50 +141,17 @@ fn handle_delete_template_keys(app: &mut App, key: KeyCode) {
 
 /// Handle keys in the course editing screen.
 fn handle_edit_course_keys(app: &mut App, key: KeyCode) {
-    match key {
-        KeyCode::Esc => app.cancel_edit(),
-        KeyCode::Tab => app.next_input_field(),
-        KeyCode::Enter => app.confirm_course(),
-        KeyCode::Backspace => {
-            app.current_input_buffer().pop();
-        }
-        KeyCode::Char(c) => {
-            app.current_input_buffer().push(c);
-        }
-        _ => {}
-    }
+    handle_form_keys(app, key, App::confirm_course, App::cancel_edit);
 }
 
 /// Handle keys in the category editing screen.
 fn handle_edit_category_keys(app: &mut App, key: KeyCode) {
-    match key {
-        KeyCode::Esc => app.cancel_edit(),
-        KeyCode::Tab => app.next_input_field(),
-        KeyCode::Enter => app.confirm_category(),
-        KeyCode::Backspace => {
-            app.current_input_buffer().pop();
-        }
-        KeyCode::Char(c) => {
-            app.current_input_buffer().push(c);
-        }
-        _ => {}
-    }
+    handle_form_keys(app, key, App::confirm_category, App::cancel_edit);
 }
 
 /// Handle keys in the evaluation editing screen.
 fn handle_edit_evaluation_keys(app: &mut App, key: KeyCode) {
-    match key {
-        KeyCode::Esc => app.cancel_edit(),
-        KeyCode::Tab => app.next_input_field(),
-        KeyCode::Enter => app.confirm_evaluation(),
-        KeyCode::Backspace => {
-            app.current_input_buffer().pop();
-        }
-        KeyCode::Char(c) => {
-            app.current_input_buffer().push(c);
-        }
-        _ => {}
-    }
+    handle_form_keys(app, key, App::confirm_evaluation, App::cancel_edit);
 }
 
 /// Handle keys in the delete confirmation screen.
@@ -193,16 +176,5 @@ fn handle_language_keys(app: &mut App, key: KeyCode) {
 
 /// Handle keys in the save template screen.
 fn handle_save_template_keys(app: &mut App, key: KeyCode) {
-    match key {
-        KeyCode::Esc => app.cancel_edit(),
-        KeyCode::Tab => app.next_input_field(),
-        KeyCode::Enter => app.confirm_save_template(),
-        KeyCode::Backspace => {
-            app.current_input_buffer().pop();
-        }
-        KeyCode::Char(c) => {
-            app.current_input_buffer().push(c);
-        }
-        _ => {}
-    }
+    handle_form_keys(app, key, App::confirm_save_template, App::cancel_edit);
 }

@@ -46,7 +46,6 @@ pub struct Messages {
     pub failed: &'static str,
     pub current: &'static str,
     pub need: &'static str,
-    pub already_passing: &'static str,
     pub cannot_pass: &'static str,
     pub no_evaluations: &'static str,
 
@@ -158,7 +157,6 @@ pub const EN: Messages = Messages {
     failed: "FAILED",
     current: "Current",
     need: "Need",
-    already_passing: "Already passing!",
     cannot_pass: "Cannot pass",
     no_evaluations: "No evaluations",
 
@@ -270,7 +268,6 @@ pub const ES: Messages = Messages {
     failed: "REPROBADO",
     current: "Actual",
     need: "Necesitas",
-    already_passing: "¡Ya estás aprobando!",
     cannot_pass: "No puedes aprobar",
     no_evaluations: "Sin evaluaciones",
 

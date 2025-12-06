@@ -5,7 +5,7 @@
 
 use crate::app::{App, Focus, InputField, Screen};
 use crate::i18n::Language;
-use crate::model::{DEFAULT_PASSING_GRADE, WeightValidation};
+use crate::model::{DEFAULT_PASSING_GRADE, MAX_GRADE, WeightValidation};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -100,7 +100,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
 
             // Current grade color
             let grade_color = match c.current_grade() {
-                Some(g) if g >= c.passing_grade => Color::Green,
+                Some(g) if c.is_passing_grade(g) => Color::Green,
                 Some(_) => Color::Red,
                 None => Color::DarkGray,
             };
@@ -687,26 +687,25 @@ fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool, is_editing:
 
     // Show what grade is needed in this evaluation to pass
     if let Some(course) = app.current_course() {
-        let info = if let (Some(cat_idx), Some(eval_idx)) =
+        let (info, info_color) = if let (Some(cat_idx), Some(eval_idx)) =
             (app.selected_category, app.selected_evaluation)
         {
-            format_needed_for_evaluation(course, cat_idx, eval_idx, m, is_editing)
+            let needed = format_needed_for_evaluation(course, cat_idx, eval_idx, m, is_editing);
+            let color = match needed.status {
+                NeedGradeStatus::Success => Color::Green,
+                NeedGradeStatus::Failure => Color::Red,
+                NeedGradeStatus::Warning => Color::Yellow,
+                NeedGradeStatus::Info => Color::DarkGray,
+            };
+            (needed.message, color)
         } else {
-            format_course_status(course, m)
-        };
-
-        let info_color = if info.contains(m.cannot_pass)
-            || info.contains(m.below_passing)
-            || info.contains(m.failed)
-        {
-            Color::Red
-        } else if info.contains(m.passing)
-            || info.contains(m.already_passing)
-            || info.contains(m.passed)
-        {
-            Color::Green
-        } else {
-            Color::Yellow
+            let text = format_course_status(course, m);
+            let color = match course.current_grade() {
+                Some(g) if course.is_passing_grade(g) => Color::Green,
+                Some(_) => Color::Red,
+                None => Color::DarkGray,
+            };
+            (text, color)
         };
 
         let info_block = Block::default()
@@ -945,6 +944,19 @@ fn draw_language_popup(frame: &mut Frame, app: &App) {
 use crate::i18n::Messages;
 use crate::model::Course;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NeedGradeStatus {
+    Success,
+    Failure,
+    Warning,
+    Info,
+}
+
+struct NeededGrade {
+    message: String,
+    status: NeedGradeStatus,
+}
+
 /// Format course status message with translations.
 fn format_course_status(course: &Course, m: &Messages) -> String {
     // Check if there are any evaluations at all
@@ -1011,24 +1023,59 @@ fn format_needed_for_evaluation(
     eval_idx: usize,
     m: &Messages,
     is_editing: bool,
-) -> String {
+) -> NeededGrade {
     let Some(category) = course.categories.get(category_idx) else {
-        return m.invalid_category.to_string();
+        return NeededGrade {
+            message: m.invalid_category.to_string(),
+            status: NeedGradeStatus::Failure,
+        };
     };
 
     let Some(eval) = category.evaluations.get(eval_idx) else {
-        return m.invalid_evaluation.to_string();
+        return NeededGrade {
+            message: m.invalid_evaluation.to_string(),
+            status: NeedGradeStatus::Failure,
+        };
     };
+
+    if category.evaluations.is_empty() {
+        return NeededGrade {
+            message: m.no_evaluations.to_string(),
+            status: NeedGradeStatus::Info,
+        };
+    }
 
     // If already graded and NOT editing, show that info
     // When editing, we ignore the current grade to show what's needed
     if !is_editing {
         if let Some(grade) = eval.grade {
             if grade >= course.passing_grade {
-                return format!("{}: {:.0} ({})", eval.name, grade, m.passing);
+                return NeededGrade {
+                    message: format!("{}: {:.0} ({})", eval.name, grade, m.passing),
+                    status: NeedGradeStatus::Success,
+                };
             }
-            return format!("{}: {:.0} ({})", eval.name, grade, m.below_passing);
+            return NeededGrade {
+                message: format!("{}: {:.0} ({})", eval.name, grade, m.below_passing),
+                status: NeedGradeStatus::Failure,
+            };
         }
+    }
+
+    // Categories with zero weight cannot change the course outcome
+    if category.weight.abs() < f64::EPSILON {
+        return NeededGrade {
+            message: m.cannot_pass.to_string(),
+            status: NeedGradeStatus::Failure,
+        };
+    }
+
+    let eval_count = category.evaluations.len() as f64;
+    if eval_count == 0.0 {
+        return NeededGrade {
+            message: m.no_evaluations.to_string(),
+            status: NeedGradeStatus::Info,
+        };
     }
 
     // Calculate total contribution from all categories, treating ungraded evals as 0
@@ -1064,31 +1111,56 @@ fn format_needed_for_evaluation(
     }
 
     // Weight of this single evaluation in the final grade
-    let eval_weight = category.weight / (100.0 * category.evaluations.len() as f64);
+    let eval_weight = category.weight / (100.0 * eval_count);
+
+    if eval_weight.abs() < f64::EPSILON {
+        return NeededGrade {
+            message: m.cannot_pass.to_string(),
+            status: NeedGradeStatus::Failure,
+        };
+    }
 
     // We need: total_contribution + (needed_grade * eval_weight) >= 54.5
     // So: needed_grade = (54.5 - total_contribution) / eval_weight
     let effective_passing = course.passing_grade - 0.5; // 54.5
     let needed_grade = (effective_passing - total_contribution) / eval_weight;
 
+    if !needed_grade.is_finite() {
+        return NeededGrade {
+            message: m.cannot_pass.to_string(),
+            status: NeedGradeStatus::Failure,
+        };
+    }
+
     if needed_grade <= 0.0 {
-        format!("{}: 0+ ({})", m.need, m.need_grade_any)
-    } else if needed_grade > 100.0 {
+        return NeededGrade {
+            message: format!("{}: 0+ ({})", m.need, m.need_grade_any),
+            status: NeedGradeStatus::Success,
+        };
+    } else if needed_grade > MAX_GRADE {
         let rounded_up = needed_grade.ceil() as i32;
-        format!(
-            "{}: {:.2} → {} ({})",
-            m.need, needed_grade, rounded_up, m.need_grade_impossible
-        )
+        return NeededGrade {
+            message: format!(
+                "{}: {:.2} → {} ({})",
+                m.need, needed_grade, rounded_up, m.need_grade_impossible
+            ),
+            status: NeedGradeStatus::Failure,
+        };
     } else {
         let rounded_up = needed_grade.ceil() as i32;
         // Only show arrow if there are decimals
-        if (needed_grade - needed_grade.floor()).abs() < 0.01 {
+        let message = if (needed_grade - needed_grade.floor()).abs() < 0.01 {
             format!("{} {} {}", m.need, rounded_up, m.need_grade_in_eval)
         } else {
             format!(
                 "{} {:.2} → {} {}",
                 m.need, needed_grade, rounded_up, m.need_grade_in_eval
             )
+        };
+
+        NeededGrade {
+            message,
+            status: NeedGradeStatus::Warning,
         }
     }
 }
