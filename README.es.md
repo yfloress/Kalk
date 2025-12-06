@@ -108,10 +108,12 @@ src/
 ├── templates.rs   # Plantillas de ramos predefinidas (fácil de modificar)
 ├── ui.rs          # Renderizado con Ratatui
 ├── events.rs      # Manejo de eventos de teclado
+├── i18n.rs        # Manejo de traducciones
 └── persistence.rs # Almacenamiento JSON
 
 ~/.local/share/kalk/
 ├── data.json           # Tus datos de ramos
+├── config.json         # Tus configuraciones
 └── user_templates.json # Tus plantillas personalizadas
 ```
 

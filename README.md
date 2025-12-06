@@ -110,10 +110,12 @@ src/
 ├── templates.rs   # Built-in course templates (easy to modify)
 ├── ui.rs          # Ratatui rendering
 ├── events.rs      # Keyboard event handling
+├── i18n.rs        # Translation handling
 └── persistence.rs # JSON storage
 
 ~/.local/share/kalk/
 ├── data.json           # Your courses data
+├── config.json         # Your configuration
 └── user_templates.json # Your custom templates
 ```
 
