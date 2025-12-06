@@ -4,7 +4,7 @@
 //! to the appropriate handlers based on the current screen.
 
 use crate::app::{App, Focus, Screen};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use std::time::Duration;
 
 /// Poll for events and handle them.
@@ -18,6 +18,15 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(false);
         }
 
+        // Global: Ctrl+L for language selection (works from main screen)
+        if key.code == KeyCode::Char('l')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+            && app.screen == Screen::Main
+        {
+            app.show_language_popup();
+            return Ok(app.should_quit);
+        }
+
         match &app.screen {
             Screen::Main => handle_main_keys(app, key.code),
             Screen::SelectingTemplate => handle_template_keys(app, key.code),
@@ -27,6 +36,7 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             Screen::ConfirmDelete => handle_delete_keys(app, key.code),
             Screen::ConfirmDeleteTemplate => handle_delete_template_keys(app, key.code),
             Screen::SavingTemplate => handle_save_template_keys(app, key.code),
+            Screen::SelectingLanguage => handle_language_keys(app, key.code),
         }
     }
     Ok(app.should_quit)
@@ -166,6 +176,17 @@ fn handle_delete_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Enter | KeyCode::Char('y') => app.delete_current(),
         KeyCode::Esc | KeyCode::Char('n') => app.cancel_edit(),
+        _ => {}
+    }
+}
+
+/// Handle keys in the language selection screen.
+fn handle_language_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.cancel_language_selection(),
+        KeyCode::Up | KeyCode::Char('k') => app.previous_language(),
+        KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => app.next_language(),
+        KeyCode::Enter => app.confirm_language_selection(),
         _ => {}
     }
 }

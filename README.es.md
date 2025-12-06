@@ -85,6 +85,7 @@ El entorno Nix incluye `cargo-audit` para análisis de seguridad.
 | `d` | Eliminar item seleccionado |
 | `t` | Guardar ramo actual como plantilla |
 | `b` | Auto-balancear pesos de categorías |
+| `Ctrl+L` | Cambiar idioma |
 | `q` | Salir |
 
 ### En Popups

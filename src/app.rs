@@ -3,10 +3,11 @@
 //! This module contains the main App struct that holds all application state,
 //! as well as methods for navigation, form handling, and state management.
 
+use crate::i18n::{Language, Messages};
 use crate::model::{
     Category, Course, CourseTemplate, DEFAULT_PASSING_GRADE, Evaluation, MAX_GRADE, MIN_GRADE,
 };
-use crate::persistence;
+use crate::persistence::{self, Config};
 use crate::templates;
 
 /// Which panel is currently focused.
@@ -28,6 +29,7 @@ pub enum Screen {
     ConfirmDelete,
     ConfirmDeleteTemplate,
     SavingTemplate,
+    SelectingLanguage,
 }
 
 /// Input field being edited.
@@ -52,11 +54,15 @@ pub struct App {
     pub selected_category: Option<usize>,
     pub selected_evaluation: Option<usize>,
     pub selected_template: usize,
+    pub selected_language: usize,
 
     // UI state
     pub focus: Focus,
     pub screen: Screen,
     pub should_quit: bool,
+
+    // Language
+    pub language: Language,
 
     // Input state for forms
     pub input_field: InputField,
@@ -69,17 +75,20 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
+        let language = Language::default();
         Self {
             courses: Vec::new(),
-            built_in_templates: templates::built_in_templates(),
+            built_in_templates: templates::built_in_templates(language),
             user_templates: Vec::new(),
             selected_course: None,
             selected_category: None,
             selected_evaluation: None,
             selected_template: 0,
+            selected_language: 0,
             focus: Focus::Courses,
             screen: Screen::Main,
             should_quit: false,
+            language,
             input_field: InputField::Name,
             edit_name: String::new(),
             edit_passing_grade: String::new(),
@@ -93,6 +102,10 @@ impl Default for App {
 impl App {
     /// Load application state from disk, or create empty state if file doesn't exist.
     pub fn load() -> Self {
+        // Load config first to get language
+        let config = persistence::load_config();
+        let language = config.language;
+
         let courses = match persistence::load_data() {
             Ok(courses) => courses,
             Err(err) => {
@@ -108,6 +121,9 @@ impl App {
                 Vec::new()
             }
         };
+
+        // Generate built-in templates for current language
+        let built_in_templates = templates::built_in_templates(language);
 
         let selected_course = if courses.is_empty() { None } else { Some(0) };
 
@@ -128,11 +144,18 @@ impl App {
 
         Self {
             courses,
+            built_in_templates,
             user_templates,
             selected_course,
             selected_category,
+            language,
             ..Default::default()
         }
+    }
+
+    /// Get the current messages for the selected language.
+    pub fn messages(&self) -> &'static Messages {
+        self.language.messages()
     }
 
     /// Save current state to disk.
@@ -787,6 +810,63 @@ impl App {
             eprintln!("Warning: failed to save user templates: {err}");
         }
 
+        self.screen = Screen::Main;
+    }
+
+    // ==========================================================================
+    // Language Selection
+    // ==========================================================================
+
+    /// Show the language selection popup.
+    pub fn show_language_popup(&mut self) {
+        // Find current language index
+        self.selected_language = Language::all()
+            .iter()
+            .position(|&l| l == self.language)
+            .unwrap_or(0);
+        self.screen = Screen::SelectingLanguage;
+    }
+
+    /// Move to next language in the list.
+    pub fn next_language(&mut self) {
+        let count = Language::all().len();
+        if count > 0 {
+            self.selected_language = (self.selected_language + 1) % count;
+        }
+    }
+
+    /// Move to previous language in the list.
+    pub fn previous_language(&mut self) {
+        let count = Language::all().len();
+        if count > 0 {
+            self.selected_language = if self.selected_language == 0 {
+                count - 1
+            } else {
+                self.selected_language - 1
+            };
+        }
+    }
+
+    /// Confirm language selection and save to config.
+    pub fn confirm_language_selection(&mut self) {
+        if let Some(&new_lang) = Language::all().get(self.selected_language) {
+            self.language = new_lang;
+
+            // Regenerate built-in templates for new language
+            self.built_in_templates = templates::built_in_templates(new_lang);
+
+            // Save config
+            let config = Config { language: new_lang };
+            if let Err(err) = persistence::save_config(&config) {
+                eprintln!("Warning: failed to save config: {err}");
+            }
+        }
+
+        self.screen = Screen::Main;
+    }
+
+    /// Cancel language selection.
+    pub fn cancel_language_selection(&mut self) {
         self.screen = Screen::Main;
     }
 }

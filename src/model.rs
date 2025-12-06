@@ -129,17 +129,6 @@ pub enum WeightValidation {
     Empty,
 }
 
-impl WeightValidation {
-    pub fn message(&self) -> String {
-        match self {
-            WeightValidation::Valid => "Weights OK (100%)".to_string(),
-            WeightValidation::Under(total) => format!("Warning: Only {total:.1}% assigned"),
-            WeightValidation::Over(total) => format!("Error: {total:.1}% exceeds 100%"),
-            WeightValidation::Empty => "No categories".to_string(),
-        }
-    }
-}
-
 /// Represents a course with its evaluation categories.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Course {
@@ -225,21 +214,6 @@ impl Course {
         Self::round_grade(grade) >= self.passing_grade
     }
 
-    /// Get formatted current grade with pass/fail status
-    pub fn current_grade_status(&self) -> String {
-        match self.current_grade() {
-            Some(grade) => {
-                let rounded = Self::round_grade(grade);
-                if self.is_passing_grade(grade) {
-                    format!("Current: {grade:.1} -> {rounded:.0} (PASSED)")
-                } else {
-                    format!("Current: {grade:.1} -> {rounded:.0} (FAILED)")
-                }
-            }
-            None => "No grades yet".to_string(),
-        }
-    }
-
     /// Validate that category weights sum to 100%.
     pub fn validate_weights(&self) -> WeightValidation {
         if self.categories.is_empty() {
@@ -255,137 +229,6 @@ impl Course {
             WeightValidation::Under(total)
         } else {
             WeightValidation::Over(total)
-        }
-    }
-
-    /// Returns a descriptive string about the grade status.
-    /// Tells the user what grade they need in the remaining categories to pass.
-    pub fn calculate_required_grade(&self) -> String {
-        let remaining_weight = self.remaining_weight();
-
-        // Check if all categories are complete
-        let all_complete = self.categories.iter().all(Category::is_complete);
-
-        if all_complete || remaining_weight <= 0.0 {
-            return match self.current_grade() {
-                Some(grade) => {
-                    let rounded = Self::round_grade(grade);
-                    if self.is_passing_grade(grade) {
-                        format!("Passed: {grade:.1} -> {rounded:.0}")
-                    } else {
-                        format!("Failed: {grade:.1} -> {rounded:.0}")
-                    }
-                }
-                None => "No evaluations".to_string(),
-            };
-        }
-
-        match self.current_grade() {
-            Some(current) => {
-                // Calculate required grade in remaining weight
-                // current_contribution + (required * remaining_weight / 100) = passing_grade
-                // required = (passing_grade - current_contribution) * 100 / remaining_weight
-                let current_contribution = current;
-                let required =
-                    (self.passing_grade - current_contribution) * 100.0 / remaining_weight;
-
-                if required <= 0.0 {
-                    format!("Current: {current:.1} | Already passing!")
-                } else if required > MAX_GRADE {
-                    format!("Current: {current:.1} | Cannot pass (need {required:.1})")
-                } else {
-                    format!("Current: {current:.1} | Need {required:.1} in {remaining_weight:.0}%")
-                }
-            }
-            None => {
-                let passing = self.passing_grade;
-                format!("No grades | Need {passing:.1} to pass")
-            }
-        }
-    }
-
-    /// Calculate what grade is needed in a specific evaluation to pass the course.
-    /// Returns a descriptive string.
-    pub fn calculate_needed_for_evaluation(&self, category_idx: usize, eval_idx: usize) -> String {
-        let Some(category) = self.categories.get(category_idx) else {
-            return "Invalid category".to_string();
-        };
-
-        let Some(eval) = category.evaluations.get(eval_idx) else {
-            return "Invalid evaluation".to_string();
-        };
-
-        // If already graded, show that info
-        if let Some(grade) = eval.grade {
-            let name = &eval.name;
-            if grade >= self.passing_grade {
-                return format!("{name}: {grade:.0} (passing)");
-            }
-            return format!("{name}: {grade:.0} (below passing)");
-        }
-
-        // Calculate current contributions from all categories
-        let mut total_contribution = 0.0;
-        let mut total_weight_graded = 0.0;
-
-        for (ci, cat) in self.categories.iter().enumerate() {
-            if ci == category_idx {
-                // For target category, calculate partial average excluding target eval
-                let other_grades: Vec<f64> = cat
-                    .evaluations
-                    .iter()
-                    .enumerate()
-                    .filter(|(ei, e)| *ei != eval_idx && e.grade.is_some())
-                    .filter_map(|(_, e)| e.grade)
-                    .collect();
-
-                if !other_grades.is_empty() {
-                    let other_avg = other_grades.iter().sum::<f64>() / other_grades.len() as f64;
-                    // Partial contribution (will be adjusted with new grade)
-                    let graded_count = other_grades.len();
-                    let total_evals = cat.evaluations.len();
-                    // Weight of already graded evals in this category
-                    let partial_weight = cat.weight * (graded_count as f64 / total_evals as f64);
-                    total_contribution += other_avg * partial_weight / 100.0;
-                    total_weight_graded += partial_weight;
-                }
-            } else if let Some(avg) = cat.average_grade() {
-                // Other categories contribute normally
-                total_contribution += avg * cat.weight / 100.0;
-                total_weight_graded += cat.weight;
-            }
-        }
-
-        // Calculate weight this single evaluation represents
-        let eval_weight = category.weight / category.evaluations.len() as f64;
-        let remaining_weight = 100.0 - total_weight_graded;
-
-        if remaining_weight <= 0.0 {
-            return "All evaluations graded".to_string();
-        }
-
-        // What grade do we need in this evaluation?
-        // total_contribution + (needed * eval_weight / 100) + (other_remaining) = passing_grade
-        // Simplified: what grade here to reach passing assuming other remaining are at passing level
-
-        // Due to rounding rules (54.5 rounds to 55), we only need 54.5 to pass
-        let effective_passing = self.passing_grade - 0.5;
-
-        // Grade needed in this eval to reach passing (assuming remaining evals get passing grade)
-        let other_remaining_weight = remaining_weight - eval_weight;
-        let other_remaining_contribution = effective_passing * other_remaining_weight / 100.0;
-
-        // needed * eval_weight / 100 = effective_passing - total_contribution - other_remaining_contribution
-        let needed_contribution =
-            effective_passing - total_contribution - other_remaining_contribution;
-        let needed_grade = needed_contribution * 100.0 / eval_weight;
-
-        if needed_grade <= 0.0 {
-            "Need: 0+ (already passing with any grade)".to_string()
-        } else if needed_grade > MAX_GRADE {
-            format!("Need: {needed_grade:.0}+ (impossible, max is 100)")
-        } else {
-            format!("Need {needed_grade:.0}+ in this eval to pass")
         }
     }
 

@@ -1,13 +1,29 @@
 //! Data persistence using JSON and XDG directories.
 
+use crate::i18n::Language;
 use crate::model::{Course, CourseTemplate};
 use color_eyre::eyre::{Context, Result};
 use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     io::{BufReader, BufWriter, Write},
     path::PathBuf,
 };
+
+/// Application configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    pub language: Language,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            language: Language::English,
+        }
+    }
+}
 
 /// Get the data file path using XDG directories.
 fn data_path() -> Option<PathBuf> {
@@ -17,6 +33,11 @@ fn data_path() -> Option<PathBuf> {
 /// Get the user templates file path using XDG directories.
 fn user_templates_path() -> Option<PathBuf> {
     ProjectDirs::from("", "", "kalk").map(|dirs| dirs.data_dir().join("user_templates.json"))
+}
+
+/// Get the config file path using XDG directories.
+fn config_path() -> Option<PathBuf> {
+    ProjectDirs::from("", "", "kalk").map(|dirs| dirs.data_dir().join("config.json"))
 }
 
 /// Load courses from disk.
@@ -123,6 +144,56 @@ pub fn save_user_templates(templates: &[CourseTemplate]) -> Result<()> {
     Ok(())
 }
 
+/// Load configuration from disk.
+/// Returns default config if the file doesn't exist or can't be parsed.
+pub fn load_config() -> Config {
+    let Some(path) = config_path() else {
+        return Config::default();
+    };
+
+    if !path.exists() {
+        return Config::default();
+    }
+
+    let Ok(file) = File::open(&path) else {
+        return Config::default();
+    };
+
+    let reader = BufReader::new(file);
+    serde_json::from_reader(reader).unwrap_or_default()
+}
+
+/// Save configuration to disk.
+pub fn save_config(config: &Config) -> Result<()> {
+    let Some(path) = config_path() else {
+        return Ok(());
+    };
+
+    // Ensure directory exists
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).context("Failed to create config directory")?;
+    }
+
+    let tmp_path = path.with_extension("tmp");
+    let file = File::create(&tmp_path).context("Failed to create temp config file")?;
+    let mut writer = BufWriter::new(file);
+
+    serde_json::to_writer_pretty(&mut writer, config).context("Failed to serialize config")?;
+    writer.flush().context("Failed to flush config to disk")?;
+    drop(writer);
+
+    if let Err(err) = fs::rename(&tmp_path, &path) {
+        if path.exists() {
+            fs::remove_file(&path).context("Failed to remove existing config file")?;
+            fs::rename(&tmp_path, &path).context("Failed to write config file")?;
+        } else {
+            return Err(err).context("Failed to write config file");
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,5 +209,17 @@ mod tests {
     fn test_user_templates_path_exists() {
         let path = user_templates_path();
         assert!(path.is_some());
+    }
+
+    #[test]
+    fn test_config_path_exists() {
+        let path = config_path();
+        assert!(path.is_some());
+    }
+
+    #[test]
+    fn test_default_config() {
+        let config = Config::default();
+        assert_eq!(config.language, Language::English);
     }
 }

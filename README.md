@@ -87,6 +87,7 @@ The Nix environment includes `cargo-audit` for security scanning.
 | `d` | Delete selected item |
 | `t` | Save current course as template |
 | `b` | Auto-balance category weights |
+| `Ctrl+L` | Change language |
 | `q` | Quit |
 
 ### In Popups

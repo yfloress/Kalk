@@ -5,6 +5,7 @@
 
 mod app;
 mod events;
+mod i18n;
 mod model;
 mod persistence;
 mod templates;
