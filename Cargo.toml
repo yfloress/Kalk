@@ -10,7 +10,6 @@ readme = "README.md"
 keywords = ["tui", "academic", "productivity", "grades", "ratatui"]
 categories = ["command-line-utilities", "visualization"]
 
-[package]
 exclude = [
     ".img/*",
     ".envrc"
