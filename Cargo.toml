@@ -21,5 +21,5 @@ crossterm = "0.27"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 directories = "5.0"
-uuid = { version = "1.8", features = ["v4", "serde"] }
+uuid = { version = "1.21", features = ["v4", "serde"] }
 color-eyre = "0.6.5"
