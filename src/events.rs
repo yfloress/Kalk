@@ -60,6 +60,9 @@ fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: 
 
 /// Handle keys in the main screen.
 fn handle_main_keys(app: &mut App, key: KeyCode) {
+    // Clear any status message on the next user action
+    app.clear_status();
+
     match key {
         // Quit
         KeyCode::Char('q') => app.should_quit = true,
