@@ -19,14 +19,21 @@ This repo follows a clean modular architecture with strict separation of concern
 
 ```
 src/
-├── main.rs        # Entry point, terminal setup, panic hooks (bootstrap only)
-├── app.rs         # Application state, navigation, form handling, coordination
-├── model.rs       # Domain structs and logic (Course, Category, Evaluation, grade calculations)
-├── templates.rs   # Built-in course templates (language-aware)
-├── ui.rs          # Ratatui rendering only (panels, popups, formatting)
-├── events.rs      # Keyboard event handling and dispatch
-├── i18n.rs        # Translations (English + Spanish)
-└── persistence.rs # JSON storage (XDG dirs, atomic writes)
+├── main.rs          # Entry point, terminal setup, panic hooks (bootstrap only)
+├── app/
+│   ├── mod.rs       # App struct, enums, Default, load(), getters, navigation
+│   └── forms.rs     # Form handling: course/category/eval editing, templates, language
+├── model/
+│   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, templates
+│   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
+│   └── tests.rs     # All model unit tests (cfg(test) only)
+├── ui/
+│   ├── mod.rs       # Main draw, panel rendering (courses, categories, evaluations), footer
+│   └── popups.rs    # Popup dialogs, input helpers, formatting functions
+├── templates.rs     # Built-in course templates (language-aware)
+├── events.rs        # Keyboard event handling and dispatch
+├── i18n.rs          # Translations (English + Spanish)
+└── persistence.rs   # JSON storage (XDG dirs, atomic writes)
 
 ~/.local/share/kalk/
 ├── data.json           # Course data
@@ -35,9 +42,15 @@ src/
 ```
 
 ## Workflow Rules (Important)
-- **Domain logic lives in `model.rs`** — grade calculations, averages, weight validation, needed-grade formulas. Never put math in `ui.rs`.
-- **`ui.rs` only renders** — it reads state from `App` and formats for display. No mutations, no calculations beyond formatting strings.
-- **`app.rs` coordinates** — holds state, handles form inputs, delegates to `model.rs` for domain logic and `persistence.rs` for disk I/O.
+- **Domain logic lives in `model/`** — grade calculations, averages, weight validation, needed-grade formulas. Never put math in `ui/`.
+- **`model/mod.rs`** owns Course, Evaluation, NeededGrade, WeightValidation, and template structs.
+- **`model/category.rs`** owns Category, CategoryRules, and related enums (AveragingMethod, MinimumNotMetAction).
+- **`model/tests.rs`** contains all model unit tests — tests are separated from production code.
+- **`ui/` only renders** — it reads state from `App` and formats for display. No mutations, no calculations beyond formatting strings.
+- **`ui/mod.rs`** handles the main layout, three panels (courses, categories, evaluations), and footer.
+- **`ui/popups.rs`** handles all popup overlays plus shared helpers (centered_rect, render_input_field, format_* functions).
+- **`app/mod.rs` coordinates** — holds state, navigation, getters, delegates to `model/` for domain logic and `persistence.rs` for disk I/O.
+- **`app/forms.rs`** handles all form input/confirmation (course, category, evaluation, templates, language selection, deletion).
 - **`events.rs` dispatches** — maps key presses to `App` methods. No business logic here.
 - **`main.rs` is bootstrap only** — terminal setup, panic hooks, main loop. Nothing else.
 - **Errors must be visible to the user** — use `app.set_status(msg)` instead of `eprintln!`. The user cannot see stderr in alternate screen mode.
@@ -80,10 +93,12 @@ Always ask the user to run them. Use `nix develop -c` prefix for all Cargo comma
 - Run `nix develop -c cargo clippy -j 2` before committing — zero warnings policy.
 
 ## Testing Guidelines
-- Tests live in `#[cfg(test)] mod tests` at the bottom of each module.
+- Model tests live in `model/tests.rs`, included via `#[cfg(test)] mod tests;` in `model/mod.rs`.
+- Small self-contained tests (e.g., path existence, config defaults) may remain inline in their module.
 - Keep tests deterministic — no filesystem or network dependencies.
-- Test domain logic in `model.rs` thoroughly (calculations, edge cases, validation).
+- Test domain logic in `model/` thoroughly (calculations, edge cases, validation).
 - Use `nix develop -c cargo test -j 2` to run.
+- **File size limit**: all `.rs` files should ideally stay under ~600 lines. A slight overshoot is acceptable if the file is cohesive, but never exceed ~650.
 
 ## Commit Guidelines
 - **NEVER create commits unless the user explicitly asks.**

@@ -31,3 +31,4 @@ target/
 *.swp
 .zed
 .direnv/
+ROADMAP_RULES.md

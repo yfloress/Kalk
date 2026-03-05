@@ -1,0 +1,352 @@
+// Kalk — your academic dashboard in the terminal.
+// Copyright (C) 2026  Kyronix
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/agpl-3.0.html>.
+//
+
+//! Category domain model and rules.
+//!
+//! A `Category` groups evaluations under a weighted section of a course
+//! (e.g., "Certamenes 80%", "Controles 20%"). Each category can have
+//! optional `CategoryRules` that modify how its grade is calculated
+//! (drop lowest, geometric mean, minimum average, etc.).
+
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use super::Evaluation;
+
+// =============================================================================
+// Averaging Method
+// =============================================================================
+
+/// How to average evaluations within a category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum AveragingMethod {
+    /// Standard arithmetic mean: sum / count
+    #[default]
+    Arithmetic,
+    /// Geometric mean: (product)^(1/count) — a single 0 makes the result 0
+    Geometric,
+}
+
+// =============================================================================
+// Minimum-Not-Met Action
+// =============================================================================
+
+/// What happens when a category's minimum average requirement is not met.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum MinimumNotMetAction {
+    /// Final grade = this category's average (other categories ignored)
+    #[default]
+    FinalEqualsAverage,
+    /// Student must take Certamen Global (handled at course level)
+    RequiresGlobal,
+}
+
+// =============================================================================
+// Category Rules
+// =============================================================================
+
+/// Rules that modify how a category's grade is calculated.
+///
+/// All fields use `#[serde(default)]` for backward compatibility —
+/// existing JSON data without rules will deserialize with sensible defaults
+/// that produce identical behavior to the old system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryRules {
+    /// Minimum average required in this category (None = no requirement).
+    /// If the average is below this, `on_minimum_not_met` determines the consequence.
+    #[serde(default)]
+    pub minimum_average: Option<f64>,
+
+    /// What happens when the minimum average is not met.
+    #[serde(default)]
+    pub on_minimum_not_met: MinimumNotMetAction,
+
+    /// Drop the N lowest grades before averaging (0 = don't drop any).
+    /// If drop_lowest >= evaluation count, no grades are dropped.
+    #[serde(default)]
+    pub drop_lowest: usize,
+
+    /// How to average evaluations in this category.
+    #[serde(default)]
+    pub averaging_method: AveragingMethod,
+
+    /// Minimum grade required per individual evaluation (None = no requirement).
+    /// If any evaluation is below this, the category is flagged.
+    #[serde(default)]
+    pub minimum_per_evaluation: Option<f64>,
+
+    /// Whether to round the category average to nearest integer before
+    /// using it in the weighted course grade calculation.
+    #[serde(default)]
+    pub round_before_weighting: bool,
+}
+
+impl Default for CategoryRules {
+    fn default() -> Self {
+        Self {
+            minimum_average: None,
+            on_minimum_not_met: MinimumNotMetAction::default(),
+            drop_lowest: 0,
+            averaging_method: AveragingMethod::default(),
+            minimum_per_evaluation: None,
+            round_before_weighting: false,
+        }
+    }
+}
+
+impl CategoryRules {
+    /// Returns true if all rules are at their defaults (no special behavior).
+    pub fn is_default(&self) -> bool {
+        self.minimum_average.is_none()
+            && self.on_minimum_not_met == MinimumNotMetAction::FinalEqualsAverage
+            && self.drop_lowest == 0
+            && self.averaging_method == AveragingMethod::Arithmetic
+            && self.minimum_per_evaluation.is_none()
+            && !self.round_before_weighting
+    }
+}
+
+// =============================================================================
+// Category
+// =============================================================================
+
+/// Represents a category of evaluations (e.g., "Certamenes", "Controles").
+/// Each category has a weight that contributes to the final course grade.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Category {
+    pub id: Uuid,
+    pub name: String,
+    /// Weight of this category (0.0 - 100.0 percentage)
+    pub weight: f64,
+    pub evaluations: Vec<Evaluation>,
+    /// Optional rules that modify grade calculation for this category.
+    #[serde(default)]
+    pub rules: CategoryRules,
+}
+
+impl Category {
+    pub fn new(name: String, weight: f64) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            weight: weight.clamp(0.0, 100.0),
+            evaluations: Vec::new(),
+            rules: CategoryRules::default(),
+        }
+    }
+
+    pub fn with_evaluations(name: String, weight: f64, evaluations: Vec<Evaluation>) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            weight: weight.clamp(0.0, 100.0),
+            evaluations,
+            rules: CategoryRules::default(),
+        }
+    }
+
+    pub fn with_rules(
+        name: String,
+        weight: f64,
+        evaluations: Vec<Evaluation>,
+        rules: CategoryRules,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            weight: weight.clamp(0.0, 100.0),
+            evaluations,
+            rules,
+        }
+    }
+
+    // =========================================================================
+    // Grade Calculation
+    // =========================================================================
+
+    /// Get the grades to use for averaging, after applying `drop_lowest`.
+    /// Ungraded evaluations are treated as 0.
+    /// Returns an empty Vec if there are no evaluations.
+    pub(crate) fn effective_grades(&self) -> Vec<f64> {
+        if self.evaluations.is_empty() {
+            return Vec::new();
+        }
+
+        let mut grades: Vec<f64> = self
+            .evaluations
+            .iter()
+            .map(|e| e.grade.unwrap_or(0.0))
+            .collect();
+
+        // Drop the N lowest grades (only if we'd have at least 1 left)
+        if self.rules.drop_lowest > 0 && self.rules.drop_lowest < grades.len() {
+            grades.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            grades = grades[self.rules.drop_lowest..].to_vec();
+        }
+
+        grades
+    }
+
+    /// Get effective grades but with a specific evaluation excluded or set to 0.
+    /// Used by `needed_grade_for_evaluation` to solve for a specific eval.
+    pub(crate) fn effective_grades_excluding(&self, eval_idx: usize) -> (Vec<f64>, usize) {
+        if self.evaluations.is_empty() {
+            return (Vec::new(), 0);
+        }
+
+        let mut indexed_grades: Vec<(usize, f64)> = self
+            .evaluations
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                if i == eval_idx {
+                    (i, 0.0)
+                } else {
+                    (i, e.grade.unwrap_or(0.0))
+                }
+            })
+            .collect();
+
+        // Apply drop_lowest
+        let effective_count;
+        if self.rules.drop_lowest > 0 && self.rules.drop_lowest < indexed_grades.len() {
+            indexed_grades
+                .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            indexed_grades = indexed_grades[self.rules.drop_lowest..].to_vec();
+            effective_count = indexed_grades.len();
+        } else {
+            effective_count = indexed_grades.len();
+        }
+
+        let grades = indexed_grades.iter().map(|(_, g)| *g).collect();
+        (grades, effective_count)
+    }
+
+    /// Calculate the average grade of all evaluations in this category,
+    /// respecting rules (drop_lowest, averaging_method, round_before_weighting).
+    /// Ungraded evaluations are treated as 0, reflecting the student's
+    /// real current standing (e.g., 90 + 0 + 0 = 30 average).
+    /// Returns None only if there are no evaluations at all.
+    pub fn average_grade(&self) -> Option<f64> {
+        let grades = self.effective_grades();
+        if grades.is_empty() {
+            return None;
+        }
+
+        let avg = match self.rules.averaging_method {
+            AveragingMethod::Arithmetic => {
+                let sum: f64 = grades.iter().sum();
+                sum / grades.len() as f64
+            }
+            AveragingMethod::Geometric => {
+                // Geometric mean: (product)^(1/n)
+                // If any grade is 0, the result is 0.
+                if grades.iter().any(|g| *g <= 0.0) {
+                    0.0
+                } else {
+                    let log_sum: f64 = grades.iter().map(|g| g.ln()).sum();
+                    (log_sum / grades.len() as f64).exp()
+                }
+            }
+        };
+
+        if self.rules.round_before_weighting {
+            Some(avg.round())
+        } else {
+            Some(avg)
+        }
+    }
+
+    /// Calculate this category's weighted contribution to the final grade.
+    /// Returns None only if there are no evaluations at all.
+    /// Ungraded evaluations count as 0 in the average.
+    pub fn weighted_contribution(&self) -> Option<f64> {
+        self.average_grade().map(|avg| avg * self.weight / 100.0)
+    }
+
+    // =========================================================================
+    // Query Helpers
+    // =========================================================================
+
+    /// Returns the number of graded evaluations.
+    pub fn graded_count(&self) -> usize {
+        self.evaluations
+            .iter()
+            .filter(|e| e.grade.is_some())
+            .count()
+    }
+
+    /// Check if category average is passing, using the course's passing grade.
+    pub fn is_passing(&self, passing_grade: f64) -> Option<bool> {
+        self.average_grade().map(|avg| avg >= passing_grade)
+    }
+
+    /// Check if the minimum average requirement is met.
+    /// Returns None if there's no minimum requirement or no evaluations.
+    /// Returns Some(true) if met, Some(false) if not met.
+    pub fn meets_minimum(&self) -> Option<bool> {
+        let min = self.rules.minimum_average?;
+        self.average_grade().map(|avg| avg >= min)
+    }
+
+    /// Check if all individual evaluations meet the per-evaluation minimum.
+    /// Returns None if there's no per-evaluation requirement.
+    /// Returns Some(list of failing eval indices) if there is a requirement.
+    pub fn evals_below_minimum(&self) -> Option<Vec<usize>> {
+        let min = self.rules.minimum_per_evaluation?;
+        let failing: Vec<usize> = self
+            .evaluations
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| match e.grade {
+                Some(g) => g < min,
+                None => false, // Ungraded evals are not flagged (they haven't been taken yet)
+            })
+            .map(|(i, _)| i)
+            .collect();
+        Some(failing)
+    }
+
+    /// Returns the number of effective evaluations (after dropping lowest).
+    pub fn effective_eval_count(&self) -> usize {
+        self.effective_grades().len()
+    }
+
+    /// Returns the indices of evaluations that would be dropped.
+    pub fn dropped_indices(&self) -> Vec<usize> {
+        if self.rules.drop_lowest == 0
+            || self.evaluations.is_empty()
+            || self.rules.drop_lowest >= self.evaluations.len()
+        {
+            return Vec::new();
+        }
+
+        let mut indexed: Vec<(usize, f64)> = self
+            .evaluations
+            .iter()
+            .enumerate()
+            .map(|(i, e)| (i, e.grade.unwrap_or(0.0)))
+            .collect();
+
+        indexed.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        indexed
+            .iter()
+            .take(self.rules.drop_lowest)
+            .map(|(i, _)| *i)
+            .collect()
+    }
+}
