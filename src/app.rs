@@ -61,6 +61,10 @@ pub struct App {
     pub screen: Screen,
     pub should_quit: bool,
 
+    /// Temporary status message shown to the user (errors, confirmations, etc.)
+    /// Cleared on the next action.
+    pub status_message: Option<String>,
+
     // Language
     pub language: Language,
 
@@ -88,6 +92,7 @@ impl Default for App {
             focus: Focus::Courses,
             screen: Screen::Main,
             should_quit: false,
+            status_message: None,
             language,
             input_field: InputField::Name,
             edit_name: String::new(),
@@ -105,19 +110,21 @@ impl App {
         // Load config first to get language
         let config = persistence::load_config();
         let language = config.language;
+        let m = language.messages();
+        let mut status_message: Option<String> = None;
 
         let courses = match persistence::load_data() {
             Ok(courses) => courses,
-            Err(err) => {
-                eprintln!("Warning: failed to load saved data, starting fresh: {err}");
+            Err(_) => {
+                status_message = Some(m.load_error.to_string());
                 Vec::new()
             }
         };
 
         let user_templates = match persistence::load_user_templates() {
             Ok(templates) => templates,
-            Err(err) => {
-                eprintln!("Warning: failed to load user templates: {err}");
+            Err(_) => {
+                status_message = Some(m.load_template_error.to_string());
                 Vec::new()
             }
         };
@@ -148,6 +155,7 @@ impl App {
             user_templates,
             selected_course,
             selected_category,
+            status_message,
             language,
             ..Default::default()
         }
@@ -161,6 +169,16 @@ impl App {
     /// Save current state to disk.
     pub fn save(&self) -> color_eyre::Result<()> {
         persistence::save_data(&self.courses)
+    }
+
+    /// Clear the status message (called before each user action).
+    pub fn clear_status(&mut self) {
+        self.status_message = None;
+    }
+
+    /// Set a status message visible to the user.
+    pub fn set_status(&mut self, msg: String) {
+        self.status_message = Some(msg);
     }
 
     // ==========================================================================
@@ -443,6 +461,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
+        self.clear_status();
         self.persist();
     }
 
@@ -451,11 +470,12 @@ impl App {
     // ==========================================================================
 
     pub fn start_new_category(&mut self) {
-        if self.current_course().is_some() {
+        if let Some(course) = self.current_course() {
+            let remaining = course.remaining_weight();
             self.screen = Screen::EditingCategory { is_new: true };
             self.input_field = InputField::Name;
             self.edit_name.clear();
-            self.edit_weight = "20.0".to_string();
+            self.edit_weight = format!("{remaining:.1}");
         }
     }
 
@@ -512,6 +532,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
+        self.clear_status();
         self.persist();
     }
 
@@ -529,14 +550,18 @@ impl App {
     }
 
     pub fn start_edit_evaluation(&mut self) {
-        let Some(name) = self.current_evaluation().map(|eval| eval.name.clone()) else {
+        let Some((name, grade)) = self
+            .current_evaluation()
+            .map(|eval| (eval.name.clone(), eval.grade))
+        else {
             return;
         };
 
         self.screen = Screen::EditingEvaluation { is_new: false };
-        self.input_field = InputField::Grade; // Start with grade field
+        self.input_field = InputField::Grade;
         self.edit_name = name;
-        self.edit_grade.clear(); // Always start with empty grade field
+        // Pre-fill with current grade so user doesn't lose it accidentally
+        self.edit_grade = grade.map(|g| format!("{g:.0}")).unwrap_or_default();
     }
 
     pub fn confirm_evaluation(&mut self) {
@@ -587,6 +612,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
+        self.clear_status();
         self.persist();
     }
 
@@ -657,6 +683,7 @@ impl App {
             }
         }
         self.screen = Screen::Main;
+        self.clear_status();
         self.persist();
     }
 
@@ -670,6 +697,7 @@ impl App {
             && let Some(course) = self.courses.get_mut(course_idx)
         {
             course.auto_balance_weights();
+            self.clear_status();
             self.persist();
         }
     }
@@ -737,17 +765,19 @@ impl App {
         }
 
         // Save updated user templates
-        if let Err(err) = persistence::save_user_templates(&self.user_templates) {
-            eprintln!("Warning: failed to save user templates: {err}");
+        if persistence::save_user_templates(&self.user_templates).is_err() {
+            let msg = self.messages().save_template_error.to_string();
+            self.set_status(msg);
         }
 
         self.screen = Screen::SelectingTemplate;
     }
 
-    /// Persist state and log (without panicking) on failure.
-    fn persist(&self) {
-        if let Err(err) = self.save() {
-            eprintln!("Warning: failed to save data: {err}");
+    /// Persist state to disk. Shows error to user via status message on failure.
+    fn persist(&mut self) {
+        if self.save().is_err() {
+            let msg = self.messages().save_error.to_string();
+            self.set_status(msg);
         }
     }
 
@@ -761,28 +791,14 @@ impl App {
             return;
         };
 
-        // Pre-fill with course name and description
+        // Pre-fill with course name and auto-generated description
         let name = format!("{} Template", course.name);
-        let description = self.generate_template_description(course);
+        let description = course.generate_template_description();
 
         self.edit_name = name;
         self.edit_description = description;
         self.input_field = InputField::Name;
         self.screen = Screen::SavingTemplate;
-    }
-
-    /// Generate a description based on course structure.
-    fn generate_template_description(&self, course: &Course) -> String {
-        if course.categories.is_empty() {
-            return "Empty template".to_string();
-        }
-
-        course
-            .categories
-            .iter()
-            .map(|c| format!("{} {}x ({:.0}%)", c.evaluations.len(), c.name, c.weight))
-            .collect::<Vec<_>>()
-            .join(" + ")
     }
 
     /// Confirm saving the current course as a user template.
@@ -803,8 +819,9 @@ impl App {
         self.user_templates.push(template);
 
         // Save user templates to disk
-        if let Err(err) = persistence::save_user_templates(&self.user_templates) {
-            eprintln!("Warning: failed to save user templates: {err}");
+        if persistence::save_user_templates(&self.user_templates).is_err() {
+            let msg = self.messages().save_template_error.to_string();
+            self.set_status(msg);
         }
 
         self.screen = Screen::Main;
@@ -854,8 +871,9 @@ impl App {
 
             // Save config
             let config = Config { language: new_lang };
-            if let Err(err) = persistence::save_config(&config) {
-                eprintln!("Warning: failed to save config: {err}");
+            if persistence::save_config(&config).is_err() {
+                let msg = self.messages().config_save_error.to_string();
+                self.set_status(msg);
             }
         }
 

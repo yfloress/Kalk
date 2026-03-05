@@ -130,11 +130,16 @@ pub struct Messages {
     pub tpl_custom: &'static str,
     pub tpl_custom_desc: &'static str,
 
+    // Status messages
+    pub save_error: &'static str,
+    pub save_template_error: &'static str,
+    pub config_save_error: &'static str,
+    pub load_error: &'static str,
+    pub load_template_error: &'static str,
+
     // Misc
     pub passing: &'static str,
     pub below_passing: &'static str,
-    pub invalid_category: &'static str,
-    pub invalid_evaluation: &'static str,
     pub need_grade_impossible: &'static str,
     pub need_grade_any: &'static str,
     pub need_grade_in_eval: &'static str,
@@ -241,11 +246,16 @@ pub const EN: Messages = Messages {
     tpl_custom: "Custom (Empty)",
     tpl_custom_desc: "Start with no categories - add your own",
 
+    // Status messages
+    save_error: "Error: Failed to save data",
+    save_template_error: "Error: Failed to save templates",
+    config_save_error: "Error: Failed to save config",
+    load_error: "Warning: Failed to load data, starting fresh",
+    load_template_error: "Warning: Failed to load templates",
+
     // Misc
     passing: "passing",
     below_passing: "below passing",
-    invalid_category: "Invalid category",
-    invalid_evaluation: "Invalid evaluation",
     need_grade_impossible: "impossible, max is 100",
     need_grade_any: "already passing with any grade",
     need_grade_in_eval: "in this eval to pass",
@@ -352,11 +362,16 @@ pub const ES: Messages = Messages {
     tpl_custom: "Personalizado (Vacío)",
     tpl_custom_desc: "Empieza sin categorías - añade las tuyas",
 
+    // Status messages
+    save_error: "Error: No se pudieron guardar los datos",
+    save_template_error: "Error: No se pudieron guardar las plantillas",
+    config_save_error: "Error: No se pudo guardar la configuración",
+    load_error: "Advertencia: No se pudieron cargar datos, iniciando vacío",
+    load_template_error: "Advertencia: No se pudieron cargar plantillas",
+
     // Misc
     passing: "aprobando",
     below_passing: "bajo aprobación",
-    invalid_category: "Categoría inválida",
-    invalid_evaluation: "Evaluación inválida",
     need_grade_impossible: "imposible, máximo es 100",
     need_grade_any: "ya aprobando con cualquier nota",
     need_grade_in_eval: "en esta eval para aprobar",

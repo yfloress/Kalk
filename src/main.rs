@@ -88,9 +88,6 @@ fn main() -> Result<()> {
     // Load application state
     let mut app = App::load();
 
-    // Run the application
-    let result = run_app(&mut terminal, &mut app);
-
-    // Propagate any errors from the main loop (terminal restoration handled by guard)
-    result
+    // Run the application (terminal restoration handled by guard)
+    run_app(&mut terminal, &mut app)
 }

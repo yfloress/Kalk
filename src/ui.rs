@@ -2,10 +2,11 @@
 //!
 //! This module handles all visual rendering of the application,
 //! including the main layout, panels, and popup dialogs.
+//! All calculation logic lives in `model.rs` — this module only formats and renders.
 
 use crate::app::{App, Focus, InputField, Screen};
-use crate::i18n::Language;
-use crate::model::{DEFAULT_PASSING_GRADE, MAX_GRADE, WeightValidation};
+use crate::i18n::{Language, Messages};
+use crate::model::{Course, MAX_GRADE, NeededGradeStatus, WeightValidation};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -15,6 +16,10 @@ use ratatui::{
         Block, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Table, Wrap,
     },
 };
+
+// =============================================================================
+// Main Draw
+// =============================================================================
 
 /// Main UI rendering function.
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -40,30 +45,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     // Draw popups on top
     match &app.screen {
-        Screen::SelectingTemplate => {
-            draw_template_popup(frame, app);
-        }
-        Screen::EditingCourse { is_new } => {
-            draw_course_popup(frame, app, *is_new);
-        }
-        Screen::EditingCategory { is_new } => {
-            draw_category_popup(frame, app, *is_new);
-        }
+        Screen::SelectingTemplate => draw_template_popup(frame, app),
+        Screen::EditingCourse { is_new } => draw_course_popup(frame, app, *is_new),
+        Screen::EditingCategory { is_new } => draw_category_popup(frame, app, *is_new),
         Screen::EditingEvaluation { is_new } => {
             draw_evaluation_popup(frame, app, *is_new, !*is_new);
         }
-        Screen::ConfirmDelete => {
-            draw_delete_popup(frame, app);
-        }
-        Screen::ConfirmDeleteTemplate => {
-            draw_delete_template_popup(frame, app);
-        }
-        Screen::SavingTemplate => {
-            draw_save_template_popup(frame, app);
-        }
-        Screen::SelectingLanguage => {
-            draw_language_popup(frame, app);
-        }
+        Screen::ConfirmDelete => draw_delete_popup(frame, app),
+        Screen::ConfirmDeleteTemplate => draw_delete_template_popup(frame, app),
+        Screen::SavingTemplate => draw_save_template_popup(frame, app),
+        Screen::SelectingLanguage => draw_language_popup(frame, app),
         Screen::Main => {}
     }
 }
@@ -211,6 +202,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(avg_widget, chunks[1]);
 
     // Category list
+    let passing_grade = course.passing_grade;
     let items: Vec<ListItem> = course
         .categories
         .iter()
@@ -227,8 +219,8 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 m.graded
             );
 
-            // Color based on passing status
-            let avg_color = match cat.is_passing() {
+            // Color based on passing status using the course's passing grade
+            let avg_color = match cat.is_passing(passing_grade) {
                 Some(true) => Color::Green,
                 Some(false) => Color::Red,
                 None => Color::DarkGray,
@@ -299,6 +291,11 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
+    let passing_grade = app
+        .current_course()
+        .map(|c| c.passing_grade)
+        .unwrap_or(55.0);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0)])
@@ -310,7 +307,7 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         .map(|g| format!("{:.1}", g))
         .unwrap_or_else(|| "-".to_string());
 
-    let avg_color = match category.is_passing() {
+    let avg_color = match category.is_passing(passing_grade) {
         Some(true) => Color::Green,
         Some(false) => Color::Red,
         None => Color::DarkGray,
@@ -364,7 +361,7 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
                 .unwrap_or_else(|| "-".to_string());
 
             let grade_style = match e.grade {
-                Some(g) if g >= DEFAULT_PASSING_GRADE => Style::default().fg(Color::Green),
+                Some(g) if g >= passing_grade => Style::default().fg(Color::Green),
                 Some(_) => Style::default().fg(Color::Red),
                 None => Style::default().fg(Color::DarkGray),
             };
@@ -398,8 +395,29 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(table, chunks[1]);
 }
 
+// =============================================================================
+// Footer
+// =============================================================================
+
 fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
+
+    // If there's a status message (error/info), show it prominently
+    if let Some(ref status) = app.status_message {
+        let is_error = status.starts_with("Error");
+        let color = if is_error { Color::Red } else { Color::Yellow };
+
+        let footer = Paragraph::new(status.as_str())
+            .style(Style::default().fg(color).add_modifier(Modifier::BOLD))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(color)),
+            );
+        frame.render_widget(footer, area);
+        return;
+    }
+
     let keys = match &app.screen {
         Screen::Main => match app.focus {
             Focus::Courses => {
@@ -460,7 +478,7 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         }
     };
 
-    let footer = Paragraph::new(keys.to_string())
+    let footer = Paragraph::new(keys)
         .style(Style::default().fg(Color::DarkGray))
         .block(
             Block::default()
@@ -496,7 +514,6 @@ fn draw_template_popup(frame: &mut Frame, app: &App) {
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            // Mark user templates with a different style
             let is_user_template = i >= built_in_count;
             let prefix = if is_user_template { "★ " } else { "" };
 
@@ -690,14 +707,14 @@ fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool, is_editing:
         let (info, info_color) = if let (Some(cat_idx), Some(eval_idx)) =
             (app.selected_category, app.selected_evaluation)
         {
-            let needed = format_needed_for_evaluation(course, cat_idx, eval_idx, m, is_editing);
+            let needed = course.needed_grade_for_evaluation(cat_idx, eval_idx, is_editing);
             let color = match needed.status {
-                NeedGradeStatus::Success => Color::Green,
-                NeedGradeStatus::Failure => Color::Red,
-                NeedGradeStatus::Warning => Color::Yellow,
-                NeedGradeStatus::Info => Color::DarkGray,
+                NeededGradeStatus::Success => Color::Green,
+                NeededGradeStatus::Failure => Color::Red,
+                NeededGradeStatus::Warning => Color::Yellow,
+                NeededGradeStatus::Info => Color::DarkGray,
             };
-            (needed.message, color)
+            (format_needed_grade(course, &needed, m), color)
         } else {
             let text = format_course_status(course, m);
             let color = match course.current_grade() {
@@ -762,7 +779,7 @@ fn draw_save_template_popup(frame: &mut Frame, app: &App) {
     // Show info about what will be saved
     if let Some(course) = app.current_course() {
         let info = format!(
-            "{} {} '{}' ",
+            "{} {} '{}'",
             m.will_save_categories,
             course.categories.len(),
             course.name
@@ -834,6 +851,53 @@ fn draw_delete_popup(frame: &mut Frame, app: &App) {
     frame.render_widget(paragraph, area);
 }
 
+fn draw_language_popup(frame: &mut Frame, app: &App) {
+    let m = app.messages();
+    let area = centered_rect(40, 30, frame.size());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(format!(" {} ", m.select_language))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let items: Vec<ListItem> = Language::all()
+        .iter()
+        .map(|lang| {
+            let is_current = *lang == app.language;
+            let prefix = if is_current { "● " } else { "  " };
+            let style = if is_current {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            ListItem::new(Line::from(Span::styled(
+                format!("{}{}", prefix, lang.display_name()),
+                style,
+            )))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .highlight_style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("> ");
+
+    let mut state = ListState::default();
+    state.select(Some(app.selected_language));
+
+    frame.render_stateful_widget(list, inner, &mut state);
+}
+
 // =============================================================================
 // Helper Functions
 // =============================================================================
@@ -890,102 +954,31 @@ fn render_input_field(frame: &mut Frame, label: &str, value: &str, is_active: bo
     frame.render_widget(input, area);
 }
 
-fn draw_language_popup(frame: &mut Frame, app: &App) {
-    let m = app.messages();
-    let area = centered_rect(40, 30, frame.size());
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title(format!(" {} ", m.select_language))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let items: Vec<ListItem> = Language::all()
-        .iter()
-        .map(|lang| {
-            let is_current = *lang == app.language;
-            let prefix = if is_current { "● " } else { "  " };
-            let style = if is_current {
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-
-            ListItem::new(Line::from(Span::styled(
-                format!("{}{}", prefix, lang.display_name()),
-                style,
-            )))
-        })
-        .collect();
-
-    let list = List::new(items)
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("> ");
-
-    let mut state = ListState::default();
-    state.select(Some(app.selected_language));
-
-    frame.render_stateful_widget(list, inner, &mut state);
-}
-
 // =============================================================================
-// Formatting Helper Functions (i18n)
+// Formatting Functions
 // =============================================================================
 
-use crate::i18n::Messages;
-use crate::model::Course;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NeedGradeStatus {
-    Success,
-    Failure,
-    Warning,
-    Info,
-}
-
-struct NeededGrade {
-    message: String,
-    status: NeedGradeStatus,
-}
-
-/// Format course status message with translations.
+/// Format course status message.
 fn format_course_status(course: &Course, m: &Messages) -> String {
-    // Check if there are any evaluations at all
-    let has_evaluations = course.categories.iter().any(|c| !c.evaluations.is_empty());
-
-    if !has_evaluations {
+    if !course.has_evaluations() {
         return m.no_evaluations.to_string();
     }
 
     match course.current_grade() {
         Some(grade) => {
             let rounded = Course::round_grade(grade);
-            if course.is_passing_grade(grade) {
-                format!(
-                    "{}: {:.1} → {:.0} ({})",
-                    m.current, grade, rounded, m.passed
-                )
+            let status = if course.is_passing_grade(grade) {
+                m.passed
             } else {
-                format!(
-                    "{}: {:.1} → {:.0} ({})",
-                    m.current, grade, rounded, m.failed
-                )
-            }
+                m.failed
+            };
+            format!("{}: {:.1} → {:.0} ({})", m.current, grade, rounded, status)
         }
         None => m.no_evaluations.to_string(),
     }
 }
 
-/// Format weight validation message with translations.
+/// Format weight validation message.
 fn format_weight_validation(validation: &WeightValidation, m: &Messages) -> String {
     match validation {
         WeightValidation::Valid => m.weights_ok.to_string(),
@@ -995,172 +988,83 @@ fn format_weight_validation(validation: &WeightValidation, m: &Messages) -> Stri
     }
 }
 
-/// Format current grade status with translations.
+/// Format current grade status for the course average display.
 fn format_grade_status(course: &Course, m: &Messages) -> String {
     match course.current_grade() {
         Some(grade) => {
             let rounded = Course::round_grade(grade);
-            if course.is_passing_grade(grade) {
-                format!(
-                    "{}: {:.1} → {:.0} ({})",
-                    m.current, grade, rounded, m.passed
-                )
+            let status = if course.is_passing_grade(grade) {
+                m.passed
             } else {
-                format!(
-                    "{}: {:.1} → {:.0} ({})",
-                    m.current, grade, rounded, m.failed
-                )
-            }
+                m.failed
+            };
+            format!("{}: {:.1} → {:.0} ({})", m.current, grade, rounded, status)
         }
         None => m.no_grades_yet.to_string(),
     }
 }
 
-/// Format needed grade for evaluation with translations.
-fn format_needed_for_evaluation(
+/// Format the result of a needed-grade calculation into a user-friendly string.
+fn format_needed_grade(
     course: &Course,
-    category_idx: usize,
-    eval_idx: usize,
+    needed: &crate::model::NeededGrade,
     m: &Messages,
-    is_editing: bool,
-) -> NeededGrade {
-    let Some(category) = course.categories.get(category_idx) else {
-        return NeededGrade {
-            message: m.invalid_category.to_string(),
-            status: NeedGradeStatus::Failure,
-        };
-    };
-
-    let Some(eval) = category.evaluations.get(eval_idx) else {
-        return NeededGrade {
-            message: m.invalid_evaluation.to_string(),
-            status: NeedGradeStatus::Failure,
-        };
-    };
-
-    if category.evaluations.is_empty() {
-        return NeededGrade {
-            message: m.no_evaluations.to_string(),
-            status: NeedGradeStatus::Info,
-        };
-    }
-
-    // If already graded and NOT editing, show that info
-    // When editing, we ignore the current grade to show what's needed
-    if !is_editing {
-        if let Some(grade) = eval.grade {
-            if grade >= course.passing_grade {
-                return NeededGrade {
-                    message: format!("{}: {:.0} ({})", eval.name, grade, m.passing),
-                    status: NeedGradeStatus::Success,
-                };
-            }
-            return NeededGrade {
-                message: format!("{}: {:.0} ({})", eval.name, grade, m.below_passing),
-                status: NeedGradeStatus::Failure,
-            };
-        }
-    }
-
-    // Categories with zero weight cannot change the course outcome
-    if category.weight.abs() < f64::EPSILON {
-        return NeededGrade {
-            message: m.cannot_pass.to_string(),
-            status: NeedGradeStatus::Failure,
-        };
-    }
-
-    let eval_count = category.evaluations.len() as f64;
-    if eval_count == 0.0 {
-        return NeededGrade {
-            message: m.no_evaluations.to_string(),
-            status: NeedGradeStatus::Info,
-        };
-    }
-
-    // Calculate total contribution from all categories, treating ungraded evals as 0
-    // except for the current evaluation we're calculating for
-    let mut total_contribution = 0.0;
-
-    for (ci, cat) in course.categories.iter().enumerate() {
-        if ci == category_idx {
-            // For the current category, sum all other evaluations (ungraded = 0)
-            // When editing, we also treat the current evaluation as 0
-            let other_sum: f64 = cat
-                .evaluations
-                .iter()
-                .enumerate()
-                .map(|(ei, e)| {
-                    if ei == eval_idx {
-                        0.0 // Always treat current eval as 0 for calculation
+) -> String {
+    match needed.status {
+        NeededGradeStatus::Success => {
+            if let Some(value) = needed.value {
+                if value == 0.0 {
+                    format!("{}: 0+ ({})", m.need, m.need_grade_any)
+                } else {
+                    // Already graded and passing
+                    let eval_name = course
+                        .categories
+                        .iter()
+                        .flat_map(|c| c.evaluations.iter())
+                        .find(|e| e.grade == Some(value))
+                        .map(|e| e.name.as_str())
+                        .unwrap_or("");
+                    if eval_name.is_empty() {
+                        format!("{}: {:.0} ({})", m.need, value, m.passing)
                     } else {
-                        e.grade.unwrap_or(0.0)
+                        format!("{}: {:.0} ({})", eval_name, value, m.passing)
                     }
-                })
-                .sum();
-            // This will be added later with the needed grade
-            total_contribution += other_sum * cat.weight / (100.0 * cat.evaluations.len() as f64);
-        } else {
-            // For other categories, all ungraded evals count as 0
-            if !cat.evaluations.is_empty() {
-                let sum: f64 = cat.evaluations.iter().map(|e| e.grade.unwrap_or(0.0)).sum();
-                let avg = sum / cat.evaluations.len() as f64;
-                total_contribution += avg * cat.weight / 100.0;
+                }
+            } else {
+                format!("{}: 0+ ({})", m.need, m.need_grade_any)
             }
         }
-    }
-
-    // Weight of this single evaluation in the final grade
-    let eval_weight = category.weight / (100.0 * eval_count);
-
-    if eval_weight.abs() < f64::EPSILON {
-        return NeededGrade {
-            message: m.cannot_pass.to_string(),
-            status: NeedGradeStatus::Failure,
-        };
-    }
-
-    // We need: total_contribution + (needed_grade * eval_weight) >= 54.5
-    // So: needed_grade = (54.5 - total_contribution) / eval_weight
-    let effective_passing = course.passing_grade - 0.5; // 54.5
-    let needed_grade = (effective_passing - total_contribution) / eval_weight;
-
-    if !needed_grade.is_finite() {
-        return NeededGrade {
-            message: m.cannot_pass.to_string(),
-            status: NeedGradeStatus::Failure,
-        };
-    }
-
-    if needed_grade <= 0.0 {
-        return NeededGrade {
-            message: format!("{}: 0+ ({})", m.need, m.need_grade_any),
-            status: NeedGradeStatus::Success,
-        };
-    } else if needed_grade > MAX_GRADE {
-        let rounded_up = needed_grade.ceil() as i32;
-        return NeededGrade {
-            message: format!(
-                "{}: {:.2} → {} ({})",
-                m.need, needed_grade, rounded_up, m.need_grade_impossible
-            ),
-            status: NeedGradeStatus::Failure,
-        };
-    } else {
-        let rounded_up = needed_grade.ceil() as i32;
-        // Only show arrow if there are decimals
-        let message = if (needed_grade - needed_grade.floor()).abs() < 0.01 {
-            format!("{} {} {}", m.need, rounded_up, m.need_grade_in_eval)
-        } else {
-            format!(
-                "{} {:.2} → {} {}",
-                m.need, needed_grade, rounded_up, m.need_grade_in_eval
-            )
-        };
-
-        NeededGrade {
-            message,
-            status: NeedGradeStatus::Warning,
+        NeededGradeStatus::Failure => {
+            if let Some(value) = needed.value {
+                if value > MAX_GRADE {
+                    let rounded_up = value.ceil() as i32;
+                    format!(
+                        "{}: {:.2} → {} ({})",
+                        m.need, value, rounded_up, m.need_grade_impossible
+                    )
+                } else {
+                    // Already graded and failing
+                    format!("{:.0} ({})", value, m.below_passing)
+                }
+            } else {
+                m.cannot_pass.to_string()
+            }
         }
+        NeededGradeStatus::Warning => {
+            if let Some(value) = needed.value {
+                let rounded_up = value.ceil() as i32;
+                if (value - value.floor()).abs() < 0.01 {
+                    format!("{} {} {}", m.need, rounded_up, m.need_grade_in_eval)
+                } else {
+                    format!(
+                        "{} {:.2} → {} {}",
+                        m.need, value, rounded_up, m.need_grade_in_eval
+                    )
+                }
+            } else {
+                m.cannot_pass.to_string()
+            }
+        }
+        NeededGradeStatus::Info => m.no_evaluations.to_string(),
     }
 }

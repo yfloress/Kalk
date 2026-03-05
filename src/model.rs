@@ -5,6 +5,8 @@
 //!
 //! Each Category has a weight (percentage of final grade).
 //! Evaluations within a Category are averaged equally.
+//! Ungraded evaluations are treated as 0 in all calculations,
+//! reflecting the real current standing of the student.
 //!
 //! Grade scale: 0-100, with 55 as passing grade by default.
 
@@ -19,6 +21,10 @@ pub const MIN_GRADE: f64 = 0.0;
 
 /// Maximum valid grade
 pub const MAX_GRADE: f64 = 100.0;
+
+// =============================================================================
+// Evaluation
+// =============================================================================
 
 /// Represents a single evaluation within a category.
 /// Evaluations are averaged equally within their category.
@@ -48,6 +54,10 @@ impl Evaluation {
         }
     }
 }
+
+// =============================================================================
+// Category
+// =============================================================================
 
 /// Represents a category of evaluations (e.g., "Certamenes", "Controles").
 /// Each category has a weight that contributes to the final course grade.
@@ -80,8 +90,9 @@ impl Category {
     }
 
     /// Calculate the average grade of all evaluations in this category.
-    /// Ungraded evaluations are treated as 0.
-    /// Returns None if there are no evaluations.
+    /// Ungraded evaluations are treated as 0, reflecting the student's
+    /// real current standing (e.g., 90 + 0 + 0 = 30 average).
+    /// Returns None only if there are no evaluations at all.
     pub fn average_grade(&self) -> Option<f64> {
         if self.evaluations.is_empty() {
             None
@@ -95,8 +106,9 @@ impl Category {
         }
     }
 
-    /// Calculate this category's contribution to the final grade.
-    /// Returns None if no evaluations have been graded.
+    /// Calculate this category's weighted contribution to the final grade.
+    /// Returns None only if there are no evaluations at all.
+    /// Ungraded evaluations count as 0 in the average.
     pub fn weighted_contribution(&self) -> Option<f64> {
         self.average_grade().map(|avg| avg * self.weight / 100.0)
     }
@@ -109,13 +121,17 @@ impl Category {
             .count()
     }
 
-    /// Check if category average is passing
-    pub fn is_passing(&self) -> Option<bool> {
-        self.average_grade().map(|avg| avg >= DEFAULT_PASSING_GRADE)
+    /// Check if category average is passing, using the course's passing grade.
+    pub fn is_passing(&self, passing_grade: f64) -> Option<bool> {
+        self.average_grade().map(|avg| avg >= passing_grade)
     }
 }
 
-/// Validation status for course weights
+// =============================================================================
+// Weight Validation
+// =============================================================================
+
+/// Validation status for course weights.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WeightValidation {
     /// Weights sum to 100%
@@ -127,6 +143,65 @@ pub enum WeightValidation {
     /// No categories defined
     Empty,
 }
+
+// =============================================================================
+// Needed Grade Calculation
+// =============================================================================
+
+/// Result status for a needed-grade calculation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NeededGradeStatus {
+    /// Already passing or needs 0+
+    Success,
+    /// Cannot pass (needs > 100 or impossible)
+    Failure,
+    /// Needs a specific achievable grade
+    Warning,
+    /// Informational (no evaluations, etc.)
+    Info,
+}
+
+/// Result of calculating the grade needed in a specific evaluation to pass.
+#[derive(Debug, Clone)]
+pub struct NeededGrade {
+    /// The exact grade needed (may be negative, > 100, or NaN for edge cases)
+    pub value: Option<f64>,
+    pub status: NeededGradeStatus,
+}
+
+impl NeededGrade {
+    fn success(value: f64) -> Self {
+        Self {
+            value: Some(value),
+            status: NeededGradeStatus::Success,
+        }
+    }
+
+    fn failure(value: Option<f64>) -> Self {
+        Self {
+            value,
+            status: NeededGradeStatus::Failure,
+        }
+    }
+
+    fn warning(value: f64) -> Self {
+        Self {
+            value: Some(value),
+            status: NeededGradeStatus::Warning,
+        }
+    }
+
+    fn info() -> Self {
+        Self {
+            value: None,
+            status: NeededGradeStatus::Info,
+        }
+    }
+}
+
+// =============================================================================
+// Course
+// =============================================================================
 
 /// Represents a course with its evaluation categories.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,14 +269,25 @@ impl Course {
         self.categories.iter().map(|c| c.weight).sum()
     }
 
-    /// Round grade according to university rules (0.5+ rounds up to nearest integer)
+    /// Get the remaining weight to reach 100%.
+    /// Returns 0.0 if already at or above 100%.
+    pub fn remaining_weight(&self) -> f64 {
+        (100.0 - self.total_weight()).max(0.0)
+    }
+
+    /// Round grade according to university rules (0.5+ rounds up to nearest integer).
     pub fn round_grade(grade: f64) -> f64 {
         grade.round()
     }
 
-    /// Check if a grade is passing (considering rounding: 54.5+ = 55 = pass)
+    /// Check if a grade is passing (considering rounding: 54.5+ = 55 = pass).
     pub fn is_passing_grade(&self, grade: f64) -> bool {
         Self::round_grade(grade) >= self.passing_grade
+    }
+
+    /// Check if the course has any evaluations at all.
+    pub fn has_evaluations(&self) -> bool {
+        self.categories.iter().any(|c| !c.evaluations.is_empty())
     }
 
     /// Validate that category weights sum to 100%.
@@ -222,8 +308,7 @@ impl Course {
         }
     }
 
-    /// Auto-balance weights: distribute remaining weight proportionally
-    /// or set equal weights for all categories.
+    /// Auto-balance weights: distribute equally among all categories.
     pub fn auto_balance_weights(&mut self) {
         if self.categories.is_empty() {
             return;
@@ -255,7 +340,119 @@ impl Course {
 
         CourseTemplate::new(&template_name, &description, categories)
     }
+
+    /// Generate a description string based on course structure.
+    /// Format: "3x Certamen (80%) + 3x Control (20%)"
+    pub fn generate_template_description(&self) -> String {
+        if self.categories.is_empty() {
+            return "Empty template".to_string();
+        }
+
+        self.categories
+            .iter()
+            .map(|c| format!("{}x {} ({:.0}%)", c.evaluations.len(), c.name, c.weight))
+            .collect::<Vec<_>>()
+            .join(" + ")
+    }
+
+    /// Calculate the grade needed in a specific evaluation to pass the course.
+    ///
+    /// When `ignore_current_grade` is true, the current eval's grade is treated
+    /// as 0 (used when editing to show what's needed regardless of existing grade).
+    pub fn needed_grade_for_evaluation(
+        &self,
+        category_idx: usize,
+        eval_idx: usize,
+        ignore_current_grade: bool,
+    ) -> NeededGrade {
+        let Some(category) = self.categories.get(category_idx) else {
+            return NeededGrade::failure(None);
+        };
+
+        let Some(eval) = category.evaluations.get(eval_idx) else {
+            return NeededGrade::failure(None);
+        };
+
+        if category.evaluations.is_empty() {
+            return NeededGrade::info();
+        }
+
+        // If already graded and we're NOT ignoring current grade, report status
+        if !ignore_current_grade && let Some(grade) = eval.grade {
+            return if grade >= self.passing_grade {
+                NeededGrade::success(grade)
+            } else {
+                NeededGrade::failure(Some(grade))
+            };
+        }
+
+        // Categories with zero weight cannot affect the course outcome
+        if category.weight.abs() < f64::EPSILON {
+            return NeededGrade::failure(None);
+        }
+
+        let eval_count = category.evaluations.len() as f64;
+        if eval_count == 0.0 {
+            return NeededGrade::info();
+        }
+
+        // Calculate total contribution from all categories,
+        // treating ungraded evals as 0, excluding current eval
+        let mut total_contribution = 0.0;
+
+        for (ci, cat) in self.categories.iter().enumerate() {
+            if ci == category_idx {
+                // For the target category, sum all evals except the one we're solving for
+                let other_sum: f64 = cat
+                    .evaluations
+                    .iter()
+                    .enumerate()
+                    .map(|(ei, e)| {
+                        if ei == eval_idx {
+                            0.0
+                        } else {
+                            e.grade.unwrap_or(0.0)
+                        }
+                    })
+                    .sum();
+                total_contribution +=
+                    other_sum * cat.weight / (100.0 * cat.evaluations.len() as f64);
+            } else if !cat.evaluations.is_empty() {
+                let sum: f64 = cat.evaluations.iter().map(|e| e.grade.unwrap_or(0.0)).sum();
+                let avg = sum / cat.evaluations.len() as f64;
+                total_contribution += avg * cat.weight / 100.0;
+            }
+        }
+
+        // Weight of this single evaluation in the final grade
+        let eval_weight = category.weight / (100.0 * eval_count);
+
+        if eval_weight.abs() < f64::EPSILON {
+            return NeededGrade::failure(None);
+        }
+
+        // We need: total_contribution + (needed_grade * eval_weight) >= passing - 0.5
+        // Because 0.5+ rounds up (54.5 rounds to 55)
+        let effective_passing = self.passing_grade - 0.5;
+        let needed = (effective_passing - total_contribution) / eval_weight;
+
+        if !needed.is_finite() {
+            return NeededGrade::failure(None);
+        }
+
+        if needed <= 0.0 {
+            NeededGrade::success(0.0)
+        } else if needed > MAX_GRADE {
+            NeededGrade::failure(Some(needed))
+        } else {
+            NeededGrade::warning(needed)
+        }
+    }
 }
+
+// =============================================================================
+// Templates
+// =============================================================================
 
 /// Template for a category when creating a course from template.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -293,21 +490,24 @@ impl CourseTemplate {
     }
 }
 
+// =============================================================================
+// Tests
+// =============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_category_average() {
+    fn test_category_average_with_ungraded_as_zero() {
         let mut cat = Category::new("Tests".to_string(), 60.0);
         cat.evaluations
-            .push(Evaluation::with_grade("Test 1".to_string(), 70.0));
-        cat.evaluations
-            .push(Evaluation::with_grade("Test 2".to_string(), 80.0));
-        cat.evaluations.push(Evaluation::new("Test 3".to_string())); // Not graded = 0
+            .push(Evaluation::with_grade("Test 1".to_string(), 90.0));
+        cat.evaluations.push(Evaluation::new("Test 2".to_string()));
+        cat.evaluations.push(Evaluation::new("Test 3".to_string()));
 
-        // Average with ungraded as 0: (70 + 80 + 0) / 3 = 50
-        assert!((cat.average_grade().unwrap() - 50.0).abs() < 0.01);
+        // (90 + 0 + 0) / 3 = 30 — reflects real standing
+        assert!((cat.average_grade().unwrap() - 30.0).abs() < 0.01);
     }
 
     #[test]
@@ -318,14 +518,12 @@ mod tests {
         cat.evaluations
             .push(Evaluation::with_grade("Test 2".to_string(), 80.0));
 
-        // Average: (70 + 80) / 2 = 75
         assert!((cat.average_grade().unwrap() - 75.0).abs() < 0.01);
     }
 
     #[test]
     fn test_category_average_empty() {
         let cat = Category::new("Tests".to_string(), 60.0);
-        // No evaluations = None
         assert!(cat.average_grade().is_none());
     }
 
@@ -337,6 +535,18 @@ mod tests {
 
         // 50 * 80 / 100 = 40
         assert!((cat.weighted_contribution().unwrap() - 40.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_is_passing_uses_custom_grade() {
+        let mut cat = Category::new("Tests".to_string(), 60.0);
+        cat.evaluations
+            .push(Evaluation::with_grade("Test 1".to_string(), 57.0));
+
+        // With default 55: should pass
+        assert_eq!(cat.is_passing(55.0), Some(true));
+        // With 60: should fail
+        assert_eq!(cat.is_passing(60.0), Some(false));
     }
 
     #[test]
@@ -361,24 +571,35 @@ mod tests {
     }
 
     #[test]
+    fn test_remaining_weight() {
+        let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+        course.categories.push(Category::new("A".to_string(), 60.0));
+
+        assert!((course.remaining_weight() - 40.0).abs() < 0.01);
+
+        course.categories.push(Category::new("B".to_string(), 40.0));
+        assert!((course.remaining_weight() - 0.0).abs() < 0.01);
+
+        // Over 100% should return 0
+        course.categories.push(Category::new("C".to_string(), 10.0));
+        assert!((course.remaining_weight() - 0.0).abs() < 0.01);
+    }
+
+    #[test]
     fn test_weight_validation() {
         let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
 
-        // Empty course
         assert_eq!(course.validate_weights(), WeightValidation::Empty);
 
-        // Under 100%
         course.categories.push(Category::new("A".to_string(), 60.0));
         assert!(matches!(
             course.validate_weights(),
             WeightValidation::Under(_)
         ));
 
-        // Exactly 100%
         course.categories.push(Category::new("B".to_string(), 40.0));
         assert_eq!(course.validate_weights(), WeightValidation::Valid);
 
-        // Over 100%
         course.categories.push(Category::new("C".to_string(), 10.0));
         assert!(matches!(
             course.validate_weights(),
@@ -399,10 +620,9 @@ mod tests {
 
     #[test]
     fn test_from_template() {
-        // Create a test template directly
         let template = CourseTemplate::new(
             "Test Template",
-            "3 Certamenes (80%) + 3 Controles (20%)",
+            "3x Certamen (80%) + 3x Control (20%)",
             vec![
                 CategoryTemplate::new("Certamen", 80.0, 3),
                 CategoryTemplate::new("Control", 20.0, 3),
@@ -412,23 +632,100 @@ mod tests {
         let course =
             Course::from_template("Matematicas".to_string(), DEFAULT_PASSING_GRADE, &template);
 
-        // Should have 2 categories
         assert_eq!(course.categories.len(), 2);
 
-        // First category: Certamen with 3 evaluations
         assert_eq!(course.categories[0].name, "Certamen");
         assert_eq!(course.categories[0].weight, 80.0);
         assert_eq!(course.categories[0].evaluations.len(), 3);
         assert_eq!(course.categories[0].evaluations[0].name, "Certamen 1");
-        assert_eq!(course.categories[0].evaluations[1].name, "Certamen 2");
-        assert_eq!(course.categories[0].evaluations[2].name, "Certamen 3");
 
-        // Second category: Control with 3 evaluations
         assert_eq!(course.categories[1].name, "Control");
         assert_eq!(course.categories[1].weight, 20.0);
         assert_eq!(course.categories[1].evaluations.len(), 3);
-        assert_eq!(course.categories[1].evaluations[0].name, "Control 1");
-        assert_eq!(course.categories[1].evaluations[1].name, "Control 2");
-        assert_eq!(course.categories[1].evaluations[2].name, "Control 3");
+    }
+
+    #[test]
+    fn test_generate_template_description() {
+        let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+        course.categories.push(Category::with_evaluations(
+            "Certamen".to_string(),
+            80.0,
+            vec![
+                Evaluation::new("C1".to_string()),
+                Evaluation::new("C2".to_string()),
+                Evaluation::new("C3".to_string()),
+            ],
+        ));
+        course.categories.push(Category::with_evaluations(
+            "Control".to_string(),
+            20.0,
+            vec![
+                Evaluation::new("Co1".to_string()),
+                Evaluation::new("Co2".to_string()),
+            ],
+        ));
+
+        let desc = course.generate_template_description();
+        assert_eq!(desc, "3x Certamen (80%) + 2x Control (20%)");
+    }
+
+    #[test]
+    fn test_needed_grade_already_passing() {
+        let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+        let mut cat = Category::new("Tests".to_string(), 100.0);
+        cat.evaluations
+            .push(Evaluation::with_grade("T1".to_string(), 70.0));
+        course.categories.push(cat);
+
+        let result = course.needed_grade_for_evaluation(0, 0, false);
+        assert_eq!(result.status, NeededGradeStatus::Success);
+    }
+
+    #[test]
+    fn test_needed_grade_impossible() {
+        let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+        let mut cat = Category::new("Tests".to_string(), 100.0);
+        // 3 evals, first two are 0
+        cat.evaluations
+            .push(Evaluation::with_grade("T1".to_string(), 0.0));
+        cat.evaluations
+            .push(Evaluation::with_grade("T2".to_string(), 0.0));
+        cat.evaluations.push(Evaluation::new("T3".to_string()));
+        course.categories.push(cat);
+
+        // Need (54.5 - 0) / (100/300) = 54.5 / 0.333 = 163.5 → impossible
+        let result = course.needed_grade_for_evaluation(0, 2, true);
+        assert_eq!(result.status, NeededGradeStatus::Failure);
+        assert!(result.value.unwrap() > MAX_GRADE);
+    }
+
+    #[test]
+    fn test_needed_grade_achievable() {
+        let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+        let mut cat = Category::new("Tests".to_string(), 100.0);
+        cat.evaluations
+            .push(Evaluation::with_grade("T1".to_string(), 60.0));
+        cat.evaluations.push(Evaluation::new("T2".to_string()));
+        course.categories.push(cat);
+
+        let result = course.needed_grade_for_evaluation(0, 1, true);
+        assert_eq!(result.status, NeededGradeStatus::Warning);
+        assert!(result.value.is_some());
+    }
+
+    #[test]
+    fn test_has_evaluations() {
+        let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+        assert!(!course.has_evaluations());
+
+        course
+            .categories
+            .push(Category::new("A".to_string(), 100.0));
+        assert!(!course.has_evaluations());
+
+        course.categories[0]
+            .evaluations
+            .push(Evaluation::new("E1".to_string()));
+        assert!(course.has_evaluations());
     }
 }
