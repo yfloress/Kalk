@@ -31,7 +31,7 @@ mod settings_popup;
 pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
-use crate::model::{Course, MinimumNotMetAction, WeightValidation};
+use crate::model::{Course, WeightValidation};
 use helpers::{focused_border_style, format_course_average, format_weight_validation};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
@@ -504,18 +504,13 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 ),
             ];
             if let Some(fm) = failed_min {
-                let action_hint = match fm.action {
-                    MinimumNotMetAction::FinalEqualsAverage => "",
-                    MinimumNotMetAction::RequiresGlobal => " !G",
-                    MinimumNotMetAction::FailCourse => " !F",
-                };
                 // In narrow mode, show a short hint; in wide mode, show full text
                 let min_text = if narrow {
-                    format!(" <{:.0}{}", fm.required, action_hint)
+                    format!(" <{:.0}", fm.required)
                 } else {
                     format!(
-                        " {:.1} < {:.0} {}{}",
-                        fm.average, fm.required, m.minimum_not_met, action_hint
+                        " {:.1} < {:.0} {}",
+                        fm.average, fm.required, m.minimum_not_met
                     )
                 };
                 avg_spans.push(Span::styled(
@@ -523,20 +518,9 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(t.status_override),
                 ));
             } else if let Some(ev) = eval_violation {
-                // Per-eval violation: show "<REQUIRED ACTION" (e.g. "<50 !G")
-                let per_eval_fm = grade_result
-                    .failed_minimums
-                    .iter()
-                    .find(|fm| fm.category_idx == cat_idx && fm.from_per_eval);
-                let action_hint = per_eval_fm
-                    .map(|fm| match fm.action {
-                        MinimumNotMetAction::FinalEqualsAverage => "",
-                        MinimumNotMetAction::RequiresGlobal => " !G",
-                        MinimumNotMetAction::FailCourse => " !F",
-                    })
-                    .unwrap_or("");
+                // Per-eval violation: show "<REQUIRED"
                 avg_spans.push(Span::styled(
-                    format!(" <{:.0}{}", ev.required, action_hint),
+                    format!(" <{:.0}", ev.required),
                     Style::default().fg(t.status_override),
                 ));
             }
