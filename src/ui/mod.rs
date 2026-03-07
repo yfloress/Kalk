@@ -31,9 +31,7 @@ pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
 use crate::model::{Course, MinimumNotMetAction, WeightValidation};
-use helpers::{
-    focused_border_style, format_course_average, format_course_status, format_weight_validation,
-};
+use helpers::{focused_border_style, format_course_average, format_weight_validation};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
@@ -62,18 +60,36 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .split(frame.size());
 
     // Main area: 3-column layout for Course -> Category -> Evaluation hierarchy
-    // When compact_courses is active, the courses panel is narrower.
+    // When compact_courses is active, the courses panel width adapts to content.
+    let courses_constraint = if app.compact_courses {
+        // Calculate minimum width needed: longest course name + grade (up to 4 chars) + borders + padding
+        let ic = icons(app.use_nerd_fonts);
+        let highlight_len = ic.highlight.chars().count() as u16;
+        let max_name_len = app
+            .courses
+            .iter()
+            .map(|c| c.name.chars().count() as u16)
+            .max()
+            .unwrap_or(4);
+        // name + space + grade (max "100") + borders(2) + highlight + padding(1)
+        let needed = max_name_len + 1 + 3 + 2 + highlight_len + 1;
+        // Clamp to reasonable bounds: at least 12, at most 30
+        Constraint::Length(needed.clamp(12, 30))
+    } else {
+        Constraint::Percentage(25)
+    };
+
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(if app.compact_courses {
             [
-                Constraint::Percentage(15),
-                Constraint::Percentage(40),
+                courses_constraint,
                 Constraint::Percentage(45),
+                Constraint::Min(0),
             ]
         } else {
             [
-                Constraint::Percentage(25),
+                courses_constraint,
                 Constraint::Percentage(35),
                 Constraint::Percentage(40),
             ]
@@ -117,50 +133,77 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
         .courses
         .iter()
         .map(|c| {
-            // Weight validation indicator
-            let weight_status = match c.validate_weights() {
-                WeightValidation::Valid => Span::styled(
-                    format!(" [{}]", ic.weight_ok),
-                    Style::default().fg(t.status_pass),
-                ),
-                WeightValidation::Under(w) => Span::styled(
-                    format!(" [{}{:.0}%]", ic.weight_warn, w),
-                    Style::default().fg(t.status_warn),
-                ),
-                WeightValidation::Over(w) => Span::styled(
-                    format!(" [{}{:.0}%]", ic.weight_error, w),
-                    Style::default().fg(t.status_fail),
-                ),
-                WeightValidation::Empty => Span::styled(
-                    format!(" [{}]", m.no_categories),
-                    Style::default().fg(t.text_muted),
-                ),
-            };
+            // Compute the true course result (accounting for rule overrides)
+            let grade_result = c.compute_grade();
+            let has_evals = c.has_evaluations();
 
-            // Current grade color
-            let grade_color = match c.current_grade() {
-                Some(g) if c.is_passing_grade(g) => t.status_pass,
-                Some(_) => t.status_fail,
-                None => t.text_muted,
+            // True pass/fail color: accounts for rule overrides (FailCourse, etc.)
+            let true_color = if !has_evals {
+                t.text_muted
+            } else if grade_result.overridden_by.is_some()
+                && !c.is_passing_grade(grade_result.grade)
+            {
+                // Rule override caused failure (e.g., FailCourse → grade 0)
+                t.status_fail
+            } else if c.is_passing_grade(grade_result.grade) {
+                t.status_pass
+            } else {
+                t.status_fail
             };
 
             if compact {
-                // Compact: single line — "NAME [OK] 54.5→55"
-                let short_grade = match c.current_grade() {
-                    Some(g) => {
-                        let r = Course::round_grade(g);
-                        format!(" {:.0}\u{2192}{:.0}", g, r)
-                    }
-                    None => String::new(),
+                // Compact: single line — "NAME GRADE" with color = true pass/fail
+                let short_grade = if has_evals {
+                    let rounded = Course::round_grade(grade_result.grade);
+                    format!(" {:.0}", rounded)
+                } else {
+                    " -".to_string()
                 };
                 ListItem::new(Line::from(vec![
                     Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
-                    weight_status,
-                    Span::styled(short_grade, Style::default().fg(grade_color)),
+                    Span::styled(short_grade, Style::default().fg(true_color)),
                 ]))
             } else {
-                // Normal: two lines
-                let status = format_course_status(c, m);
+                // Weight validation indicator (only in normal mode)
+                let weight_status = match c.validate_weights() {
+                    WeightValidation::Valid => Span::styled(
+                        format!(" [{}]", ic.weight_ok),
+                        Style::default().fg(t.status_pass),
+                    ),
+                    WeightValidation::Under(w) => Span::styled(
+                        format!(" [{}{:.0}%]", ic.weight_warn, w),
+                        Style::default().fg(t.status_warn),
+                    ),
+                    WeightValidation::Over(w) => Span::styled(
+                        format!(" [{}{:.0}%]", ic.weight_error, w),
+                        Style::default().fg(t.status_fail),
+                    ),
+                    WeightValidation::Empty => Span::styled(
+                        format!(" [{}]", m.no_categories),
+                        Style::default().fg(t.text_muted),
+                    ),
+                };
+
+                // Normal: two lines with full status info (rule-aware)
+                let status = if has_evals {
+                    let rounded = Course::round_grade(grade_result.grade);
+                    let is_truly_passing = c.is_passing_grade(grade_result.grade)
+                        && grade_result.overridden_by.is_none();
+                    let label = if is_truly_passing { m.passed } else { m.failed };
+                    if let Some(ref cat_name) = grade_result.overridden_by {
+                        format!(
+                            "{}: {:.1} -> {:.0} ({}) [{}]",
+                            m.current, grade_result.grade, rounded, label, cat_name
+                        )
+                    } else {
+                        format!(
+                            "{}: {:.1} -> {:.0} ({})",
+                            m.current, grade_result.grade, rounded, label
+                        )
+                    }
+                } else {
+                    m.no_evaluations.to_string()
+                };
                 ListItem::new(vec![
                     Line::from(vec![
                         Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
@@ -168,7 +211,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
                     ]),
                     Line::from(Span::styled(
                         format!("  {}", status),
-                        Style::default().fg(grade_color),
+                        Style::default().fg(true_color),
                     )),
                 ])
             }
