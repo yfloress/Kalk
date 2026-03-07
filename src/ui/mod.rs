@@ -599,8 +599,18 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 m.select, m.confirm, m.cancel
             )
         }
+        Screen::EditingCategory { .. } => {
+            let rules_hint = if app.show_advanced_rules {
+                m.advanced_rules_hide
+            } else {
+                m.advanced_rules_show
+            };
+            format!(
+                "Tab: {} | Enter: {} | Esc: {} | {} | {}",
+                m.next_field, m.confirm, m.cancel, rules_hint, m.help_toggle
+            )
+        }
         Screen::EditingCourse { .. }
-        | Screen::EditingCategory { .. }
         | Screen::EditingEvaluation { .. }
         | Screen::SavingTemplate => {
             format!(

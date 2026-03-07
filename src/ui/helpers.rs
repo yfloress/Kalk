@@ -21,13 +21,15 @@
 //! and `popups.rs` (overlay dialogs). Extracting them keeps both of those files
 //! under the ~600-line guideline.
 
+use crate::app::InputField;
 use crate::i18n::Messages;
 use crate::model::{Course, CourseGradeResult, MAX_GRADE, NeededGradeStatus, WeightValidation};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
 // =============================================================================
@@ -127,6 +129,101 @@ pub fn render_toggle_field(
     );
 
     frame.render_widget(widget, area);
+}
+
+// =============================================================================
+// Category Help
+// =============================================================================
+
+/// Return a short contextual help string for the currently focused field.
+pub fn contextual_field_help(field: InputField, m: &Messages) -> String {
+    match field {
+        InputField::Name => m.help_name.to_string(),
+        InputField::Weight => m.help_weight.to_string(),
+        InputField::DropLowest => m.help_drop_lowest.to_string(),
+        InputField::AvgMethod => m.help_averaging_method.to_string(),
+        InputField::MinimumAverage => m.help_minimum_average.to_string(),
+        InputField::OnMinNotMet => m.help_on_min_not_met.to_string(),
+        InputField::MinPerEval => m.help_min_per_eval.to_string(),
+        InputField::RoundBeforeWeight => m.help_round_before_weighting.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Draw a full-screen help overlay explaining every category field.
+pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
+    let area = centered_rect(70, 60, frame.size());
+    frame.render_widget(Clear, area);
+
+    let label_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(Color::White);
+
+    let help_lines = vec![
+        Line::from(Span::styled(
+            format!("  {} ", m.advanced_rules),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.name), label_style),
+            Span::styled(m.help_name, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.weight), label_style),
+            Span::styled(m.help_weight, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("── {} ──", m.advanced_rules),
+            Style::default().fg(Color::Cyan),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.drop_lowest), label_style),
+            Span::styled(m.help_drop_lowest, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.averaging_method), label_style),
+            Span::styled(m.help_averaging_method, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.minimum_average), label_style),
+            Span::styled(m.help_minimum_average, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.on_minimum_not_met), label_style),
+            Span::styled(m.help_on_min_not_met, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.minimum_per_evaluation), label_style),
+            Span::styled(m.help_min_per_eval, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.round_before_weighting), label_style),
+            Span::styled(m.help_round_before_weighting, desc_style),
+        ]),
+    ];
+
+    let block = Block::default()
+        .title(format!(" {} ", m.help_toggle))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let paragraph = Paragraph::new(help_lines)
+        .block(block)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
 }
 
 // =============================================================================

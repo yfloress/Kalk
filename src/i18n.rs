@@ -162,6 +162,9 @@ pub struct Messages {
     pub need_grade_in_eval: &'static str,
 
     // Category rules labels
+    pub advanced_rules: &'static str,
+    pub advanced_rules_show: &'static str,
+    pub advanced_rules_hide: &'static str,
     pub drop_lowest: &'static str,
     pub averaging_method: &'static str,
     pub averaging_arithmetic: &'static str,
@@ -174,6 +177,17 @@ pub struct Messages {
     pub round_before_weighting: &'static str,
     pub yes: &'static str,
     pub no: &'static str,
+
+    // Field help descriptions (shown in help panel)
+    pub help_toggle: &'static str,
+    pub help_name: &'static str,
+    pub help_weight: &'static str,
+    pub help_drop_lowest: &'static str,
+    pub help_averaging_method: &'static str,
+    pub help_minimum_average: &'static str,
+    pub help_on_min_not_met: &'static str,
+    pub help_min_per_eval: &'static str,
+    pub help_round_before_weighting: &'static str,
 
     // Status indicators for rules
     pub rules_active: &'static str,
@@ -300,6 +314,9 @@ pub const EN: Messages = Messages {
     need_grade_in_eval: "in this eval to pass",
 
     // Category rules labels
+    advanced_rules: "Advanced Rules",
+    advanced_rules_show: "Ctrl+R: Show rules",
+    advanced_rules_hide: "Ctrl+R: Hide rules",
     drop_lowest: "Drop Lowest",
     averaging_method: "Average Method",
     averaging_arithmetic: "Arithmetic",
@@ -312,6 +329,17 @@ pub const EN: Messages = Messages {
     round_before_weighting: "Round Category",
     yes: "Yes",
     no: "No",
+
+    // Field help descriptions
+    help_toggle: "?: Help",
+    help_name: "Category label (e.g. Exams, Quizzes, Labs).",
+    help_weight: "How much this category counts toward the final grade (0-100%).",
+    help_drop_lowest: "Discard the N worst grades before averaging. 0 = keep all.",
+    help_averaging_method: "Arithmetic = normal average. Geometric = root-product average (useful for multiplicative grading).",
+    help_on_min_not_met: "What happens when the minimum average is not reached. Final=Avg means the course grade equals this category average. Requires Global means you must take a global exam.",
+    help_minimum_average: "Minimum average required in this category (e.g. 55). Leave empty for none.",
+    help_min_per_eval: "Minimum grade required on each individual evaluation. Leave empty for none.",
+    help_round_before_weighting: "Round the category average before applying weight. Useful when the university rounds per category.",
 
     // Status indicators for rules
     rules_active: "Rules",
@@ -438,6 +466,9 @@ pub const ES: Messages = Messages {
     need_grade_in_eval: "en esta eval para aprobar",
 
     // Category rules labels
+    advanced_rules: "Reglas Avanzadas",
+    advanced_rules_show: "Ctrl+R: Mostrar reglas",
+    advanced_rules_hide: "Ctrl+R: Ocultar reglas",
     drop_lowest: "Eliminar Peores",
     averaging_method: "Metodo de Promedio",
     averaging_arithmetic: "Aritmetico",
@@ -450,6 +481,17 @@ pub const ES: Messages = Messages {
     round_before_weighting: "Redondear Categoria",
     yes: "Si",
     no: "No",
+
+    // Field help descriptions
+    help_toggle: "?: Ayuda",
+    help_name: "Etiqueta de la categoria (ej: Certamenes, Controles, Labs).",
+    help_weight: "Cuanto vale esta categoria en la nota final (0-100%).",
+    help_drop_lowest: "Descarta las N peores notas antes de promediar. 0 = no eliminar.",
+    help_averaging_method: "Aritmetico = promedio normal. Geometrico = promedio con raiz del producto (usado en calificacion multiplicativa).",
+    help_on_min_not_met: "Que pasa si no se alcanza el promedio minimo. Final=Prom significa que la nota del ramo es el promedio de esta categoria. Requiere Global significa que debes dar examen global.",
+    help_minimum_average: "Nota minima promedio requerida en esta categoria (ej: 55). Dejar vacio si no aplica.",
+    help_min_per_eval: "Nota minima requerida en cada evaluacion individual. Dejar vacio si no aplica.",
+    help_round_before_weighting: "Redondea el promedio de la categoria antes de ponderar. Util cuando la universidad redondea por categoria.",
 
     // Status indicators for rules
     rules_active: "Reglas",

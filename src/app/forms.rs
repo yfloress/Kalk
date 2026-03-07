@@ -131,6 +131,9 @@ impl App {
             self.edit_weight = format!("{remaining:.1}");
             // Initialize rule fields to defaults
             self.init_rule_fields_default();
+            // New categories start with advanced rules collapsed and help hidden
+            self.show_advanced_rules = false;
+            self.show_field_help = false;
         }
     }
 
@@ -143,6 +146,7 @@ impl App {
         let name = category.name.clone();
         let weight = category.weight;
         let rules = category.rules.clone();
+        let has_custom_rules = !rules.is_default();
 
         self.screen = Screen::EditingCategory { is_new: false };
         self.input_field = InputField::Name;
@@ -150,11 +154,7 @@ impl App {
         self.edit_weight = format!("{weight:.1}");
 
         // Populate rule fields from cloned rules
-        self.edit_drop_lowest = if rules.drop_lowest > 0 {
-            format!("{}", rules.drop_lowest)
-        } else {
-            String::new()
-        };
+        self.edit_drop_lowest = rules.drop_lowest;
         self.edit_averaging_method = rules.averaging_method;
         self.edit_min_average = rules
             .minimum_average
@@ -166,11 +166,15 @@ impl App {
             .map(|v| format!("{v:.0}"))
             .unwrap_or_default();
         self.edit_round_before_weighting = rules.round_before_weighting;
+
+        // Auto-expand advanced rules if any non-default rules are configured
+        self.show_advanced_rules = has_custom_rules;
+        self.show_field_help = false;
     }
 
     /// Initialize category rule editing fields to their defaults.
     fn init_rule_fields_default(&mut self) {
-        self.edit_drop_lowest.clear();
+        self.edit_drop_lowest = 0;
         self.edit_averaging_method = Default::default();
         self.edit_min_average.clear();
         self.edit_on_min_not_met = Default::default();
@@ -180,7 +184,7 @@ impl App {
 
     /// Build a `CategoryRules` from the current editing state.
     fn build_rules_from_fields(&self) -> CategoryRules {
-        let drop_lowest = self.edit_drop_lowest.trim().parse::<usize>().unwrap_or(0);
+        let drop_lowest = self.edit_drop_lowest;
 
         let minimum_average = if self.edit_min_average.trim().is_empty() {
             None

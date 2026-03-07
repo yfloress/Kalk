@@ -44,6 +44,21 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(app.should_quit);
         }
 
+        // Ctrl+R toggles advanced rules in category edit popup
+        if key.code == KeyCode::Char('r')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(app.screen, Screen::EditingCategory { .. })
+        {
+            app.toggle_advanced_rules();
+            return Ok(app.should_quit);
+        }
+
+        // ? toggles field help panel in category edit popup
+        if key.code == KeyCode::Char('?') && matches!(app.screen, Screen::EditingCategory { .. }) {
+            app.toggle_field_help();
+            return Ok(app.should_quit);
+        }
+
         match &app.screen {
             Screen::Main => handle_main_keys(app, key.code),
             Screen::SelectingTemplate => handle_template_keys(app, key.code),
@@ -172,7 +187,10 @@ fn handle_edit_category_keys(app: &mut App, key: KeyCode) {
         match key {
             KeyCode::Esc => app.cancel_edit(),
             KeyCode::Tab => app.next_input_field(),
-            KeyCode::Enter | KeyCode::Char(' ') => app.cycle_toggle_field(),
+            KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => {
+                app.cycle_toggle_field()
+            }
+            KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
             _ => {}
         }
     } else {
