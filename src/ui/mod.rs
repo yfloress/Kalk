@@ -313,6 +313,9 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
 
     // Category list — use grade_result to show failed minimums and eval violations
     let passing_grade = course.passing_grade;
+    // Inner width of the categories panel (excluding borders)
+    let panel_inner_w = area.width.saturating_sub(2) as usize;
+    let narrow = panel_inner_w < 35;
     let items: Vec<ListItem> = course
         .categories
         .iter()
@@ -323,12 +326,16 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 .map(|g| format!("{:.1}", g))
                 .unwrap_or_else(|| "-".to_string());
 
-            let mut progress = format!(
-                "{}/{} {}",
-                cat.graded_count(),
-                cat.evaluations.len(),
-                m.graded
-            );
+            let mut progress = if narrow {
+                format!("{}/{}", cat.graded_count(), cat.evaluations.len())
+            } else {
+                format!(
+                    "{}/{} {}",
+                    cat.graded_count(),
+                    cat.evaluations.len(),
+                    m.graded
+                )
+            };
 
             // Show drop count in progress
             if cat.rules.drop_lowest > 0 {
@@ -373,8 +380,14 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 ));
             }
             if has_eval_violations {
+                // In narrow mode, just show the icon; in wide mode, show icon + label
+                let violation_text = if narrow {
+                    format!(" {}", ic.below_min)
+                } else {
+                    format!(" ({}{})", ic.below_min, m.eval_below_min)
+                };
                 name_spans.push(Span::styled(
-                    format!(" ({}{})", ic.below_min, m.eval_below_min),
+                    violation_text,
                     Style::default().fg(t.status_override),
                 ));
             }
@@ -394,11 +407,17 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                     MinimumNotMetAction::RequiresGlobal => " !G",
                     MinimumNotMetAction::FailCourse => " !F",
                 };
-                avg_spans.push(Span::styled(
+                // In narrow mode, show a short hint; in wide mode, show full text
+                let min_text = if narrow {
+                    format!(" <{:.0}{}", fm.required, action_hint)
+                } else {
                     format!(
                         " {:.1} < {:.0} {}{}",
                         fm.average, fm.required, m.minimum_not_met, action_hint
-                    ),
+                    )
+                };
+                avg_spans.push(Span::styled(
+                    min_text,
                     Style::default().fg(t.status_override),
                 ));
             }

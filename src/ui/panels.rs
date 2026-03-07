@@ -258,14 +258,31 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Build a styled `Line` from a slice of `(key, description)` pairs.
 ///
-/// Each pair is rendered as:  `key` in the theme's `footer_key` colour (bold),
-/// followed by `: description` in the theme's `footer_desc` colour, separated
-/// by ` | ` (using `key_hint_sep` from the icon set) between entries.
+/// Adapts to available width:
+/// - **Full mode**: `key: description | key: description | ...`
+/// - **Compact mode** (when full doesn't fit): `key | key | key | ...`
+///
+/// The `available_width` is the inner width (excluding borders) of the footer.
 fn styled_keybindings<'a>(
     pairs: &[(&'a str, &'a str)],
     t: &super::theme::Theme,
     ic: &super::icons::IconSet,
+    available_width: u16,
 ) -> Line<'a> {
+    let sep_len = ic.key_hint_sep.chars().count();
+
+    // Calculate full-mode width: key + ": " + desc, separated by key_hint_sep
+    let full_width: usize = pairs
+        .iter()
+        .enumerate()
+        .map(|(i, (key, desc))| {
+            let entry = key.chars().count() + 2 + desc.chars().count(); // "key: desc"
+            if i > 0 { entry + sep_len } else { entry }
+        })
+        .sum();
+
+    let use_compact = full_width > available_width as usize;
+
     let mut spans: Vec<Span<'a>> = Vec::with_capacity(pairs.len() * 4);
     for (i, (key, desc)) in pairs.iter().enumerate() {
         if i > 0 {
@@ -280,10 +297,12 @@ fn styled_keybindings<'a>(
                 .fg(t.footer_key)
                 .add_modifier(Modifier::BOLD),
         ));
-        spans.push(Span::styled(
-            format!(": {}", desc),
-            Style::default().fg(t.footer_desc),
-        ));
+        if !use_compact {
+            spans.push(Span::styled(
+                format!(": {}", desc),
+                Style::default().fg(t.footer_desc),
+            ));
+        }
     }
     Line::from(spans)
 }
@@ -296,6 +315,8 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
+    // Inner width = total width minus 2 border columns
+    let available_width = area.width.saturating_sub(2);
 
     // If there's a status message (error/info), show it prominently
     if let Some(ref status) = app.status_message {
@@ -334,6 +355,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 ],
                 t,
                 ic,
+                available_width,
             ),
             Focus::Categories => styled_keybindings(
                 &[
@@ -346,6 +368,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 ],
                 t,
                 ic,
+                available_width,
             ),
             Focus::Evaluations => styled_keybindings(
                 &[
@@ -358,6 +381,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 ],
                 t,
                 ic,
+                available_width,
             ),
         },
         Screen::SelectingTemplate => {
@@ -371,6 +395,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ],
                     t,
                     ic,
+                    available_width,
                 )
             } else {
                 styled_keybindings(
@@ -381,6 +406,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ],
                     t,
                     ic,
+                    available_width,
                 )
             }
         }
@@ -392,6 +418,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             ],
             t,
             ic,
+            available_width,
         ),
         Screen::EditingCategory { .. } => {
             let rules_hint = if app.show_advanced_rules {
@@ -409,6 +436,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 ],
                 t,
                 ic,
+                available_width,
             )
         }
         Screen::EditingCourse { .. }
@@ -421,14 +449,19 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             ],
             t,
             ic,
+            available_width,
         ),
-        Screen::ConfirmDelete | Screen::ConfirmDeleteTemplate => {
-            styled_keybindings(&[("Enter/y", m.confirm), ("Esc/n", m.cancel)], t, ic)
-        }
+        Screen::ConfirmDelete | Screen::ConfirmDeleteTemplate => styled_keybindings(
+            &[("Enter/y", m.confirm), ("Esc/n", m.cancel)],
+            t,
+            ic,
+            available_width,
+        ),
         Screen::Settings => styled_keybindings(
             &[("Space", m.toggle), ("Enter", m.confirm), ("Esc", m.cancel)],
             t,
             ic,
+            available_width,
         ),
     };
 
