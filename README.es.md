@@ -22,9 +22,14 @@ Gestiona ramos, registra notas por categorías y calcula automáticamente la not
 |----------------|-------------|
 | **Sistema jerárquico de notas** | Estructura Ramo → Categorías → Evaluaciones con ponderaciones |
 | **Cálculo en tiempo real** | Muestra exactamente qué nota necesitas en cada evaluación para aprobar |
+| **Reglas avanzadas por categoría** | Eliminar peores notas, media geométrica, promedios mínimos, mínimo por evaluación, redondeo por categoría |
 | **Plantillas de ramos** | Plantillas predefinidas + crea tus propias plantillas reutilizables con `t` |
 | **Validación de pesos** | Indicadores visuales cuando los pesos no suman 100% |
 | **Auto-balance** | Distribuye automáticamente los pesos equitativamente entre categorías |
+| **Iconos Nerd Font** | Iconos elegantes con Nerd Fonts (activados por defecto), con fallback Unicode |
+| **UI con temas** | Bordes redondeados, colores semánticos y atajos estilizados |
+| **Ajustes** | Activar/desactivar iconos Nerd Font, cambiar idioma — todo persistido en disco |
+| **Bilingüe** | Soporte completo en inglés y español (`Ctrl+L` para cambiar) |
 | **Persistencia automática** | Los datos se guardan localmente (`XDG_DATA_HOME/kalk`) y persisten entre sesiones |
 | **Solo teclado** | TUI rápido y ligero — no se necesita mouse |
 
@@ -33,9 +38,26 @@ Gestiona ramos, registra notas por categorías y calcula automáticamente la not
 ## Cálculo de Notas
 
 - **Escala**: 0-100 puntos
-- **Nota de aprobación por defecto**: 55
+- **Nota de aprobación por defecto**: 55 (configurable por ramo)
 - **Redondeo**: 0.5+ redondea hacia arriba (entonces 54.5 → 55 = aprobado)
 - **Indicadores por evaluación**: Muestra "Necesitas X+ en esta eval para aprobar" al editar
+
+---
+
+## Reglas Avanzadas por Categoría
+
+Cada categoría soporta reglas avanzadas opcionales (`Shift+A` al editar):
+
+| Regla | Descripción |
+|-------|-------------|
+| **Eliminar Peores** | Descarta las N peores notas antes de promediar (0–5) |
+| **Método de Promedio** | Aritmético (por defecto) o Media Geométrica |
+| **Promedio Mínimo** | Exigir un promedio mínimo en esta categoría para aprobar |
+| **Si No Se Cumple** | Cuando no se alcanza el mínimo: final = prom. categoría, o requiere global |
+| **Min. Por Eval** | Nota mínima requerida en cada evaluación individual |
+| **Redondear Categoría** | Redondea el promedio de la categoría antes de ponderar |
+
+Presiona `?` dentro del editor de categoría para ver la ayuda completa.
 
 ---
 
@@ -44,6 +66,7 @@ Gestiona ramos, registra notas por categorías y calcula automáticamente la not
 ### Requisitos
 
 - [Rust & Cargo](https://rustup.rs/) o [Nix](https://nixos.org/)
+- Se recomienda una [Nerd Font](https://www.nerdfonts.com/) (iconos activados por defecto — se pueden desactivar en Ajustes)
 
 ### Usando Cargo
 
@@ -85,10 +108,11 @@ El entorno Nix incluye `cargo-audit` para análisis de seguridad.
 | `d` | Eliminar item seleccionado |
 | `t` | Guardar ramo actual como plantilla |
 | `b` | Auto-balancear pesos de categorías |
+| `Ctrl+S` | Abrir ajustes |
 | `Ctrl+L` | Cambiar idioma |
 | `q` | Salir |
 
-### En Popups
+### En Popups de Edición
 
 | Tecla | Acción |
 |:-----:|--------|
@@ -96,24 +120,51 @@ El entorno Nix incluye `cargo-audit` para análisis de seguridad.
 | `Enter` | Confirmar |
 | `Esc` | Cancelar |
 
+### En Editor de Categoría
+
+| Tecla | Acción |
+|:-----:|--------|
+| `Shift+A` | Mostrar/ocultar sección de reglas avanzadas |
+| `?` | Mostrar/ocultar ayuda de campos |
+| `Space` / `Enter` | Ciclar campos toggle (eliminar peores, método prom., etc.) |
+
+### En Ajustes
+
+| Tecla | Acción |
+|:-----:|--------|
+| `Space` | Alternar ajuste seleccionado |
+| `Enter` | Confirmar y guardar |
+| `Esc` | Cancelar sin guardar |
+
 ---
 
 ## Estructura del Proyecto
 
 ```
 src/
-├── main.rs        # Punto de entrada, configuración del terminal
-├── app.rs         # Estado y lógica de la aplicación
-├── model.rs       # Estructuras de datos (Course, Category, Evaluation)
-├── templates.rs   # Plantillas de ramos predefinidas (fácil de modificar)
-├── ui.rs          # Renderizado con Ratatui
-├── events.rs      # Manejo de eventos de teclado
-├── i18n.rs        # Manejo de traducciones
-└── persistence.rs # Almacenamiento JSON
+├── main.rs          # Punto de entrada, configuración del terminal, panic hooks
+├── app/
+│   ├── mod.rs       # Struct App, estado, navegación, getters
+│   └── forms.rs     # Manejo de formularios: ramo/categoría/eval/plantilla/ajustes
+├── model/
+│   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, plantillas
+│   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
+│   └── tests.rs     # Todos los tests unitarios del modelo
+├── ui/
+│   ├── mod.rs       # Layout principal, panel de ramos, panel de categorías
+│   ├── panels.rs    # Panel de evaluaciones, renderizado del footer
+│   ├── popups.rs    # Todos los popups (editar, eliminar, plantilla, idioma, ajustes)
+│   ├── helpers.rs   # Helpers de renderizado compartidos y funciones de formato
+│   ├── icons.rs     # Sets de iconos Nerd Font y fallback Unicode
+│   └── theme.rs     # Tema de colores semántico (bordes redondeados, paleta)
+├── templates.rs     # Plantillas predefinidas (según idioma)
+├── events.rs        # Manejo de eventos de teclado y despacho
+├── i18n.rs          # Traducciones (inglés + español)
+└── persistence.rs   # Almacenamiento JSON (dirs XDG, escritura atómica)
 
 ~/.local/share/kalk/
 ├── data.json           # Tus datos de ramos
-├── config.json         # Tus configuraciones
+├── config.json         # Tu configuración (idioma, nerd fonts)
 └── user_templates.json # Tus plantillas personalizadas
 ```
 

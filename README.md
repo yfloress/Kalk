@@ -24,9 +24,14 @@ Manage courses, track grades by categories, and automatically calculate the exac
 |---------|-------------|
 | **Hierarchical Grade System** | Course → Categories → Evaluations structure with weighted categories |
 | **Real-time Calculation** | Shows exactly what grade you need in each evaluation to pass |
+| **Advanced Category Rules** | Drop lowest grades, geometric mean, minimum averages, per-evaluation minimums, round before weighting |
 | **Course Templates** | Pre-built templates + create your own reusable templates with `t` |
 | **Weight Validation** | Visual indicators when category weights don't sum to 100% |
 | **Auto-balance** | Automatically distribute weights equally across categories |
+| **Nerd Font Icons** | Beautiful icons with Nerd Fonts (enabled by default), with Unicode fallback |
+| **Themed UI** | Rounded borders, semantic colours, and styled keybindings |
+| **Settings** | Toggle Nerd Font icons, change language — all persisted to disk |
+| **Bilingual** | Full English and Spanish support (`Ctrl+L` to switch) |
 | **Automatic Persistence** | Data saved locally (`XDG_DATA_HOME/kalk`) and persists across restarts |
 | **Keyboard-driven** | Fast, lightweight TUI — no mouse needed |
 
@@ -35,9 +40,26 @@ Manage courses, track grades by categories, and automatically calculate the exac
 ## Grade Calculation
 
 - **Scale**: 0-100 points
-- **Default passing grade**: 55
+- **Default passing grade**: 55 (customizable per course)
 - **Rounding**: 0.5+ rounds up (so 54.5 → 55 = pass)
 - **Per-evaluation hints**: Shows "Need X+ in this eval to pass" when editing
+
+---
+
+## Advanced Category Rules
+
+Each category supports optional advanced rules (`Shift+A` while editing):
+
+| Rule | Description |
+|------|-------------|
+| **Drop Lowest** | Discard the N worst grades before averaging (0–5) |
+| **Averaging Method** | Arithmetic (default) or Geometric mean |
+| **Minimum Average** | Require a minimum average in this category to pass |
+| **If Not Met** | When minimum isn't reached: final = category avg, or require global exam |
+| **Min. Per Eval** | Minimum grade required on each individual evaluation |
+| **Round Category** | Round the category average before applying its weight |
+
+Press `?` inside the category editor for a full help overlay.
 
 ---
 
@@ -46,6 +68,7 @@ Manage courses, track grades by categories, and automatically calculate the exac
 ### Requirements
 
 - [Rust & Cargo](https://rustup.rs/) or [Nix](https://nixos.org/)
+- A [Nerd Font](https://www.nerdfonts.com/) is recommended (icons enabled by default — can be disabled in Settings)
 
 ### Using Cargo
 
@@ -87,10 +110,11 @@ The Nix environment includes `cargo-audit` for security scanning.
 | `d` | Delete selected item |
 | `t` | Save current course as template |
 | `b` | Auto-balance category weights |
+| `Ctrl+S` | Open settings |
 | `Ctrl+L` | Change language |
 | `q` | Quit |
 
-### In Popups
+### In Edit Popups
 
 | Key | Action |
 |:---:|--------|
@@ -98,24 +122,51 @@ The Nix environment includes `cargo-audit` for security scanning.
 | `Enter` | Confirm |
 | `Esc` | Cancel |
 
+### In Category Editor
+
+| Key | Action |
+|:---:|--------|
+| `Shift+A` | Toggle advanced rules section |
+| `?` | Toggle field help overlay |
+| `Space` / `Enter` | Cycle toggle fields (drop lowest, avg method, etc.) |
+
+### In Settings
+
+| Key | Action |
+|:---:|--------|
+| `Space` | Toggle selected setting |
+| `Enter` | Confirm and save |
+| `Esc` | Cancel without saving |
+
 ---
 
 ## Project Structure
 
 ```
 src/
-├── main.rs        # Entry point, terminal setup
-├── app.rs         # Application state and logic
-├── model.rs       # Data structures (Course, Category, Evaluation)
-├── templates.rs   # Built-in course templates (easy to modify)
-├── ui.rs          # Ratatui rendering
-├── events.rs      # Keyboard event handling
-├── i18n.rs        # Translation handling
-└── persistence.rs # JSON storage
+├── main.rs          # Entry point, terminal setup, panic hooks
+├── app/
+│   ├── mod.rs       # App struct, state, navigation, getters
+│   └── forms.rs     # Form handling: course/category/eval/template/settings
+├── model/
+│   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, templates
+│   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
+│   └── tests.rs     # All model unit tests
+├── ui/
+│   ├── mod.rs       # Main layout, courses panel, categories panel
+│   ├── panels.rs    # Evaluations panel, footer rendering
+│   ├── popups.rs    # All popup overlays (edit, delete, template, language, settings)
+│   ├── helpers.rs   # Shared rendering helpers and formatting functions
+│   ├── icons.rs     # Nerd Font and Unicode fallback icon sets
+│   └── theme.rs     # Semantic colour theme (rounded borders, palette)
+├── templates.rs     # Built-in course templates (language-aware)
+├── events.rs        # Keyboard event handling and dispatch
+├── i18n.rs          # Translations (English + Spanish)
+└── persistence.rs   # JSON storage (XDG dirs, atomic writes)
 
 ~/.local/share/kalk/
 ├── data.json           # Your courses data
-├── config.json         # Your configuration
+├── config.json         # Your configuration (language, nerd fonts)
 └── user_templates.json # Your custom templates
 ```
 
