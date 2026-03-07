@@ -150,6 +150,10 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     // Check if any evaluation has a status indicator (dropped or below min)
     let has_status = !dropped_indices.is_empty() || !below_min_indices.is_empty();
 
+    // Auto-compact status text when the panel is narrow
+    let panel_inner_w = area.width.saturating_sub(2) as usize;
+    let narrow_evals = panel_inner_w < 40;
+
     // Evaluations table — add a Status column only when needed
     let header_cells: Vec<Cell> = if has_status {
         vec!["#", m.name, m.grade, ""]
@@ -195,11 +199,19 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
                 }
             };
 
-            // Status indicator
+            // Status indicator — icon-only when panel is narrow
             let status = if is_dropped {
-                format!("({}{})", ic.dropped, m.dropped)
+                if narrow_evals {
+                    ic.dropped.to_string()
+                } else {
+                    format!("({}{})", ic.dropped, m.dropped)
+                }
             } else if is_below_min {
-                format!("({}{})", ic.below_min, m.eval_below_min)
+                if narrow_evals {
+                    ic.below_min.to_string()
+                } else {
+                    format!("({}{})", ic.below_min, m.eval_below_min)
+                }
             } else {
                 String::new()
             };
@@ -228,11 +240,12 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         category.evaluations.len()
     );
     let col_widths: Vec<Constraint> = if has_status {
+        let status_w = if narrow_evals { 3 } else { 10 };
         vec![
             Constraint::Length(3),
             Constraint::Min(6),
             Constraint::Length(5),
-            Constraint::Min(10),
+            Constraint::Min(status_w),
         ]
     } else {
         vec![

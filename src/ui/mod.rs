@@ -60,20 +60,30 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .split(frame.size());
 
     // Main area: 3-column layout for Course -> Category -> Evaluation hierarchy
-    // When compact_courses is active, the courses panel width adapts to content.
-    let courses_constraint = if app.compact_courses {
-        // Calculate minimum width needed: longest course name + grade (up to 4 chars) + borders + padding
-        let ic = icons(app.use_nerd_fonts);
-        let highlight_len = ic.highlight.chars().count() as u16;
-        let max_name_len = app
-            .courses
-            .iter()
-            .map(|c| c.name.chars().count() as u16)
-            .max()
-            .unwrap_or(4);
-        // name + space + grade (max "100") + borders(2) + highlight + padding(1)
+    // Compact mode triggers either by user toggle OR when the terminal is too
+    // narrow for the normal two-line courses layout to display without clipping.
+    let total_width = chunks[0].width;
+    let ic = icons(app.use_nerd_fonts);
+
+    // Calculate the width the normal (non-compact) courses panel would need:
+    // longest "NAME [OK]" first line + longest "  Actual: 100 (REPROBADO)" second line
+    let highlight_len = ic.highlight.chars().count() as u16;
+    let max_name_len = app
+        .courses
+        .iter()
+        .map(|c| c.name.chars().count() as u16)
+        .max()
+        .unwrap_or(4);
+    // Rough width for normal mode: name + weight_status(~6) + borders(2) + highlight + pad
+    let normal_needed = max_name_len + 6 + 2 + highlight_len + 1;
+    // Auto-compact when 25% of terminal width is smaller than what normal mode needs,
+    // or when the overall terminal is narrow enough that panels would be cramped.
+    let auto_compact = (total_width / 4) < normal_needed || total_width < 100;
+    let effective_compact = app.compact_courses || auto_compact;
+
+    let courses_constraint = if effective_compact {
+        // Dynamic width: name + space + grade(3) + borders(2) + highlight + pad(1)
         let needed = max_name_len + 1 + 3 + 2 + highlight_len + 1;
-        // Clamp to reasonable bounds: at least 12, at most 30
         Constraint::Length(needed.clamp(12, 30))
     } else {
         Constraint::Percentage(25)
@@ -81,7 +91,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints(if app.compact_courses {
+        .constraints(if effective_compact {
             [
                 courses_constraint,
                 Constraint::Percentage(45),
@@ -96,7 +106,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         })
         .split(chunks[0]);
 
-    draw_courses_panel(frame, app, main_chunks[0]);
+    draw_courses_panel(frame, app, main_chunks[0], effective_compact);
     draw_categories_panel(frame, app, main_chunks[1]);
     draw_evaluations_panel(frame, app, main_chunks[2]);
     draw_footer(frame, app, chunks[1]);
@@ -120,14 +130,14 @@ pub fn draw(frame: &mut Frame, app: &App) {
 // Panel Drawing
 // =============================================================================
 
-fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
+fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compact: bool) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
     let is_focused = app.focus == Focus::Courses;
     let border_style = focused_border_style(is_focused);
 
-    let compact = app.compact_courses;
+    let compact = effective_compact;
 
     let items: Vec<ListItem> = app
         .courses
@@ -315,7 +325,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     let passing_grade = course.passing_grade;
     // Inner width of the categories panel (excluding borders)
     let panel_inner_w = area.width.saturating_sub(2) as usize;
-    let narrow = panel_inner_w < 35;
+    let narrow = panel_inner_w < 50;
     let items: Vec<ListItem> = course
         .categories
         .iter()
