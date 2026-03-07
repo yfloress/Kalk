@@ -95,6 +95,7 @@ Always ask the user to run them. Use `nix develop -c` prefix for all Cargo comma
 - Keep functions short and focused. Use section separators (`// ===...`) to organize large files.
 - Prefer passing parameters over accessing global/hardcoded constants for flexibility.
 - Run `nix develop -c cargo clippy -j 2` before committing — zero warnings policy.
+- **No dead code** — if code is no longer used, delete it. Do not leave commented-out code, unused functions, unused imports, or orphaned helpers. Dead code is not acceptable; remove it immediately.
 
 ## Testing Guidelines
 - Model tests live in `model/tests.rs`, included via `#[cfg(test)] mod tests;` in `model/mod.rs`.
