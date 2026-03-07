@@ -50,7 +50,7 @@ src/
 - **`model/tests.rs`** contains all model unit tests — tests are separated from production code.
 - **`ui/` only renders** — it reads state from `App` and formats for display. No mutations, no calculations beyond formatting strings.
 - **`ui/mod.rs`** handles the main layout, courses panel, and categories panel.
-- **`ui/panels.rs`** handles the evaluations panel and footer rendering (extracted to keep files under ~600 lines).
+- **`ui/panels.rs`** handles the evaluations panel and footer rendering (extracted to keep files manageable).
 - **`ui/popups.rs`** handles all popup overlays (template selection, course/category/evaluation editing, deletions, language).
 - **`ui/helpers.rs`** contains shared rendering helpers (`centered_rect`, `render_input_field`, `render_toggle_field`, `focused_border_style`) and formatting functions (`format_course_status`, `format_course_average`, `format_weight_validation`, `format_needed_grade`).
 - **`app/mod.rs` coordinates** — holds state, navigation, getters, delegates to `model/` for domain logic and `persistence.rs` for disk I/O.
@@ -102,7 +102,11 @@ Always ask the user to run them. Use `nix develop -c` prefix for all Cargo comma
 - Keep tests deterministic — no filesystem or network dependencies.
 - Test domain logic in `model/` thoroughly (calculations, edge cases, validation).
 - Use `nix develop -c cargo test -j 2` to run.
-- **File size limit**: all `.rs` files should ideally stay under ~600 lines. A slight overshoot is acceptable if the file is cohesive, but never exceed ~650.
+- **File size limit** — the goal is to avoid spaghetti code (everything in one file) and keep files easy to read and maintain for both humans and AI:
+  - **~600 lines (ideal)**: aim for this as the default target.
+  - **~800 lines (soft limit)**: acceptable when the file is cohesive and splitting would be forced or artificial. Must be justified.
+  - **~900 lines (hard limit)**: absolute maximum. Never exceed this. If a file approaches 900 lines, split it.
+  - Do **not** split files just to hit 600 if the split would be unnatural or create unnecessary indirection.
 
 ## Commit Guidelines
 - **NEVER create commits unless the user explicitly asks.**
