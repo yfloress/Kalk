@@ -149,12 +149,23 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Determine if OnMinNotMet field is visible (only when min average is set)
     let show_on_min_not_met = show_advanced && !app.edit_min_average.trim().is_empty();
 
+    // --- Compute help text height dynamically ---
+    let popup_width = 50u16;
+    // Inner text width = popup - 2*margin - 2*border = 50 - 4 - 2 = 44
+    let inner_text_width = popup_width.saturating_sub(6).max(1) as usize;
+    let help_text = contextual_field_help(app.input_field, m);
+    let help_lines_needed: u16 = if help_text.is_empty() {
+        1
+    } else {
+        ((help_text.len() + inner_text_width - 1) / inner_text_width).max(1) as u16
+    };
+
     // --- Compute popup height based on what's visible ---
     // Basic: Name(3) + spacing(1) + Weight(3) + hint(1) = 8
     // Separator: 2
-    // Help hint area: 3 (enough for wrapped text)
+    // Help hint area: dynamic
     // Outer margin: 4 (margin(2) top+bottom)
-    let base_height: u16 = 8 + 2 + 3 + 4;
+    let base_height: u16 = 8 + 2 + help_lines_needed + 4;
     let advanced_height: u16 = if show_advanced {
         let fields = if show_on_min_not_met { 6 } else { 5 };
         fields * 3 + 1 // fields * 3 lines + 1 spacing
@@ -164,7 +175,6 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let total_height = base_height + advanced_height;
 
     // Use absolute cell sizing for consistency
-    let popup_width = 50u16;
     let popup_height = total_height;
     let term = frame.size();
     let x = term.x + term.width.saturating_sub(popup_width) / 2;
@@ -212,8 +222,8 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         constraints.push(Constraint::Length(3)); // Round Before Weighting (toggle)
     }
 
-    // Contextual help hint at the bottom (always present, 3 lines for wrapping)
-    constraints.push(Constraint::Length(3));
+    // Contextual help hint at the bottom (dynamically sized)
+    constraints.push(Constraint::Length(help_lines_needed));
 
     let inner = Layout::default()
         .direction(Direction::Vertical)
@@ -373,7 +383,6 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Contextual help hint (always at bottom of popup)
     // =====================================================================
 
-    let help_text = contextual_field_help(app.input_field, m);
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(Color::DarkGray))
         .wrap(Wrap { trim: true });
