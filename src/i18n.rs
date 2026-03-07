@@ -323,8 +323,8 @@ pub const EN: Messages = Messages {
 
     // Category rules labels
     advanced_rules: "Advanced Rules",
-    advanced_rules_show: "Ctrl+R: Show rules",
-    advanced_rules_hide: "Ctrl+R: Hide rules",
+    advanced_rules_show: "Shift+A: Show rules",
+    advanced_rules_hide: "Shift+A: Hide rules",
     drop_lowest: "Drop Lowest",
     averaging_method: "Average Method",
     averaging_arithmetic: "Arithmetic",
@@ -479,8 +479,8 @@ pub const ES: Messages = Messages {
 
     // Category rules labels
     advanced_rules: "Reglas Avanzadas",
-    advanced_rules_show: "Ctrl+R: Mostrar reglas",
-    advanced_rules_hide: "Ctrl+R: Ocultar reglas",
+    advanced_rules_show: "Shift+A: Mostrar reglas",
+    advanced_rules_hide: "Shift+A: Ocultar reglas",
     drop_lowest: "Eliminar Peores",
     averaging_method: "Método de Promedio",
     averaging_arithmetic: "Aritmético",

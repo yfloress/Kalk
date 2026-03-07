@@ -64,7 +64,7 @@ pub enum MinimumNotMetAction {
 /// All fields use `#[serde(default)]` for backward compatibility —
 /// existing JSON data without rules will deserialize with sensible defaults
 /// that produce identical behavior to the old system.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CategoryRules {
     /// Minimum average required in this category (None = no requirement).
     /// If the average is below this, `on_minimum_not_met` determines the consequence.
@@ -93,19 +93,6 @@ pub struct CategoryRules {
     /// using it in the weighted course grade calculation.
     #[serde(default)]
     pub round_before_weighting: bool,
-}
-
-impl Default for CategoryRules {
-    fn default() -> Self {
-        Self {
-            minimum_average: None,
-            on_minimum_not_met: MinimumNotMetAction::default(),
-            drop_lowest: 0,
-            averaging_method: AveragingMethod::default(),
-            minimum_per_evaluation: None,
-            round_before_weighting: false,
-        }
-    }
 }
 
 impl CategoryRules {

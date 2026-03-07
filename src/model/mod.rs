@@ -261,30 +261,29 @@ impl Course {
         // Check all category rules
         for (idx, cat) in self.categories.iter().enumerate() {
             // Check minimum average requirement
-            if let Some(min_avg) = cat.rules.minimum_average {
-                if let Some(avg) = cat.average_grade() {
-                    if avg < min_avg {
-                        failed_minimums.push(FailedMinimum {
-                            category_idx: idx,
-                            category_name: cat.name.clone(),
-                            average: avg,
-                            required: min_avg,
-                            action: cat.rules.on_minimum_not_met,
-                        });
-                    }
-                }
+            if let Some(min_avg) = cat.rules.minimum_average
+                && let Some(avg) = cat.average_grade()
+                && avg < min_avg
+            {
+                failed_minimums.push(FailedMinimum {
+                    category_idx: idx,
+                    category_name: cat.name.clone(),
+                    average: avg,
+                    required: min_avg,
+                    action: cat.rules.on_minimum_not_met,
+                });
             }
 
             // Check per-evaluation minimum
-            if let Some(failing) = cat.evals_below_minimum() {
-                if !failing.is_empty() {
-                    eval_violations.push(EvalViolation {
-                        category_idx: idx,
-                        category_name: cat.name.clone(),
-                        failing_indices: failing,
-                        required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
-                    });
-                }
+            if let Some(failing) = cat.evals_below_minimum()
+                && !failing.is_empty()
+            {
+                eval_violations.push(EvalViolation {
+                    category_idx: idx,
+                    category_name: cat.name.clone(),
+                    failing_indices: failing,
+                    required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
+                });
             }
         }
 
@@ -505,10 +504,10 @@ impl Course {
                 // For the target category, use the pre-computed grades excluding target eval
                 let other_sum: f64 = other_grades.iter().sum();
                 total_contribution += other_sum * cat.weight / (100.0 * effective_count as f64);
-            } else if !cat.evaluations.is_empty() {
-                if let Some(contribution) = cat.weighted_contribution() {
-                    total_contribution += contribution;
-                }
+            } else if !cat.evaluations.is_empty()
+                && let Some(contribution) = cat.weighted_contribution()
+            {
+                total_contribution += contribution;
             }
         }
 

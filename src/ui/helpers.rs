@@ -33,6 +33,86 @@ use ratatui::{
 };
 
 // =============================================================================
+// Delete Confirmation Helper
+// =============================================================================
+
+/// Shared renderer for delete-confirmation popups.
+///
+/// Draws a fixed-size centred popup with a question, a separator, a warning
+/// line, and keybinding hints at the bottom.
+pub fn render_delete_confirmation(
+    frame: &mut Frame,
+    title: &str,
+    question: &str,
+    warning_text: &str,
+    confirm_label: &str,
+    cancel_label: &str,
+) {
+    let term = frame.size();
+    let popup_w = 46u16.min(term.width);
+    let popup_h = 11u16.min(term.height);
+    let x = term.x + term.width.saturating_sub(popup_w) / 2;
+    let y = term.y + term.height.saturating_sub(popup_h) / 2;
+    let area = Rect::new(x, y, popup_w, popup_h);
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(format!(" {} ", title))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Red));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // question
+            Constraint::Length(1), // separator
+            Constraint::Length(2), // warning
+            Constraint::Min(0),    // spacer
+            Constraint::Length(1), // keybindings
+        ])
+        .split(inner);
+
+    let q = Paragraph::new(Line::from(vec![
+        Span::styled("  ", Style::default()),
+        Span::styled(
+            question,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]))
+    .wrap(Wrap { trim: true });
+    frame.render_widget(q, chunks[0]);
+
+    let sep = Paragraph::new(Line::from(Span::styled(
+        "──────────────────────────────────────────",
+        Style::default().fg(Color::DarkGray),
+    )));
+    frame.render_widget(sep, chunks[1]);
+
+    let warn = Paragraph::new(Line::from(vec![
+        Span::styled("  ! ", Style::default().fg(Color::Yellow)),
+        Span::styled(warning_text, Style::default().fg(Color::Yellow)),
+    ]));
+    frame.render_widget(warn, chunks[2]);
+
+    let hints = Paragraph::new(Line::from(vec![
+        Span::styled(
+            format!("  Enter/y: {}  ", confirm_label),
+            Style::default().fg(Color::Red),
+        ),
+        Span::styled(
+            format!("Esc/n: {}", cancel_label),
+            Style::default().fg(Color::DarkGray),
+        ),
+    ]));
+    frame.render_widget(hints, chunks[4]);
+}
+
+// =============================================================================
 // Rendering Helpers
 // =============================================================================
 

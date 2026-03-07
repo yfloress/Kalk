@@ -574,3 +574,870 @@ fn test_effective_eval_count() {
     cat.rules.drop_lowest = 1;
     assert_eq!(cat.effective_eval_count(), 2);
 }
+
+// =========================================================================
+// Round grade tests
+// =========================================================================
+
+#[test]
+fn test_round_grade_half_rounds_up() {
+    // 54.5 should round to 55 (0.5+ rounds up)
+    assert!((Course::round_grade(54.5) - 55.0).abs() < 0.01);
+}
+
+#[test]
+fn test_round_grade_below_half_rounds_down() {
+    // 54.4 should round to 54
+    assert!((Course::round_grade(54.4) - 54.0).abs() < 0.01);
+}
+
+#[test]
+fn test_round_grade_exact_integer() {
+    assert!((Course::round_grade(70.0) - 70.0).abs() < 0.01);
+}
+
+#[test]
+fn test_round_grade_zero() {
+    assert!((Course::round_grade(0.0) - 0.0).abs() < 0.01);
+}
+
+#[test]
+fn test_round_grade_max() {
+    assert!((Course::round_grade(100.0) - 100.0).abs() < 0.01);
+}
+
+#[test]
+fn test_round_grade_just_above_half() {
+    // 54.51 should round to 55
+    assert!((Course::round_grade(54.51) - 55.0).abs() < 0.01);
+}
+
+#[test]
+fn test_round_grade_just_below_half() {
+    // 54.49 should round to 54
+    assert!((Course::round_grade(54.49) - 54.0).abs() < 0.01);
+}
+
+// =========================================================================
+// is_passing_grade boundary tests
+// =========================================================================
+
+#[test]
+fn test_is_passing_grade_exact_boundary() {
+    let course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    // 55.0 rounds to 55, which is >= 55
+    assert!(course.is_passing_grade(55.0));
+}
+
+#[test]
+fn test_is_passing_grade_rounds_up_to_pass() {
+    let course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    // 54.5 rounds to 55, which is >= 55 → passing
+    assert!(course.is_passing_grade(54.5));
+}
+
+#[test]
+fn test_is_passing_grade_rounds_down_to_fail() {
+    let course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    // 54.4 rounds to 54, which is < 55 → failing
+    assert!(!course.is_passing_grade(54.4));
+}
+
+#[test]
+fn test_is_passing_grade_custom_threshold() {
+    let course = Course::new("Math".to_string(), 60.0);
+    assert!(course.is_passing_grade(60.0));
+    assert!(course.is_passing_grade(59.5));
+    assert!(!course.is_passing_grade(59.4));
+}
+
+// =========================================================================
+// graded_count tests
+// =========================================================================
+
+#[test]
+fn test_graded_count_mixed() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 60.0));
+
+    assert_eq!(cat.graded_count(), 2);
+}
+
+#[test]
+fn test_graded_count_all_graded() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 60.0));
+
+    assert_eq!(cat.graded_count(), 2);
+}
+
+#[test]
+fn test_graded_count_none_graded() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations.push(Evaluation::new("T1".to_string()));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+
+    assert_eq!(cat.graded_count(), 0);
+}
+
+#[test]
+fn test_graded_count_empty() {
+    let cat = Category::new("Tests".to_string(), 100.0);
+    assert_eq!(cat.graded_count(), 0);
+}
+
+// =========================================================================
+// needed_grade with multiple categories
+// =========================================================================
+
+#[test]
+fn test_needed_grade_multiple_categories() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category 0: Certamenes 70%, one graded eval
+    let mut certs = Category::new("Certamenes".to_string(), 70.0);
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 60.0));
+    certs.evaluations.push(Evaluation::new("C2".to_string()));
+
+    // Category 1: Controles 30%, one graded eval
+    let mut controls = Category::new("Controles".to_string(), 30.0);
+    controls
+        .evaluations
+        .push(Evaluation::with_grade("Co1".to_string(), 80.0));
+
+    course.categories.push(certs);
+    course.categories.push(controls);
+
+    // Solving for C2 (category 0, eval 1):
+    // Controles contribution = 80 * 30 / 100 = 24
+    // Certamenes: effective_grades_excluding(1) → [60, 0] with eval_idx=1 set to 0
+    //   other_sum = 60, effective_count = 2
+    //   contribution from others = 60 * 70 / (100 * 2) = 21
+    // eval_weight = 70 / (100 * 2) = 0.35
+    // needed = (54.5 - 21 - 24) / 0.35 = 9.5 / 0.35 = 27.14...
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    let val = result.value.unwrap();
+    assert!(val > 25.0 && val < 30.0, "Expected ~27.1, got {}", val);
+}
+
+// =========================================================================
+// needed_grade edge cases
+// =========================================================================
+
+#[test]
+fn test_needed_grade_zero_weight_category() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Bonus".to_string(), 0.0);
+    cat.evaluations.push(Evaluation::new("B1".to_string()));
+    course.categories.push(cat);
+
+    // Zero weight → cannot affect outcome
+    let result = course.needed_grade_for_evaluation(0, 0, true);
+    assert_eq!(result.status, NeededGradeStatus::Failure);
+}
+
+#[test]
+fn test_needed_grade_geometric_returns_info() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.averaging_method = AveragingMethod::Geometric;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 60.0));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    // Geometric mean → calculation not supported, should return Info
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(result.status, NeededGradeStatus::Info);
+}
+
+#[test]
+fn test_needed_grade_already_failing() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 30.0));
+    course.categories.push(cat);
+
+    // Already graded and failing, not ignoring current grade
+    let result = course.needed_grade_for_evaluation(0, 0, false);
+    assert_eq!(result.status, NeededGradeStatus::Failure);
+    assert!((result.value.unwrap() - 30.0).abs() < 0.01);
+}
+
+#[test]
+fn test_needed_grade_invalid_indices() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let cat = Category::new("Tests".to_string(), 100.0);
+    course.categories.push(cat);
+
+    // Invalid category index
+    let result = course.needed_grade_for_evaluation(5, 0, true);
+    assert_eq!(result.status, NeededGradeStatus::Failure);
+
+    // Invalid eval index
+    let result = course.needed_grade_for_evaluation(0, 5, true);
+    assert_eq!(result.status, NeededGradeStatus::Failure);
+}
+
+#[test]
+fn test_needed_grade_single_eval_ungraded() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations.push(Evaluation::new("T1".to_string()));
+    course.categories.push(cat);
+
+    // Single ungraded eval: need >= 54.5 to pass
+    let result = course.needed_grade_for_evaluation(0, 0, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    let val = result.value.unwrap();
+    assert!((val - 54.5).abs() < 0.01, "Expected 54.5, got {}", val);
+}
+
+#[test]
+fn test_needed_grade_already_passing_any_grade() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 100.0));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    // With T1=100, avg = (100 + X) / 2 >= 54.5 → X >= 9
+    // That's achievable, should be Warning with a low value
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert!(
+        result.status == NeededGradeStatus::Warning || result.status == NeededGradeStatus::Success
+    );
+}
+
+// =========================================================================
+// compute_grade with eval violations
+// =========================================================================
+
+#[test]
+fn test_compute_grade_eval_violations() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_per_evaluation = Some(40.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 20.0)); // Below 40
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 35.0)); // Below 40
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    assert_eq!(result.eval_violations.len(), 1);
+    assert_eq!(result.eval_violations[0].category_idx, 0);
+    assert_eq!(result.eval_violations[0].failing_indices, vec![1, 2]);
+    assert!((result.eval_violations[0].required - 40.0).abs() < 0.01);
+}
+
+#[test]
+fn test_compute_grade_no_eval_violations_when_all_pass() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_per_evaluation = Some(40.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 50.0));
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    assert!(result.eval_violations.is_empty());
+}
+
+// =========================================================================
+// compute_grade with multiple minimum failures
+// =========================================================================
+
+#[test]
+fn test_compute_grade_multiple_final_equals_avg_uses_worst() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category 0: avg=30, min=50, action=FinalEqualsAverage
+    let mut cat_a = Category::new("CatA".to_string(), 50.0);
+    cat_a.rules.minimum_average = Some(50.0);
+    cat_a.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat_a
+        .evaluations
+        .push(Evaluation::with_grade("A1".to_string(), 30.0));
+
+    // Category 1: avg=40, min=50, action=FinalEqualsAverage
+    let mut cat_b = Category::new("CatB".to_string(), 50.0);
+    cat_b.rules.minimum_average = Some(50.0);
+    cat_b.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat_b
+        .evaluations
+        .push(Evaluation::with_grade("B1".to_string(), 40.0));
+
+    course.categories.push(cat_a);
+    course.categories.push(cat_b);
+
+    let result = course.compute_grade();
+    // Both fail minimum. Worst average is 30 (CatA).
+    assert!((result.grade - 30.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("CatA".to_string()));
+    assert_eq!(result.failed_minimums.len(), 2);
+}
+
+#[test]
+fn test_compute_grade_mixed_minimum_actions() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category 0: avg=40, min=50, action=RequiresGlobal
+    let mut cat_a = Category::new("Certs".to_string(), 70.0);
+    cat_a.rules.minimum_average = Some(50.0);
+    cat_a.rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+    cat_a
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 40.0));
+
+    // Category 1: normal, no minimum
+    let mut cat_b = Category::new("Tasks".to_string(), 30.0);
+    cat_b
+        .evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 90.0));
+
+    course.categories.push(cat_a);
+    course.categories.push(cat_b);
+
+    let result = course.compute_grade();
+    // Certs fails minimum → requires global, but no FinalEqualsAverage
+    assert!(result.needs_global);
+    assert!(result.overridden_by.is_none());
+    // Normal grade: (40*70/100) + (90*30/100) = 28 + 27 = 55
+    assert!((result.grade - 55.0).abs() < 0.01);
+}
+
+#[test]
+fn test_compute_grade_final_equals_avg_takes_priority_over_requires_global() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category 0: avg=25, min=50, FinalEqualsAverage
+    let mut cat_a = Category::new("CatA".to_string(), 50.0);
+    cat_a.rules.minimum_average = Some(50.0);
+    cat_a.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat_a
+        .evaluations
+        .push(Evaluation::with_grade("A1".to_string(), 25.0));
+
+    // Category 1: avg=40, min=50, RequiresGlobal
+    let mut cat_b = Category::new("CatB".to_string(), 50.0);
+    cat_b.rules.minimum_average = Some(50.0);
+    cat_b.rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+    cat_b
+        .evaluations
+        .push(Evaluation::with_grade("B1".to_string(), 40.0));
+
+    course.categories.push(cat_a);
+    course.categories.push(cat_b);
+
+    let result = course.compute_grade();
+    // FinalEqualsAverage overrides: grade = 25, no needs_global checked
+    assert!((result.grade - 25.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("CatA".to_string()));
+    assert!(!result.needs_global);
+}
+
+// =========================================================================
+// auto_balance_weights edge cases
+// =========================================================================
+
+#[test]
+fn test_auto_balance_weights_three_categories() {
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    course.categories.push(Category::new("A".to_string(), 10.0));
+    course.categories.push(Category::new("B".to_string(), 20.0));
+    course.categories.push(Category::new("C".to_string(), 70.0));
+
+    course.auto_balance_weights();
+
+    // Should sum to exactly 100.0 after rounding correction on the last category
+    assert!((course.total_weight() - 100.0).abs() < 0.01);
+    // Each should be ~33.3
+    assert!((course.categories[0].weight - 33.3).abs() < 0.1);
+    assert!((course.categories[1].weight - 33.3).abs() < 0.1);
+}
+
+#[test]
+fn test_auto_balance_weights_single_category() {
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    course.categories.push(Category::new("A".to_string(), 50.0));
+
+    course.auto_balance_weights();
+
+    assert!((course.categories[0].weight - 100.0).abs() < 0.01);
+    assert!((course.total_weight() - 100.0).abs() < 0.01);
+}
+
+#[test]
+fn test_auto_balance_weights_empty_course() {
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Should not panic on empty categories
+    course.auto_balance_weights();
+
+    assert!(course.categories.is_empty());
+}
+
+// =========================================================================
+// effective_grades_excluding with drop_lowest
+// =========================================================================
+
+#[test]
+fn test_effective_grades_excluding_with_drop_lowest() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 1;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 20.0));
+    cat.evaluations.push(Evaluation::new("T3".to_string())); // eval_idx=2, treated as 0
+
+    // Excluding eval 2 (set to 0): grades = [80, 20, 0]
+    // After drop_lowest=1: drop the 0, left with [20, 80]
+    let (grades, count) = cat.effective_grades_excluding(2);
+    assert_eq!(count, 2);
+    assert_eq!(grades.len(), 2);
+    let sum: f64 = grades.iter().sum();
+    assert!((sum - 100.0).abs() < 0.01); // 20 + 80
+}
+
+#[test]
+fn test_effective_grades_excluding_target_not_dropped() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 1;
+    // All high grades except eval 0 which we set to 0
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 90.0)); // will be set to 0
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 70.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 80.0));
+
+    // Excluding eval 0 (set to 0): grades = [0, 70, 80]
+    // After drop_lowest=1: drop 0, left with [70, 80]
+    let (grades, count) = cat.effective_grades_excluding(0);
+    assert_eq!(count, 2);
+    let sum: f64 = grades.iter().sum();
+    assert!((sum - 150.0).abs() < 0.01); // 70 + 80
+}
+
+// =========================================================================
+// Drop lowest boundary: 2 evals with drop=1
+// =========================================================================
+
+#[test]
+fn test_drop_lowest_two_evals_drop_one() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 1;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 40.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 90.0));
+
+    // Drop 40, average of [90] = 90
+    assert!((cat.average_grade().unwrap() - 90.0).abs() < 0.01);
+    assert_eq!(cat.effective_eval_count(), 1);
+}
+
+// =========================================================================
+// Geometric mean with drop_lowest
+// =========================================================================
+
+#[test]
+fn test_geometric_mean_with_drop_lowest() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.averaging_method = AveragingMethod::Geometric;
+    cat.rules.drop_lowest = 1;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 10.0)); // lowest, will be dropped
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 64.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 36.0));
+
+    // Drop 10, geometric mean of [36, 64] = sqrt(36*64) = sqrt(2304) = 48
+    assert!((cat.average_grade().unwrap() - 48.0).abs() < 0.1);
+}
+
+// =========================================================================
+// Round before weighting with geometric mean
+// =========================================================================
+
+#[test]
+fn test_round_before_weighting_geometric() {
+    let mut cat = Category::new("Tests".to_string(), 60.0);
+    cat.rules.averaging_method = AveragingMethod::Geometric;
+    cat.rules.round_before_weighting = true;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 64.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 36.0));
+
+    // Geometric mean = 48.0, rounded = 48
+    // Weighted = 48 * 60 / 100 = 28.8
+    assert!((cat.average_grade().unwrap() - 48.0).abs() < 0.1);
+    assert!((cat.weighted_contribution().unwrap() - 28.8).abs() < 0.1);
+}
+
+// =========================================================================
+// Course current_grade edge cases
+// =========================================================================
+
+#[test]
+fn test_current_grade_no_evaluations() {
+    let course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    assert!(course.current_grade().is_none());
+}
+
+#[test]
+fn test_current_grade_empty_categories() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    course
+        .categories
+        .push(Category::new("A".to_string(), 100.0));
+
+    // Category exists but has no evaluations
+    assert!(course.current_grade().is_none());
+}
+
+#[test]
+fn test_current_grade_all_ungraded() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations.push(Evaluation::new("T1".to_string()));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    // Has evaluations but all ungraded → treated as 0
+    let grade = course.current_grade().unwrap();
+    assert!((grade - 0.0).abs() < 0.01);
+}
+
+// =========================================================================
+// Weight validation edge cases
+// =========================================================================
+
+#[test]
+fn test_weight_validation_tolerance() {
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    // 33.33 * 3 = 99.99, which is under 100 but within rounding
+    course
+        .categories
+        .push(Category::new("A".to_string(), 33.34));
+    course
+        .categories
+        .push(Category::new("B".to_string(), 33.33));
+    course
+        .categories
+        .push(Category::new("C".to_string(), 33.33));
+
+    // Total = 100.00, should be valid
+    assert_eq!(course.validate_weights(), WeightValidation::Valid);
+}
+
+// =========================================================================
+// Course::new clamps passing_grade
+// =========================================================================
+
+#[test]
+fn test_course_new_clamps_passing_grade() {
+    let course_low = Course::new("Test".to_string(), -10.0);
+    assert!((course_low.passing_grade - MIN_GRADE).abs() < 0.01);
+
+    let course_high = Course::new("Test".to_string(), 150.0);
+    assert!((course_high.passing_grade - MAX_GRADE).abs() < 0.01);
+}
+
+// =========================================================================
+// Category weight clamping
+// =========================================================================
+
+#[test]
+fn test_category_weight_clamped() {
+    let cat = Category::new("Test".to_string(), 150.0);
+    assert!((cat.weight - 100.0).abs() < 0.01);
+
+    let cat_neg = Category::new("Test".to_string(), -5.0);
+    assert!((cat_neg.weight - 0.0).abs() < 0.01);
+}
+
+// =========================================================================
+// evals_below_minimum edge cases
+// =========================================================================
+
+#[test]
+fn test_evals_below_minimum_no_requirement() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 10.0));
+
+    // No minimum_per_evaluation set
+    assert!(cat.evals_below_minimum().is_none());
+}
+
+#[test]
+fn test_evals_below_minimum_all_failing() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_per_evaluation = Some(50.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 20.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 30.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 10.0));
+
+    let failing = cat.evals_below_minimum().unwrap();
+    assert_eq!(failing, vec![0, 1, 2]);
+}
+
+// =========================================================================
+// dropped_indices edge cases
+// =========================================================================
+
+#[test]
+fn test_dropped_indices_no_drop() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 30.0));
+
+    assert!(cat.dropped_indices().is_empty());
+}
+
+#[test]
+fn test_dropped_indices_drop_exceeds_evals() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 5;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 30.0));
+
+    // drop_lowest >= evaluations.len() → nothing dropped
+    assert!(cat.dropped_indices().is_empty());
+}
+
+#[test]
+fn test_dropped_indices_empty_evals() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 1;
+
+    assert!(cat.dropped_indices().is_empty());
+}
+
+#[test]
+fn test_dropped_indices_drop_two() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 2;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 30.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 20.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T4".to_string(), 70.0));
+
+    let dropped = cat.dropped_indices();
+    assert_eq!(dropped.len(), 2);
+    // T3 (index 2, grade 20) and T2 (index 1, grade 30) should be dropped
+    assert!(dropped.contains(&1));
+    assert!(dropped.contains(&2));
+}
+
+// =========================================================================
+// meets_minimum with no evaluations
+// =========================================================================
+
+#[test]
+fn test_meets_minimum_no_evaluations() {
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_average = Some(50.0);
+
+    // No evaluations → average_grade is None → meets_minimum is None
+    assert_eq!(cat.meets_minimum(), None);
+}
+
+// =========================================================================
+// weighted_contribution edge cases
+// =========================================================================
+
+#[test]
+fn test_weighted_contribution_no_evaluations() {
+    let cat = Category::new("Tests".to_string(), 80.0);
+    assert!(cat.weighted_contribution().is_none());
+}
+
+#[test]
+fn test_weighted_contribution_zero_weight() {
+    let mut cat = Category::new("Bonus".to_string(), 0.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("B1".to_string(), 100.0));
+
+    // 100 * 0 / 100 = 0
+    assert!((cat.weighted_contribution().unwrap() - 0.0).abs() < 0.01);
+}
+
+// =========================================================================
+// to_template roundtrip test
+// =========================================================================
+
+#[test]
+fn test_to_template_roundtrip() {
+    let mut course = Course::new("Fisica".to_string(), 60.0);
+
+    let rules = CategoryRules {
+        drop_lowest: 1,
+        minimum_average: Some(45.0),
+        on_minimum_not_met: MinimumNotMetAction::RequiresGlobal,
+        ..Default::default()
+    };
+
+    let certs = Category::with_rules(
+        "Certamen".to_string(),
+        70.0,
+        vec![
+            Evaluation::with_grade("C1".to_string(), 80.0),
+            Evaluation::with_grade("C2".to_string(), 50.0),
+            Evaluation::new("C3".to_string()),
+        ],
+        rules,
+    );
+    // Ensure grades exist to verify they are NOT carried into the template
+    assert_eq!(certs.graded_count(), 2);
+
+    let controls = Category::with_evaluations(
+        "Control".to_string(),
+        30.0,
+        vec![
+            Evaluation::new("Co1".to_string()),
+            Evaluation::new("Co2".to_string()),
+        ],
+    );
+
+    course.categories.push(certs);
+    course.categories.push(controls);
+
+    let template = course.to_template("Fisica Template".to_string(), "test desc".to_string());
+
+    assert_eq!(template.name, "Fisica Template");
+    assert_eq!(template.description, "test desc");
+    assert_eq!(template.categories.len(), 2);
+
+    // Verify structure preserved
+    assert_eq!(template.categories[0].name, "Certamen");
+    assert!((template.categories[0].weight - 70.0).abs() < 0.01);
+    assert_eq!(template.categories[0].default_evaluation_count, 3);
+    assert_eq!(template.categories[0].rules.drop_lowest, 1);
+    assert_eq!(template.categories[0].rules.minimum_average, Some(45.0));
+    assert_eq!(
+        template.categories[0].rules.on_minimum_not_met,
+        MinimumNotMetAction::RequiresGlobal
+    );
+
+    assert_eq!(template.categories[1].name, "Control");
+    assert!((template.categories[1].weight - 30.0).abs() < 0.01);
+    assert_eq!(template.categories[1].default_evaluation_count, 2);
+    assert!(template.categories[1].rules.is_default());
+
+    // Roundtrip: create a new course from the template
+    let course2 = Course::from_template("Fisica 2".to_string(), 60.0, &template);
+    assert_eq!(course2.categories.len(), 2);
+    assert_eq!(course2.categories[0].evaluations.len(), 3);
+    assert_eq!(course2.categories[0].rules.drop_lowest, 1);
+    assert_eq!(course2.categories[0].rules.minimum_average, Some(45.0));
+    // Grades should NOT be carried over — all evals ungraded
+    assert_eq!(course2.categories[0].graded_count(), 0);
+    assert_eq!(course2.categories[1].evaluations.len(), 2);
+    assert_eq!(course2.categories[1].graded_count(), 0);
+}
+
+// =========================================================================
+// is_passing on empty category
+// =========================================================================
+
+#[test]
+fn test_is_passing_empty_category() {
+    let cat = Category::new("Tests".to_string(), 100.0);
+    // No evaluations → average_grade is None → is_passing is None
+    assert_eq!(cat.is_passing(55.0), None);
+}
+
+// =========================================================================
+// compute_grade with drop_lowest + minimum average interaction
+// =========================================================================
+
+#[test]
+fn test_compute_grade_drop_lowest_affects_minimum_check() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category with drop_lowest=1 and minimum_average=50
+    // Grades: [20, 60, 70] → after drop 20 → avg = (60+70)/2 = 65 → passes minimum
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 1;
+    cat.rules.minimum_average = Some(50.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 20.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 60.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 70.0));
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    // After dropping 20, avg = 65 which is >= 50 → minimum met
+    // Grade = 65 (no override)
+    assert!((result.grade - 65.0).abs() < 0.01);
+    assert!(result.overridden_by.is_none());
+    assert!(result.failed_minimums.is_empty());
+}
+
+#[test]
+fn test_compute_grade_drop_lowest_still_fails_minimum() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category with drop_lowest=1 and minimum_average=50
+    // Grades: [10, 20, 30] → after drop 10 → avg = (20+30)/2 = 25 → fails minimum
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 1;
+    cat.rules.minimum_average = Some(50.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 10.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 20.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T3".to_string(), 30.0));
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    // After dropping 10, avg = 25 which is < 50 → minimum not met → override
+    assert!((result.grade - 25.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("Tests".to_string()));
+    assert_eq!(result.failed_minimums.len(), 1);
+}

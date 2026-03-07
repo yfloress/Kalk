@@ -34,7 +34,7 @@ use ratatui::{
 
 use super::helpers::{
     centered_rect, contextual_field_help, draw_category_help_overlay, format_course_status,
-    format_needed_grade, render_input_field, render_toggle_field,
+    format_needed_grade, render_delete_confirmation, render_input_field, render_toggle_field,
 };
 
 // =============================================================================
@@ -75,7 +75,7 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
                     Style::default().fg(if is_user_template {
                         Color::Yellow
                     } else {
-                        Color::DarkGray
+                        Color::Gray
                     }),
                 )),
             ])
@@ -98,7 +98,13 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
 
 pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let m = app.messages();
-    let area = centered_rect(50, 35, frame.size());
+    // Fixed height: border(1) + top_pad + field(3) + spacing(1) + field(3) + bot_pad + border(1)
+    let popup_h = 13u16;
+    let popup_w = 50u16;
+    let term = frame.size();
+    let x = term.x + term.width.saturating_sub(popup_w) / 2;
+    let y = term.y + term.height.saturating_sub(popup_h) / 2;
+    let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
     frame.render_widget(Clear, area);
 
     let title = if is_new {
@@ -112,24 +118,38 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
+    let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let inner = Layout::default()
+    // Centre the two inputs vertically inside `inner`
+    let layout = Layout::default()
         .direction(Direction::Vertical)
-        .margin(2)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Length(1),
-            Constraint::Length(3),
+            Constraint::Min(0),    // top spacer
+            Constraint::Length(3), // Name field
+            Constraint::Length(1), // spacing
+            Constraint::Length(3), // Passing Grade field
+            Constraint::Min(0),    // bottom spacer
         ])
-        .split(area);
+        .split(inner);
+
+    // Horizontal padding (inset fields by 2 columns on each side)
+    let field_area = |rect: Rect| -> Rect {
+        let pad = 2u16.min(rect.width / 2);
+        Rect::new(
+            rect.x + pad,
+            rect.y,
+            rect.width.saturating_sub(pad * 2),
+            rect.height,
+        )
+    };
 
     render_input_field(
         frame,
         m.name,
         &app.edit_name,
         app.input_field == InputField::Name,
-        inner[0],
+        field_area(layout[1]),
     );
 
     render_input_field(
@@ -137,7 +157,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         m.passing_grade,
         &app.edit_passing_grade,
         app.input_field == InputField::PassingGrade,
-        inner[2],
+        field_area(layout[3]),
     );
 }
 
@@ -157,7 +177,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let help_lines_needed: u16 = if help_text.is_empty() {
         1
     } else {
-        ((help_text.len() + inner_text_width - 1) / inner_text_width).max(1) as u16
+        help_text.len().div_ceil(inner_text_width).max(1) as u16
     };
 
     // --- Compute popup height based on what's visible ---
@@ -283,7 +303,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let toggle_text = if show_advanced {
         format!("▼ {} ──────────────────", m.advanced_rules)
     } else {
-        format!("▶ {} (Ctrl+R) ────────", m.advanced_rules)
+        format!("▶ {} (Shift+A) ───────", m.advanced_rules)
     };
     let toggle_color = if show_advanced {
         Color::Cyan
@@ -535,64 +555,38 @@ pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
 
 pub fn draw_delete_template_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
-    let area = centered_rect(50, 25, frame.size());
-    frame.render_widget(Clear, area);
-
     let template_name = app
         .current_template()
         .map(|t| t.name.as_str())
         .unwrap_or(m.unknown);
 
-    let block = Block::default()
-        .title(format!(" {} ", m.delete_template))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Red));
-
-    let text = vec![
-        Line::from(Span::styled(
-            format!("{} '{}'?", m.delete_template_question, template_name),
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            m.action_cannot_be_undone,
-            Style::default().fg(Color::Yellow),
-        )),
-    ];
-
-    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
+    let question = format!("{} '{}'?", m.delete_template_question, template_name);
+    render_delete_confirmation(
+        frame,
+        m.delete_template,
+        &question,
+        m.action_cannot_be_undone,
+        m.confirm,
+        m.cancel,
+    );
 }
 
 pub fn draw_delete_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
-    let area = centered_rect(45, 25, frame.size());
-    frame.render_widget(Clear, area);
-
     let (message, warning) = match app.focus {
         Focus::Courses => (m.delete_course_question, m.delete_course_warning),
         Focus::Categories => (m.delete_category_question, m.delete_category_warning),
         Focus::Evaluations => (m.delete_evaluation_question, m.delete_evaluation_warning),
     };
 
-    let block = Block::default()
-        .title(format!(" {} ", m.confirm_delete))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Red));
-
-    let text = vec![
-        Line::from(Span::styled(
-            message,
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(warning, Style::default().fg(Color::Yellow))),
-    ];
-
-    let paragraph = Paragraph::new(text).block(block).wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
+    render_delete_confirmation(
+        frame,
+        m.confirm_delete,
+        message,
+        warning,
+        m.confirm,
+        m.cancel,
+    );
 }
 
 pub fn draw_language_popup(frame: &mut Frame, app: &App) {

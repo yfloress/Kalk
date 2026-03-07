@@ -44,9 +44,9 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(app.should_quit);
         }
 
-        // Ctrl+R toggles advanced rules in category edit popup
-        if key.code == KeyCode::Char('r')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
+        // Shift+A toggles advanced rules in category edit popup
+        if key.code == KeyCode::Char('A')
+            && key.modifiers.contains(KeyModifiers::SHIFT)
             && matches!(app.screen, Screen::EditingCategory { .. })
         {
             app.toggle_advanced_rules();
