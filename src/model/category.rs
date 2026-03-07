@@ -139,6 +139,7 @@ pub struct Category {
 }
 
 impl Category {
+    #[cfg(test)]
     pub fn new(name: String, weight: f64) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -322,6 +323,7 @@ impl Category {
     }
 
     /// Returns the number of effective evaluations (after dropping lowest).
+    #[cfg(test)]
     pub fn effective_eval_count(&self) -> usize {
         self.effective_grades().len()
     }

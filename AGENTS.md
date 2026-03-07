@@ -29,7 +29,8 @@ src/
 │   └── tests.rs     # All model unit tests (cfg(test) only)
 ├── ui/
 │   ├── mod.rs       # Main draw, panel rendering (courses, categories, evaluations), footer
-│   └── popups.rs    # Popup dialogs, input helpers, formatting functions
+│   ├── popups.rs    # Popup dialogs (template, course, category, eval, delete, language)
+│   └── helpers.rs   # Shared rendering helpers (input fields, toggles) and formatting functions
 ├── templates.rs     # Built-in course templates (language-aware)
 ├── events.rs        # Keyboard event handling and dispatch
 ├── i18n.rs          # Translations (English + Spanish)
@@ -48,7 +49,8 @@ src/
 - **`model/tests.rs`** contains all model unit tests — tests are separated from production code.
 - **`ui/` only renders** — it reads state from `App` and formats for display. No mutations, no calculations beyond formatting strings.
 - **`ui/mod.rs`** handles the main layout, three panels (courses, categories, evaluations), and footer.
-- **`ui/popups.rs`** handles all popup overlays plus shared helpers (centered_rect, render_input_field, format_* functions).
+- **`ui/popups.rs`** handles all popup overlays (template selection, course/category/evaluation editing, deletions, language).
+- **`ui/helpers.rs`** contains shared rendering helpers (`centered_rect`, `render_input_field`, `render_toggle_field`, `focused_border_style`) and formatting functions (`format_course_status`, `format_course_average`, `format_weight_validation`, `format_needed_grade`).
 - **`app/mod.rs` coordinates** — holds state, navigation, getters, delegates to `model/` for domain logic and `persistence.rs` for disk I/O.
 - **`app/forms.rs`** handles all form input/confirmation (course, category, evaluation, templates, language selection, deletion).
 - **`events.rs` dispatches** — maps key presses to `App` methods. No business logic here.

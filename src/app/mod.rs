@@ -25,7 +25,9 @@
 mod forms;
 
 use crate::i18n::{Language, Messages};
-use crate::model::{Category, Course, CourseTemplate, Evaluation};
+use crate::model::{
+    AveragingMethod, Category, Course, CourseTemplate, Evaluation, MinimumNotMetAction,
+};
 use crate::persistence;
 use crate::templates;
 
@@ -63,6 +65,24 @@ pub enum InputField {
     Weight,
     Grade,
     Description,
+    // Category rule fields
+    DropLowest,
+    MinimumAverage,
+    MinPerEval,
+    // Category rule toggle fields (cycled with Space/Enter, not typed)
+    AvgMethod,
+    OnMinNotMet,
+    RoundBeforeWeight,
+}
+
+impl InputField {
+    /// Returns true if this field is a toggle (cycled, not typed).
+    pub fn is_toggle(&self) -> bool {
+        matches!(
+            self,
+            InputField::AvgMethod | InputField::OnMinNotMet | InputField::RoundBeforeWeight
+        )
+    }
 }
 
 // =============================================================================
@@ -102,6 +122,14 @@ pub struct App {
     pub edit_weight: String,
     pub edit_grade: String,
     pub edit_description: String,
+
+    // Category rule editing state
+    pub edit_drop_lowest: String,
+    pub edit_min_average: String,
+    pub edit_min_per_eval: String,
+    pub edit_averaging_method: AveragingMethod,
+    pub edit_on_min_not_met: MinimumNotMetAction,
+    pub edit_round_before_weighting: bool,
 }
 
 impl Default for App {
@@ -127,6 +155,12 @@ impl Default for App {
             edit_weight: String::new(),
             edit_grade: String::new(),
             edit_description: String::new(),
+            edit_drop_lowest: String::new(),
+            edit_min_average: String::new(),
+            edit_min_per_eval: String::new(),
+            edit_averaging_method: AveragingMethod::default(),
+            edit_on_min_not_met: MinimumNotMetAction::default(),
+            edit_round_before_weighting: false,
         }
     }
 }
@@ -425,8 +459,24 @@ impl App {
         self.input_field = match (&self.screen, &self.input_field) {
             (Screen::EditingCourse { .. }, InputField::Name) => InputField::PassingGrade,
             (Screen::EditingCourse { .. }, InputField::PassingGrade) => InputField::Name,
+            // Category: Name → Weight → DropLowest → AvgMethod → MinAverage → (OnMinNotMet) → MinPerEval → RoundBeforeWeight → Name
             (Screen::EditingCategory { .. }, InputField::Name) => InputField::Weight,
-            (Screen::EditingCategory { .. }, InputField::Weight) => InputField::Name,
+            (Screen::EditingCategory { .. }, InputField::Weight) => InputField::DropLowest,
+            (Screen::EditingCategory { .. }, InputField::DropLowest) => InputField::AvgMethod,
+            (Screen::EditingCategory { .. }, InputField::AvgMethod) => InputField::MinimumAverage,
+            (Screen::EditingCategory { .. }, InputField::MinimumAverage) => {
+                // Only show OnMinNotMet if a minimum average is set
+                if !self.edit_min_average.trim().is_empty() {
+                    InputField::OnMinNotMet
+                } else {
+                    InputField::MinPerEval
+                }
+            }
+            (Screen::EditingCategory { .. }, InputField::OnMinNotMet) => InputField::MinPerEval,
+            (Screen::EditingCategory { .. }, InputField::MinPerEval) => {
+                InputField::RoundBeforeWeight
+            }
+            (Screen::EditingCategory { .. }, InputField::RoundBeforeWeight) => InputField::Name,
             (Screen::EditingEvaluation { .. }, InputField::Grade) => InputField::Name,
             (Screen::EditingEvaluation { .. }, InputField::Name) => InputField::Grade,
             (Screen::SavingTemplate, InputField::Name) => InputField::Description,
@@ -442,6 +492,36 @@ impl App {
             InputField::Weight => &mut self.edit_weight,
             InputField::Grade => &mut self.edit_grade,
             InputField::Description => &mut self.edit_description,
+            InputField::DropLowest => &mut self.edit_drop_lowest,
+            InputField::MinimumAverage => &mut self.edit_min_average,
+            InputField::MinPerEval => &mut self.edit_min_per_eval,
+            // Toggle fields don't have text buffers — return a dummy
+            // (these are cycled, not typed into)
+            InputField::AvgMethod | InputField::OnMinNotMet | InputField::RoundBeforeWeight => {
+                &mut self.edit_name // unreachable in practice: toggles use cycle_toggle_field()
+            }
+        }
+    }
+
+    /// Cycle the current toggle field to its next value.
+    pub fn cycle_toggle_field(&mut self) {
+        match self.input_field {
+            InputField::AvgMethod => {
+                self.edit_averaging_method = match self.edit_averaging_method {
+                    AveragingMethod::Arithmetic => AveragingMethod::Geometric,
+                    AveragingMethod::Geometric => AveragingMethod::Arithmetic,
+                };
+            }
+            InputField::OnMinNotMet => {
+                self.edit_on_min_not_met = match self.edit_on_min_not_met {
+                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
+                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
+                };
+            }
+            InputField::RoundBeforeWeight => {
+                self.edit_round_before_weighting = !self.edit_round_before_weighting;
+            }
+            _ => {}
         }
     }
 

@@ -160,6 +160,28 @@ pub struct Messages {
     pub need_grade_impossible: &'static str,
     pub need_grade_any: &'static str,
     pub need_grade_in_eval: &'static str,
+
+    // Category rules labels
+    pub drop_lowest: &'static str,
+    pub averaging_method: &'static str,
+    pub averaging_arithmetic: &'static str,
+    pub averaging_geometric: &'static str,
+    pub minimum_average: &'static str,
+    pub on_minimum_not_met: &'static str,
+    pub action_final_equals_avg: &'static str,
+    pub action_requires_global: &'static str,
+    pub minimum_per_evaluation: &'static str,
+    pub round_before_weighting: &'static str,
+    pub yes: &'static str,
+    pub no: &'static str,
+
+    // Status indicators for rules
+    pub rules_active: &'static str,
+    pub minimum_not_met: &'static str,
+    pub needs_global: &'static str,
+    pub grade_capped_by: &'static str,
+    pub dropped: &'static str,
+    pub eval_below_min: &'static str,
 }
 
 /// English messages.
@@ -276,6 +298,28 @@ pub const EN: Messages = Messages {
     need_grade_impossible: "impossible, max is 100",
     need_grade_any: "already passing with any grade",
     need_grade_in_eval: "in this eval to pass",
+
+    // Category rules labels
+    drop_lowest: "Drop Lowest",
+    averaging_method: "Average Method",
+    averaging_arithmetic: "Arithmetic",
+    averaging_geometric: "Geometric",
+    minimum_average: "Min. Average",
+    on_minimum_not_met: "If Not Met",
+    action_final_equals_avg: "Final = Category Avg",
+    action_requires_global: "Requires Global",
+    minimum_per_evaluation: "Min. Per Eval",
+    round_before_weighting: "Round Category",
+    yes: "Yes",
+    no: "No",
+
+    // Status indicators for rules
+    rules_active: "Rules",
+    minimum_not_met: "below minimum",
+    needs_global: "NEEDS GLOBAL",
+    grade_capped_by: "capped by",
+    dropped: "dropped",
+    eval_below_min: "below min",
 };
 
 /// Spanish messages.
@@ -392,6 +436,28 @@ pub const ES: Messages = Messages {
     need_grade_impossible: "imposible, máximo es 100",
     need_grade_any: "ya aprobando con cualquier nota",
     need_grade_in_eval: "en esta eval para aprobar",
+
+    // Category rules labels
+    drop_lowest: "Eliminar Peores",
+    averaging_method: "Metodo de Promedio",
+    averaging_arithmetic: "Aritmetico",
+    averaging_geometric: "Geometrico",
+    minimum_average: "Promedio Minimo",
+    on_minimum_not_met: "Si No Se Cumple",
+    action_final_equals_avg: "Final = Prom. Categoria",
+    action_requires_global: "Requiere Global",
+    minimum_per_evaluation: "Min. Por Eval",
+    round_before_weighting: "Redondear Categoria",
+    yes: "Si",
+    no: "No",
+
+    // Status indicators for rules
+    rules_active: "Reglas",
+    minimum_not_met: "bajo minimo",
+    needs_global: "NECESITA GLOBAL",
+    grade_capped_by: "limitado por",
+    dropped: "eliminada",
+    eval_below_min: "bajo min",
 };
 
 impl Language {

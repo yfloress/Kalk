@@ -18,17 +18,20 @@
 //! User interface rendering using Ratatui.
 //!
 //! This module handles the main layout, panels, and footer.
-//! Popup dialogs and formatting helpers live in the `popups` submodule.
-//! All calculation logic lives in `model.rs` — this module only formats and renders.
+//! Popup dialogs live in `popups`, rendering helpers and formatting in `helpers`.
+//! All calculation logic lives in `model/` — this module only formats and renders.
 
+pub(crate) mod helpers;
 mod popups;
 
 use crate::app::{App, Focus, Screen};
-use crate::model::WeightValidation;
+use crate::model::{MinimumNotMetAction, WeightValidation};
+use helpers::{
+    focused_border_style, format_course_average, format_course_status, format_weight_validation,
+};
 use popups::{
     draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
     draw_evaluation_popup, draw_language_popup, draw_save_template_popup, draw_template_popup,
-    focused_border_style, format_course_status, format_grade_status, format_weight_validation,
 };
 use ratatui::{
     Frame,
@@ -206,13 +209,9 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         );
     frame.render_widget(header, chunks[0]);
 
-    // Course total average with pass/fail status
-    let avg_text = format_grade_status(course, m);
-    let avg_color = match course.current_grade() {
-        Some(g) if course.is_passing_grade(g) => Color::Green,
-        Some(_) => Color::Red,
-        None => Color::DarkGray,
-    };
+    // Course total average with pass/fail status, rule overrides, and needs_global
+    let grade_result = course.compute_grade();
+    let (avg_text, avg_color) = format_course_average(course, &grade_result, m);
     let avg_block = Block::default()
         .title(format!(" {} ", m.course_average))
         .borders(Borders::ALL)
@@ -222,48 +221,98 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         .block(avg_block);
     frame.render_widget(avg_widget, chunks[1]);
 
-    // Category list
+    // Category list — use grade_result to show failed minimums and eval violations
     let passing_grade = course.passing_grade;
     let items: Vec<ListItem> = course
         .categories
         .iter()
-        .map(|cat| {
+        .enumerate()
+        .map(|(cat_idx, cat)| {
             let avg = cat
                 .average_grade()
                 .map(|g| format!("{:.1}", g))
                 .unwrap_or_else(|| "-".to_string());
 
-            let progress = format!(
+            let mut progress = format!(
                 "{}/{} {}",
                 cat.graded_count(),
                 cat.evaluations.len(),
                 m.graded
             );
 
-            // Color based on passing status using the course's passing grade
-            let avg_color = match cat.is_passing(passing_grade) {
-                Some(true) => Color::Green,
-                Some(false) => Color::Red,
-                None => Color::DarkGray,
+            // Show drop count in progress
+            if cat.rules.drop_lowest > 0 {
+                progress.push_str(&format!(" (-{})", cat.rules.drop_lowest));
+            }
+
+            // Check if this category has a failed minimum in the grade result
+            let failed_min = grade_result
+                .failed_minimums
+                .iter()
+                .find(|fm| fm.category_idx == cat_idx);
+
+            // Check if this category has eval violations in the grade result
+            let has_eval_violations = grade_result
+                .eval_violations
+                .iter()
+                .any(|ev| ev.category_idx == cat_idx && !ev.failing_indices.is_empty());
+
+            // Color based on passing status, but override with Magenta if minimum not met
+            let avg_color = if failed_min.is_some() {
+                Color::Magenta
+            } else {
+                match cat.is_passing(passing_grade) {
+                    Some(true) => Color::Green,
+                    Some(false) => Color::Red,
+                    None => Color::DarkGray,
+                }
             };
 
-            ListItem::new(vec![
-                Line::from(vec![
-                    Span::styled(&cat.name, Style::default().add_modifier(Modifier::BOLD)),
-                    Span::styled(
-                        format!(" ({:.0}%)", cat.weight),
-                        Style::default().fg(Color::Yellow),
+            // Build name line with optional rules indicator
+            let mut name_spans = vec![
+                Span::styled(&cat.name, Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!(" ({:.0}%)", cat.weight),
+                    Style::default().fg(Color::Yellow),
+                ),
+            ];
+            if !cat.rules.is_default() {
+                name_spans.push(Span::styled(
+                    format!(" [{}]", m.rules_active),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+            if has_eval_violations {
+                name_spans.push(Span::styled(
+                    format!(" ({})", m.eval_below_min),
+                    Style::default().fg(Color::Magenta),
+                ));
+            }
+
+            // Build avg line with optional minimum warning
+            let mut avg_spans = vec![
+                Span::raw(format!("  {}: ", m.avg)),
+                Span::styled(avg, Style::default().fg(avg_color)),
+                Span::styled(
+                    format!(" | {}", progress),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ];
+            if let Some(fm) = failed_min {
+                let action_hint = match fm.action {
+                    MinimumNotMetAction::FinalEqualsAverage => "",
+                    MinimumNotMetAction::RequiresGlobal => " !G",
+                };
+                avg_spans.push(Span::styled(
+                    format!(
+                        " {:.1} < {:.0} {}{}",
+                        fm.average, fm.required, m.minimum_not_met, action_hint
                     ),
-                ]),
-                Line::from(vec![
-                    Span::raw(format!("  {}: ", m.avg)),
-                    Span::styled(avg, Style::default().fg(avg_color)),
-                    Span::styled(
-                        format!(" | {}", progress),
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ]),
-            ])
+                    Style::default().fg(Color::Magenta),
+                ));
+            }
+
+            ListItem::new(vec![Line::from(name_spans), Line::from(avg_spans)])
         })
         .collect();
 
@@ -292,6 +341,8 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let is_focused = app.focus == Focus::Evaluations;
     let border_style = focused_border_style(is_focused);
+
+    let selected_cat_idx = app.selected_category;
 
     let Some(category) = app.current_category() else {
         let block = Block::default()
@@ -328,13 +379,27 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         .map(|g| format!("{:.1}", g))
         .unwrap_or_else(|| "-".to_string());
 
-    let avg_color = match category.is_passing(passing_grade) {
-        Some(true) => Color::Green,
-        Some(false) => Color::Red,
-        None => Color::DarkGray,
+    // Compute grade result to access eval_violations for this category
+    let grade_result = app.current_course().map(|c| c.compute_grade());
+    let eval_violation = grade_result.as_ref().and_then(|gr| {
+        selected_cat_idx.and_then(|ci| {
+            gr.eval_violations
+                .iter()
+                .find(|ev| ev.category_idx == ci && !ev.failing_indices.is_empty())
+        })
+    });
+
+    let avg_color = if category.meets_minimum() == Some(false) {
+        Color::Magenta
+    } else {
+        match category.is_passing(passing_grade) {
+            Some(true) => Color::Green,
+            Some(false) => Color::Red,
+            None => Color::DarkGray,
+        }
     };
 
-    let header_text = Line::from(vec![
+    let mut header_spans = vec![
         Span::raw(format!(
             "{} ({:.0}%) | {}: ",
             category.name, category.weight, m.avg
@@ -346,7 +411,27 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
             category.evaluations.len(),
             m.graded
         )),
-    ]);
+    ];
+
+    if category.rules.drop_lowest > 0 {
+        header_spans.push(Span::styled(
+            format!(" (-{})", category.rules.drop_lowest),
+            Style::default().fg(Color::Cyan),
+        ));
+    }
+
+    // Show per-eval minimum violation info if present
+    if let Some(ev) = &eval_violation {
+        header_spans.push(Span::styled(
+            format!(
+                " | {} {}: {:.0}",
+                ev.category_name, m.eval_below_min, ev.required
+            ),
+            Style::default().fg(Color::Magenta),
+        ));
+    }
+
+    let header_text = Line::from(header_spans);
 
     let header = Paragraph::new(header_text).block(
         Block::default()
@@ -355,8 +440,12 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     );
     frame.render_widget(header, chunks[0]);
 
-    // Evaluations table
-    let header_labels = ["#", m.name, m.grade];
+    // Precompute dropped indices and below-minimum indices
+    let dropped_indices = category.dropped_indices();
+    let below_min_indices = category.evals_below_minimum().unwrap_or_default();
+
+    // Evaluations table — add a Status column for indicators
+    let header_labels = ["#", m.name, m.grade, ""];
     let header_cells = header_labels
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().add_modifier(Modifier::BOLD)));
@@ -376,21 +465,45 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default()
             };
 
+            let is_dropped = dropped_indices.contains(&i);
+            let is_below_min = below_min_indices.contains(&i);
+
             let grade_str = e
                 .grade
                 .map(|g| format!("{:.0}", g))
                 .unwrap_or_else(|| "-".to_string());
 
-            let grade_style = match e.grade {
-                Some(g) if g >= passing_grade => Style::default().fg(Color::Green),
-                Some(_) => Style::default().fg(Color::Red),
-                None => Style::default().fg(Color::DarkGray),
+            let grade_style = if is_dropped {
+                Style::default().fg(Color::DarkGray)
+            } else if is_below_min {
+                Style::default().fg(Color::Magenta)
+            } else {
+                match e.grade {
+                    Some(g) if g >= passing_grade => Style::default().fg(Color::Green),
+                    Some(_) => Style::default().fg(Color::Red),
+                    None => Style::default().fg(Color::DarkGray),
+                }
+            };
+
+            // Status indicator
+            let status = if is_dropped {
+                format!("({})", m.dropped)
+            } else if is_below_min {
+                format!("({})", m.eval_below_min)
+            } else {
+                String::new()
+            };
+            let status_style = if is_dropped {
+                Style::default().fg(Color::DarkGray)
+            } else {
+                Style::default().fg(Color::Magenta)
             };
 
             Row::new(vec![
                 Cell::from(format!("{}", i + 1)),
                 Cell::from(e.name.as_str()),
                 Cell::from(grade_str).style(grade_style),
+                Cell::from(status).style(status_style),
             ])
             .style(style)
         })
@@ -403,6 +516,7 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
             Constraint::Length(3),
             Constraint::Min(10),
             Constraint::Length(7),
+            Constraint::Length(12),
         ],
     )
     .header(header_row)

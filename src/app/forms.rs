@@ -23,7 +23,9 @@
 //! extension to keep file sizes manageable.
 
 use crate::i18n::Language;
-use crate::model::{Category, Course, DEFAULT_PASSING_GRADE, Evaluation, MAX_GRADE, MIN_GRADE};
+use crate::model::{
+    Category, CategoryRules, Course, DEFAULT_PASSING_GRADE, Evaluation, MAX_GRADE, MIN_GRADE,
+};
 use crate::persistence;
 
 use super::{App, InputField, Screen};
@@ -127,21 +129,87 @@ impl App {
             self.input_field = InputField::Name;
             self.edit_name.clear();
             self.edit_weight = format!("{remaining:.1}");
+            // Initialize rule fields to defaults
+            self.init_rule_fields_default();
         }
     }
 
     pub fn start_edit_category(&mut self) {
-        let Some((name, weight)) = self
-            .current_category()
-            .map(|category| (category.name.clone(), category.weight))
-        else {
+        let Some(category) = self.current_category() else {
             return;
         };
+
+        // Clone all needed data before mutating self
+        let name = category.name.clone();
+        let weight = category.weight;
+        let rules = category.rules.clone();
 
         self.screen = Screen::EditingCategory { is_new: false };
         self.input_field = InputField::Name;
         self.edit_name = name;
         self.edit_weight = format!("{weight:.1}");
+
+        // Populate rule fields from cloned rules
+        self.edit_drop_lowest = if rules.drop_lowest > 0 {
+            format!("{}", rules.drop_lowest)
+        } else {
+            String::new()
+        };
+        self.edit_averaging_method = rules.averaging_method;
+        self.edit_min_average = rules
+            .minimum_average
+            .map(|v| format!("{v:.0}"))
+            .unwrap_or_default();
+        self.edit_on_min_not_met = rules.on_minimum_not_met;
+        self.edit_min_per_eval = rules
+            .minimum_per_evaluation
+            .map(|v| format!("{v:.0}"))
+            .unwrap_or_default();
+        self.edit_round_before_weighting = rules.round_before_weighting;
+    }
+
+    /// Initialize category rule editing fields to their defaults.
+    fn init_rule_fields_default(&mut self) {
+        self.edit_drop_lowest.clear();
+        self.edit_averaging_method = Default::default();
+        self.edit_min_average.clear();
+        self.edit_on_min_not_met = Default::default();
+        self.edit_min_per_eval.clear();
+        self.edit_round_before_weighting = false;
+    }
+
+    /// Build a `CategoryRules` from the current editing state.
+    fn build_rules_from_fields(&self) -> CategoryRules {
+        let drop_lowest = self.edit_drop_lowest.trim().parse::<usize>().unwrap_or(0);
+
+        let minimum_average = if self.edit_min_average.trim().is_empty() {
+            None
+        } else {
+            self.edit_min_average
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|v| v.clamp(MIN_GRADE, MAX_GRADE))
+        };
+
+        let minimum_per_evaluation = if self.edit_min_per_eval.trim().is_empty() {
+            None
+        } else {
+            self.edit_min_per_eval
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|v| v.clamp(MIN_GRADE, MAX_GRADE))
+        };
+
+        CategoryRules {
+            drop_lowest,
+            averaging_method: self.edit_averaging_method,
+            minimum_average,
+            on_minimum_not_met: self.edit_on_min_not_met,
+            minimum_per_evaluation,
+            round_before_weighting: self.edit_round_before_weighting,
+        }
     }
 
     pub fn confirm_category(&mut self) {
@@ -156,6 +224,7 @@ impl App {
             return;
         }
 
+        let rules = self.build_rules_from_fields();
         let selected_cat = self.selected_category;
 
         match self.screen {
@@ -163,7 +232,7 @@ impl App {
                 if let Some(idx) = self.selected_course
                     && let Some(course) = self.courses.get_mut(idx)
                 {
-                    let category = Category::new(name, weight);
+                    let category = Category::with_rules(name, weight, Vec::new(), rules);
                     course.categories.push(category);
                     self.selected_category = Some(course.categories.len() - 1);
                     self.selected_evaluation = None;
@@ -177,6 +246,7 @@ impl App {
                 {
                     category.name = name;
                     category.weight = weight;
+                    category.rules = rules;
                 }
             }
             _ => {}

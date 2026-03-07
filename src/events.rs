@@ -165,8 +165,19 @@ fn handle_edit_course_keys(app: &mut App, key: KeyCode) {
 }
 
 /// Handle keys in the category editing screen.
+/// Toggle fields (AvgMethod, OnMinNotMet, RoundBeforeWeight) cycle on Space/Enter
+/// instead of confirming the form.
 fn handle_edit_category_keys(app: &mut App, key: KeyCode) {
-    handle_form_keys(app, key, App::confirm_category, App::cancel_edit);
+    if app.input_field.is_toggle() {
+        match key {
+            KeyCode::Esc => app.cancel_edit(),
+            KeyCode::Tab => app.next_input_field(),
+            KeyCode::Enter | KeyCode::Char(' ') => app.cycle_toggle_field(),
+            _ => {}
+        }
+    } else {
+        handle_form_keys(app, key, App::confirm_category, App::cancel_edit);
+    }
 }
 
 /// Handle keys in the evaluation editing screen.

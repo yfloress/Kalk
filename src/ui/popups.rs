@@ -15,22 +15,26 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/agpl-3.0.html>.
 //
 
-//! Popup dialogs and shared formatting/helper functions for the UI.
+//! Popup dialogs for the UI layer.
 //!
 //! This module contains all overlay popups (template selection, course/category/
-//! evaluation editing, delete confirmations, language selection, save-as-template)
-//! as well as utility functions used across the UI layer (centering, input fields,
-//! grade formatting).
+//! evaluation editing, delete confirmations, language selection, save-as-template).
+//! Rendering helpers and formatting functions live in `helpers.rs`.
 
 use crate::app::{App, Focus, InputField};
-use crate::i18n::{Language, Messages};
-use crate::model::{Course, MAX_GRADE, NeededGradeStatus, WeightValidation};
+use crate::i18n::Language;
+use crate::model::{AveragingMethod, MinimumNotMetAction, NeededGradeStatus};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+};
+
+use super::helpers::{
+    centered_rect, format_course_status, format_needed_grade, render_input_field,
+    render_toggle_field,
 };
 
 // =============================================================================
@@ -139,7 +143,12 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
 pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let m = app.messages();
-    let area = centered_rect(50, 40, frame.size());
+    // Determine if OnMinNotMet field is visible (only when min average is set)
+    let show_on_min_not_met = !app.edit_min_average.trim().is_empty();
+    let field_count: u16 = if show_on_min_not_met { 9 } else { 8 };
+    // Each field row = 3 lines (border+content+border), plus 2 for margin, plus 2 for weight hint
+    let popup_height = (field_count * 3 + 6).min(85);
+    let area = centered_rect(55, popup_height, frame.size());
     frame.render_widget(Clear, area);
 
     let title = if is_new {
@@ -155,34 +164,50 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     frame.render_widget(block, area);
 
+    // Build constraints dynamically
+    let mut constraints = vec![
+        Constraint::Length(3), // Name
+        Constraint::Length(3), // Weight
+        Constraint::Length(2), // Weight hint
+        Constraint::Length(3), // Drop Lowest
+        Constraint::Length(3), // Averaging Method (toggle)
+        Constraint::Length(3), // Minimum Average
+    ];
+    if show_on_min_not_met {
+        constraints.push(Constraint::Length(3)); // On Min Not Met (toggle)
+    }
+    constraints.push(Constraint::Length(3)); // Min Per Eval
+    constraints.push(Constraint::Length(3)); // Round Before Weighting (toggle)
+
     let inner = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Length(1),
-            Constraint::Length(3),
-            Constraint::Length(2),
-        ])
+        .constraints(constraints)
         .split(area);
 
+    let mut slot = 0;
+
+    // Name
     render_input_field(
         frame,
         m.name,
         &app.edit_name,
         app.input_field == InputField::Name,
-        inner[0],
+        inner[slot],
     );
+    slot += 1;
 
+    // Weight
     render_input_field(
         frame,
         m.weight,
         &app.edit_weight,
         app.input_field == InputField::Weight,
-        inner[2],
+        inner[slot],
     );
+    slot += 1;
 
-    // Show current weight status
+    // Weight hint
     if let Some(course) = app.current_course() {
         let current_total = course.total_weight();
         let hint = format!("{}: {:.0}%", m.current_total, current_total);
@@ -194,8 +219,83 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             Color::Green
         };
         let hint_widget = Paragraph::new(hint).style(Style::default().fg(hint_color));
-        frame.render_widget(hint_widget, inner[3]);
+        frame.render_widget(hint_widget, inner[slot]);
     }
+    slot += 1;
+
+    // Drop Lowest
+    render_input_field(
+        frame,
+        m.drop_lowest,
+        &app.edit_drop_lowest,
+        app.input_field == InputField::DropLowest,
+        inner[slot],
+    );
+    slot += 1;
+
+    // Averaging Method (toggle)
+    let avg_method_label = match app.edit_averaging_method {
+        AveragingMethod::Arithmetic => m.averaging_arithmetic,
+        AveragingMethod::Geometric => m.averaging_geometric,
+    };
+    render_toggle_field(
+        frame,
+        m.averaging_method,
+        avg_method_label,
+        app.input_field == InputField::AvgMethod,
+        inner[slot],
+    );
+    slot += 1;
+
+    // Minimum Average
+    render_input_field(
+        frame,
+        m.minimum_average,
+        &app.edit_min_average,
+        app.input_field == InputField::MinimumAverage,
+        inner[slot],
+    );
+    slot += 1;
+
+    // On Minimum Not Met (toggle, conditional)
+    if show_on_min_not_met {
+        let action_label = match app.edit_on_min_not_met {
+            MinimumNotMetAction::FinalEqualsAverage => m.action_final_equals_avg,
+            MinimumNotMetAction::RequiresGlobal => m.action_requires_global,
+        };
+        render_toggle_field(
+            frame,
+            m.on_minimum_not_met,
+            action_label,
+            app.input_field == InputField::OnMinNotMet,
+            inner[slot],
+        );
+        slot += 1;
+    }
+
+    // Min Per Eval
+    render_input_field(
+        frame,
+        m.minimum_per_evaluation,
+        &app.edit_min_per_eval,
+        app.input_field == InputField::MinPerEval,
+        inner[slot],
+    );
+    slot += 1;
+
+    // Round Before Weighting (toggle)
+    let round_label = if app.edit_round_before_weighting {
+        m.yes
+    } else {
+        m.no
+    };
+    render_toggle_field(
+        frame,
+        m.round_before_weighting,
+        round_label,
+        app.input_field == InputField::RoundBeforeWeight,
+        inner[slot],
+    );
 }
 
 pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool, is_editing: bool) {
@@ -440,181 +540,4 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     state.select(Some(app.selected_language));
 
     frame.render_stateful_widget(list, inner, &mut state);
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-pub fn focused_border_style(is_focused: bool) -> Style {
-    if is_focused {
-        Style::default().fg(Color::Cyan)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    }
-}
-
-pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
-pub fn render_input_field(
-    frame: &mut Frame,
-    label: &str,
-    value: &str,
-    is_active: bool,
-    area: Rect,
-) {
-    let style = if is_active {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default()
-    };
-
-    // Show cursor indicator when active
-    let display_value = if is_active {
-        format!("{}|", value)
-    } else {
-        value.to_string()
-    };
-
-    let input = Paragraph::new(display_value).style(style).block(
-        Block::default()
-            .title(label)
-            .borders(Borders::ALL)
-            .border_style(style),
-    );
-
-    frame.render_widget(input, area);
-}
-
-// =============================================================================
-// Formatting Functions
-// =============================================================================
-
-/// Format course status message.
-pub fn format_course_status(course: &Course, m: &Messages) -> String {
-    if !course.has_evaluations() {
-        return m.no_evaluations.to_string();
-    }
-
-    match course.current_grade() {
-        Some(grade) => {
-            let rounded = Course::round_grade(grade);
-            let status = if course.is_passing_grade(grade) {
-                m.passed
-            } else {
-                m.failed
-            };
-            format!("{}: {:.1} → {:.0} ({})", m.current, grade, rounded, status)
-        }
-        None => m.no_evaluations.to_string(),
-    }
-}
-
-/// Format weight validation message.
-pub fn format_weight_validation(validation: &WeightValidation, m: &Messages) -> String {
-    match validation {
-        WeightValidation::Valid => m.weights_ok.to_string(),
-        WeightValidation::Under(total) => format!("{} {:.1}%", m.weights_warning, total),
-        WeightValidation::Over(total) => format!("{} {:.1}%", m.weights_error, total),
-        WeightValidation::Empty => m.no_categories.to_string(),
-    }
-}
-
-/// Format current grade status for the course average display.
-pub fn format_grade_status(course: &Course, m: &Messages) -> String {
-    match course.current_grade() {
-        Some(grade) => {
-            let rounded = Course::round_grade(grade);
-            let status = if course.is_passing_grade(grade) {
-                m.passed
-            } else {
-                m.failed
-            };
-            format!("{}: {:.1} → {:.0} ({})", m.current, grade, rounded, status)
-        }
-        None => m.no_grades_yet.to_string(),
-    }
-}
-
-/// Format the result of a needed-grade calculation into a user-friendly string.
-pub fn format_needed_grade(
-    course: &Course,
-    needed: &crate::model::NeededGrade,
-    m: &Messages,
-) -> String {
-    match needed.status {
-        NeededGradeStatus::Success => {
-            if let Some(value) = needed.value {
-                if value == 0.0 {
-                    format!("{}: 0+ ({})", m.need, m.need_grade_any)
-                } else {
-                    // Already graded and passing
-                    let eval_name = course
-                        .categories
-                        .iter()
-                        .flat_map(|c| c.evaluations.iter())
-                        .find(|e| e.grade == Some(value))
-                        .map(|e| e.name.as_str())
-                        .unwrap_or("");
-                    if eval_name.is_empty() {
-                        format!("{}: {:.0} ({})", m.need, value, m.passing)
-                    } else {
-                        format!("{}: {:.0} ({})", eval_name, value, m.passing)
-                    }
-                }
-            } else {
-                format!("{}: 0+ ({})", m.need, m.need_grade_any)
-            }
-        }
-        NeededGradeStatus::Failure => {
-            if let Some(value) = needed.value {
-                if value > MAX_GRADE {
-                    let rounded_up = value.ceil() as i32;
-                    format!(
-                        "{}: {:.2} → {} ({})",
-                        m.need, value, rounded_up, m.need_grade_impossible
-                    )
-                } else {
-                    // Already graded and failing
-                    format!("{:.0} ({})", value, m.below_passing)
-                }
-            } else {
-                m.cannot_pass.to_string()
-            }
-        }
-        NeededGradeStatus::Warning => {
-            if let Some(value) = needed.value {
-                let rounded_up = value.ceil() as i32;
-                if (value - value.floor()).abs() < 0.01 {
-                    format!("{} {} {}", m.need, rounded_up, m.need_grade_in_eval)
-                } else {
-                    format!(
-                        "{} {:.2} → {} {}",
-                        m.need, value, rounded_up, m.need_grade_in_eval
-                    )
-                }
-            } else {
-                m.cannot_pass.to_string()
-            }
-        }
-        NeededGradeStatus::Info => m.no_evaluations.to_string(),
-    }
 }
