@@ -35,7 +35,7 @@ use popups::{
 };
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, Wrap},
@@ -191,16 +191,15 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let validation_msg = format_weight_validation(&validation, m);
+    let total_w = course.total_weight().abs();
     let header_text = format!(
-        "{}: {:.0} | Total: {:.0}% | {}",
-        m.passing_grade.split(' ').next().unwrap_or("Pass"),
-        course.passing_grade,
-        course.total_weight(),
-        validation_msg
+        "{:.0} | {:.0}% | {}",
+        course.passing_grade, total_w, validation_msg
     );
 
     let header = Paragraph::new(header_text)
         .style(Style::default().fg(validation_color))
+        .alignment(Alignment::Center)
         .block(
             Block::default()
                 .title(format!(" {} ", course.name))
@@ -341,7 +340,6 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let is_focused = app.focus == Focus::Evaluations;
     let border_style = focused_border_style(is_focused);
-
     let selected_cat_idx = app.selected_category;
 
     let Some(category) = app.current_category() else {
@@ -379,16 +377,6 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         .map(|g| format!("{:.1}", g))
         .unwrap_or_else(|| "-".to_string());
 
-    // Compute grade result to access eval_violations for this category
-    let grade_result = app.current_course().map(|c| c.compute_grade());
-    let eval_violation = grade_result.as_ref().and_then(|gr| {
-        selected_cat_idx.and_then(|ci| {
-            gr.eval_violations
-                .iter()
-                .find(|ev| ev.category_idx == ci && !ev.failing_indices.is_empty())
-        })
-    });
-
     let avg_color = if category.meets_minimum() == Some(false) {
         Color::Magenta
     } else {
@@ -399,42 +387,53 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         }
     };
 
-    let mut header_spans = vec![
-        Span::raw(format!(
-            "{} ({:.0}%) | {}: ",
-            category.name, category.weight, m.avg
-        )),
+    // Compute grade result to check for eval violations in this category
+    let grade_result = app.current_course().map(|c| c.compute_grade());
+    let eval_violation = grade_result.as_ref().and_then(|gr| {
+        selected_cat_idx.and_then(|ci| {
+            gr.eval_violations
+                .iter()
+                .find(|ev| ev.category_idx == ci && !ev.failing_indices.is_empty())
+        })
+    });
+
+    let drop_hint = if category.rules.drop_lowest > 0 {
+        format!("(-{})", category.rules.drop_lowest)
+    } else {
+        String::new()
+    };
+
+    let header_spans = vec![
+        Span::styled(format!("{}: ", m.avg), Style::default().fg(Color::DarkGray)),
         Span::styled(avg, Style::default().fg(avg_color)),
-        Span::raw(format!(
-            " | {}/{} {}",
-            category.graded_count(),
-            category.evaluations.len(),
-            m.graded
-        )),
+        Span::styled(
+            format!(
+                " | {}/{}{}",
+                category.graded_count(),
+                category.evaluations.len(),
+                if drop_hint.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", drop_hint)
+                }
+            ),
+            Style::default().fg(Color::DarkGray),
+        ),
     ];
 
-    if category.rules.drop_lowest > 0 {
-        header_spans.push(Span::styled(
-            format!(" (-{})", category.rules.drop_lowest),
-            Style::default().fg(Color::Cyan),
-        ));
-    }
-
-    // Show per-eval minimum violation info if present
-    if let Some(ev) = &eval_violation {
-        header_spans.push(Span::styled(
-            format!(
-                " | {} {}: {:.0}",
-                ev.category_name, m.eval_below_min, ev.required
-            ),
-            Style::default().fg(Color::Magenta),
-        ));
-    }
-
+    let header_title = if let Some(ev) = &eval_violation {
+        format!(
+            " {} ({:.0}%) | {}>={:.0} ",
+            ev.category_name, category.weight, m.eval_below_min, ev.required
+        )
+    } else {
+        format!(" {} ({:.0}%) ", category.name, category.weight)
+    };
     let header_text = Line::from(header_spans);
 
     let header = Paragraph::new(header_text).block(
         Block::default()
+            .title(header_title)
             .borders(Borders::ALL)
             .border_style(border_style),
     );
@@ -444,11 +443,18 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     let dropped_indices = category.dropped_indices();
     let below_min_indices = category.evals_below_minimum().unwrap_or_default();
 
-    // Evaluations table — add a Status column for indicators
-    let header_labels = ["#", m.name, m.grade, ""];
-    let header_cells = header_labels
-        .iter()
-        .map(|h| Cell::from(*h).style(Style::default().add_modifier(Modifier::BOLD)));
+    // Check if any evaluation has a status indicator (dropped or below min)
+    let has_status = !dropped_indices.is_empty() || !below_min_indices.is_empty();
+
+    // Evaluations table — add a Status column only when needed
+    let header_cells: Vec<Cell> = if has_status {
+        vec!["#", m.name, m.grade, ""]
+    } else {
+        vec!["#", m.name, m.grade]
+    }
+    .into_iter()
+    .map(|h| Cell::from(h).style(Style::default().add_modifier(Modifier::BOLD)))
+    .collect();
     let header_row = Row::new(header_cells).height(1);
 
     let rows: Vec<Row> = category
@@ -499,28 +505,34 @@ fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(Color::Magenta)
             };
 
-            Row::new(vec![
+            let mut cells = vec![
                 Cell::from(format!("{}", i + 1)),
                 Cell::from(e.name.as_str()),
                 Cell::from(grade_str).style(grade_style),
-                Cell::from(status).style(status_style),
-            ])
-            .style(style)
+            ];
+            if has_status {
+                cells.push(Cell::from(status).style(status_style));
+            }
+            Row::new(cells).style(style)
         })
         .collect();
 
     let title = format!(" {} ({}) ", m.evaluations, category.evaluations.len());
-    let table = Table::new(
-        rows,
-        [
+    let col_widths: Vec<Constraint> = if has_status {
+        vec![
             Constraint::Length(3),
-            Constraint::Min(10),
-            Constraint::Length(7),
-            Constraint::Length(12),
-        ],
-    )
-    .header(header_row)
-    .block(
+            Constraint::Min(6),
+            Constraint::Length(5),
+            Constraint::Length(10),
+        ]
+    } else {
+        vec![
+            Constraint::Length(3),
+            Constraint::Min(6),
+            Constraint::Length(5),
+        ]
+    };
+    let table = Table::new(rows, col_widths).header(header_row).block(
         Block::default()
             .title(title)
             .borders(Borders::ALL)

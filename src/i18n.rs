@@ -219,9 +219,9 @@ pub const EN: Messages = Messages {
     no_evaluations: "No evaluations",
 
     // Weight validation
-    weights_ok: "Weights OK (100%)",
-    weights_warning: "Warning: Only",
-    weights_error: "Error:",
+    weights_ok: "OK",
+    weights_warning: "Only",
+    weights_error: "Err:",
     no_categories: "No categories",
 
     // Footer / Keybindings
@@ -371,9 +371,9 @@ pub const ES: Messages = Messages {
     no_evaluations: "Sin evaluaciones",
 
     // Weight validation
-    weights_ok: "Pesos OK (100%)",
-    weights_warning: "Advertencia: Solo",
-    weights_error: "Error:",
+    weights_ok: "OK",
+    weights_warning: "Solo",
+    weights_error: "Err:",
     no_categories: "Sin categorías",
 
     // Footer / Keybindings
