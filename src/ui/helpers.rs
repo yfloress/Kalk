@@ -32,6 +32,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
+use super::icons::icons;
 use super::theme::theme;
 
 // =============================================================================
@@ -49,10 +50,34 @@ pub fn render_delete_confirmation(
     warning_text: &str,
     confirm_label: &str,
     cancel_label: &str,
+    use_nerd_fonts: bool,
 ) {
     let t = theme();
+    let ic = icons(use_nerd_fonts);
     let term = frame.size();
-    let popup_w = 46u16.min(term.width);
+
+    // Build the formatted title with icon
+    let title_str = format!(" {}{} ", ic.delete, title);
+
+    // Calculate the minimum width needed to avoid truncation:
+    // - title (with border chars)
+    // - question line: 2 (indent) + icon + question
+    // - warning line: 2 (indent) + icon + warning_text
+    // - hints line: 2 (indent) + "Enter/y: " + confirm + "  " + "Esc/n: " + cancel
+    let question_icon_w = if use_nerd_fonts { 2 } else { 0 };
+    let warning_icon_w = ic.warning.chars().count();
+    let content_widths = [
+        title_str.chars().count() + 2, // +2 for border chars
+        2 + question_icon_w + question.chars().count(),
+        2 + warning_icon_w + warning_text.chars().count(),
+        2 + 9 + confirm_label.chars().count() + 2 + 6 + cancel_label.chars().count(),
+    ];
+    let max_content = content_widths.iter().copied().max().unwrap_or(40);
+    // Add 2 for left+right border, clamp to reasonable bounds
+    let ideal_w = (max_content + 4) as u16;
+    let popup_w = ideal_w.clamp(36, 60).min(term.width);
+
+    // Height: title(1) + question(2) + sep(1) + warning(2) + spacer(1) + hints(1) + border(2)
     let popup_h = 11u16.min(term.height);
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -60,7 +85,7 @@ pub fn render_delete_confirmation(
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(format!(" {} ", title))
+        .title(title_str)
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(t.popup_border_danger));
@@ -79,30 +104,41 @@ pub fn render_delete_confirmation(
         ])
         .split(inner);
 
-    let q = Paragraph::new(Line::from(vec![
-        Span::styled("  ", Style::default()),
-        Span::styled(
-            question,
-            Style::default()
-                .fg(t.text_primary)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]))
-    .wrap(Wrap { trim: true });
+    // Question line with optional icon
+    let mut q_spans = vec![Span::styled("  ", Style::default())];
+    if use_nerd_fonts {
+        q_spans.push(Span::styled(ic.info, Style::default().fg(t.text_primary)));
+    }
+    q_spans.push(Span::styled(
+        question,
+        Style::default()
+            .fg(t.text_primary)
+            .add_modifier(Modifier::BOLD),
+    ));
+    let q = Paragraph::new(Line::from(q_spans)).wrap(Wrap { trim: true });
     frame.render_widget(q, chunks[0]);
 
+    // Dynamic separator that fills available width
+    let sep_width = inner.width as usize;
+    let sep_line: String = "\u{2500}".repeat(sep_width);
     let sep = Paragraph::new(Line::from(Span::styled(
-        "──────────────────────────────────────────",
+        sep_line,
         Style::default().fg(t.popup_separator),
     )));
     frame.render_widget(sep, chunks[1]);
 
+    // Warning line with icon and wrapping
     let warn = Paragraph::new(Line::from(vec![
-        Span::styled("  ! ", Style::default().fg(t.status_warn)),
+        Span::styled(
+            format!("  {}", ic.warning),
+            Style::default().fg(t.status_warn),
+        ),
         Span::styled(warning_text, Style::default().fg(t.status_warn)),
-    ]));
+    ]))
+    .wrap(Wrap { trim: true });
     frame.render_widget(warn, chunks[2]);
 
+    // Keybinding hints
     let hints = Paragraph::new(Line::from(vec![
         Span::styled(
             format!("  Enter/y: {}  ", confirm_label),

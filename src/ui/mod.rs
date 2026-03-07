@@ -240,23 +240,43 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 ]))
             } else {
                 // Weight validation indicator (only in normal mode)
-                let weight_status = match c.validate_weights() {
-                    WeightValidation::Valid => Span::styled(
-                        format!(" [{}]", ic.weight_ok),
-                        Style::default().fg(t.status_pass),
-                    ),
-                    WeightValidation::Under(w) => Span::styled(
-                        format!(" [{}{:.0}%]", ic.weight_warn, w),
+                // When weights are valid but the course has academic issues
+                // (needs_global, rule overrides, failed minimums), show the
+                // academic status icon instead so the user is not misled.
+                let weight_status = if grade_result.needs_global
+                    && matches!(c.validate_weights(), WeightValidation::Valid)
+                {
+                    Span::styled(
+                        format!(" [{}]", ic.warning),
                         Style::default().fg(t.status_warn),
-                    ),
-                    WeightValidation::Over(w) => Span::styled(
-                        format!(" [{}{:.0}%]", ic.weight_error, w),
+                    )
+                } else if has_rule_issues
+                    && !grade_result.needs_global
+                    && matches!(c.validate_weights(), WeightValidation::Valid)
+                {
+                    Span::styled(
+                        format!(" [{}]", ic.failed),
                         Style::default().fg(t.status_fail),
-                    ),
-                    WeightValidation::Empty => Span::styled(
-                        format!(" [{}]", m.no_categories),
-                        Style::default().fg(t.text_muted),
-                    ),
+                    )
+                } else {
+                    match c.validate_weights() {
+                        WeightValidation::Valid => Span::styled(
+                            format!(" [{}]", ic.weight_ok),
+                            Style::default().fg(t.status_pass),
+                        ),
+                        WeightValidation::Under(w) => Span::styled(
+                            format!(" [{}{:.0}%]", ic.weight_warn, w),
+                            Style::default().fg(t.status_warn),
+                        ),
+                        WeightValidation::Over(w) => Span::styled(
+                            format!(" [{}{:.0}%]", ic.weight_error, w),
+                            Style::default().fg(t.status_fail),
+                        ),
+                        WeightValidation::Empty => Span::styled(
+                            format!(" [{}]", m.no_categories),
+                            Style::default().fg(t.text_muted),
+                        ),
+                    }
                 };
 
                 // Normal: two lines with full status info (rule-aware)
@@ -264,7 +284,13 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                     let rounded = Course::round_grade(grade_result.grade);
                     let is_truly_passing =
                         c.is_passing_grade(grade_result.grade) && !has_rule_issues;
-                    let label = if is_truly_passing { m.passed } else { m.failed };
+                    let label = if is_truly_passing {
+                        m.passed
+                    } else if grade_result.needs_global {
+                        m.needs_global
+                    } else {
+                        m.failed
+                    };
                     if let Some(ref cat_name) = grade_result.overridden_by {
                         format!("{}: {:.0} ({}) [{}]", m.current, rounded, label, cat_name)
                     } else {

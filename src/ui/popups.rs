@@ -594,6 +594,7 @@ pub fn draw_delete_template_popup(frame: &mut Frame, app: &App) {
         m.action_cannot_be_undone,
         m.confirm,
         m.cancel,
+        app.use_nerd_fonts,
     );
 }
 
@@ -612,6 +613,7 @@ pub fn draw_delete_popup(frame: &mut Frame, app: &App) {
         warning,
         m.confirm,
         m.cancel,
+        app.use_nerd_fonts,
     );
 }
 
