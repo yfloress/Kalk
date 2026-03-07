@@ -62,8 +62,13 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(app.should_quit);
         }
 
-        // ? toggles field help panel in category edit popup
-        if key.code == KeyCode::Char('?') && matches!(app.screen, Screen::EditingCategory { .. }) {
+        // ? toggles field help panel in category/course edit popup
+        if key.code == KeyCode::Char('?')
+            && matches!(
+                app.screen,
+                Screen::EditingCategory { .. } | Screen::EditingCourse { .. }
+            )
+        {
             app.toggle_field_help();
             return Ok(app.should_quit);
         }

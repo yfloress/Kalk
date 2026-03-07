@@ -193,6 +193,10 @@ pub struct Messages {
     pub help_on_min_not_met: &'static str,
     pub help_min_per_eval: &'static str,
     pub help_round_before_weighting: &'static str,
+    pub help_passing_grade: &'static str,
+    pub help_global_policy: &'static str,
+    pub help_global_weights: &'static str,
+    pub help_global_eligibility: &'static str,
 
     // Status indicators for rules
     pub rules_active: &'static str,
@@ -377,6 +381,10 @@ pub const EN: Messages = Messages {
     help_minimum_average: "Minimum average required in this category (e.g. 55). Leave empty for none.",
     help_min_per_eval: "Minimum grade required on each individual evaluation. Leave empty for none.",
     help_round_before_weighting: "Round the category average before applying weight. Useful when the university rounds per category.",
+    help_passing_grade: "Minimum grade to pass the course (0-100). Default is 55. Grades are rounded: 54.5 rounds up to 55 (pass).",
+    help_global_policy: "The global exam replaces the worst grade in the failing category. Everything is recalculated. The grade can go up or down.",
+    help_global_weights: "Final = semester grade * W1 + global grade * W2. They should add up to 100 (e.g. 70 + 30).",
+    help_global_eligibility: "Grade range required to be eligible for the global exam. Leave empty for no restriction (anyone can take it).",
 
     // Status indicators for rules
     rules_active: "Rules",
@@ -561,6 +569,10 @@ pub const ES: Messages = Messages {
     help_minimum_average: "Nota mínima promedio requerida en esta categoría (ej: 55). Dejar vacío si no aplica.",
     help_min_per_eval: "Nota mínima requerida en cada evaluación individual. Dejar vacío si no aplica.",
     help_round_before_weighting: "Redondea el promedio de la categoría antes de ponderar. Útil cuando la universidad redondea por categoría.",
+    help_passing_grade: "Nota mínima para aprobar el ramo (0-100). Por defecto es 55. Las notas se redondean: 54.5 sube a 55 (aprueba).",
+    help_global_policy: "El global reemplaza la peor nota de la categoría que reprueba. Todo se recalcula. La nota puede subir o bajar.",
+    help_global_weights: "Final = nota semestral * P1 + nota global * P2. Deben sumar 100 (ej: 70 + 30).",
+    help_global_eligibility: "Rango de notas requerido para poder dar el global. Dejar vacío si no hay restricción (cualquiera puede darlo).",
 
     // Status indicators for rules
     rules_active: "Reglas",

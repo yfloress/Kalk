@@ -34,8 +34,9 @@ use ratatui::{
 };
 
 use super::helpers::{
-    centered_rect, contextual_field_help, draw_category_help_overlay, format_course_status,
-    format_needed_grade, render_delete_confirmation, render_input_field, render_toggle_field,
+    centered_rect, contextual_field_help, draw_category_help_overlay, draw_course_help_overlay,
+    format_course_status, format_needed_grade, render_delete_confirmation, render_input_field,
+    render_toggle_field,
 };
 use super::icons::icons;
 use super::theme::theme;
@@ -110,17 +111,28 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let m = app.messages();
     let t = theme();
 
+    let popup_w = 55u16;
+
+    // --- Compute help text height dynamically ---
+    let inner_text_width = popup_w.saturating_sub(6).max(1) as usize;
+    let help_text = contextual_field_help(app, m);
+    let help_lines_needed: u16 = if help_text.is_empty() {
+        1
+    } else {
+        help_text.len().div_ceil(inner_text_width).max(1) as u16
+    };
+
     // Dynamic height based on selected global policy:
-    // Base: border(2) + Name(3) + sp(1) + PassingGrade(3) + sp(1) + GlobalPolicy(3) = 13
+    // Content: top_sp(1) + Name(3) + sp(1) + PassingGrade(3) + sp(1) + GlobalPolicy(3) = 12
     // Weighted adds: sp(1) + SemWeight(3) + sp(1) + GlobWeight(3) = 8
     // Both non-None add eligibility: sp(1) + MinGrade(3) + sp(1) + MaxGrade(3) = 8
+    // Overhead: border(2)
     let extra = match &app.edit_global_policy {
         GlobalExamPolicy::None => 0u16,
         GlobalExamPolicy::Weighted { .. } => 8 + 8, // weights + eligibility
         GlobalExamPolicy::ReplacesWorstGrade => 8,  // eligibility only
     };
-    let popup_h = (15 + extra).min(term_height_fallback(frame));
-    let popup_w = 55u16;
+    let popup_h = (12 + extra + help_lines_needed + 2).min(term_height_fallback(frame));
     let term = frame.size();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -144,7 +156,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     // Build constraints dynamically
     let mut constraints: Vec<Constraint> = vec![
-        Constraint::Length(1), // top spacer
+        Constraint::Length(1), // [0] top spacer
         Constraint::Length(3), // [1] Name field
         Constraint::Length(1), // spacing
         Constraint::Length(3), // [3] Passing Grade field
@@ -176,23 +188,14 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         constraints.push(Constraint::Length(3)); // Max Grade
     }
 
-    constraints.push(Constraint::Min(0)); // bottom spacer
+    // Contextual help hint at the bottom (dynamically sized)
+    constraints.push(Constraint::Length(help_lines_needed));
 
     let layout = Layout::default()
         .direction(Direction::Vertical)
+        .horizontal_margin(1)
         .constraints(constraints)
         .split(inner);
-
-    // Horizontal padding (inset fields by 2 columns on each side)
-    let field_area = |rect: Rect| -> Rect {
-        let pad = 2u16.min(rect.width / 2);
-        Rect::new(
-            rect.x + pad,
-            rect.y,
-            rect.width.saturating_sub(pad * 2),
-            rect.height,
-        )
-    };
 
     // -- Fixed fields --
     render_input_field(
@@ -200,7 +203,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         m.name,
         &app.edit_name,
         app.input_field == InputField::Name,
-        field_area(layout[1]),
+        layout[1],
     );
 
     render_input_field(
@@ -208,7 +211,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         m.passing_grade,
         &app.edit_passing_grade,
         app.input_field == InputField::PassingGrade,
-        field_area(layout[3]),
+        layout[3],
     );
 
     // Global Policy toggle
@@ -222,7 +225,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         m.global_policy,
         policy_label,
         app.input_field == InputField::GlobalPolicy,
-        field_area(layout[5]),
+        layout[5],
     );
 
     // -- Conditional Weighted fields --
@@ -232,7 +235,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
             m.global_semester_weight,
             &app.edit_global_semester_weight,
             app.input_field == InputField::GlobalSemesterWeight,
-            field_area(layout[idx]),
+            layout[idx],
         );
     }
     if let Some(idx) = weight_glob_idx {
@@ -241,7 +244,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
             m.global_exam_weight,
             &app.edit_global_exam_weight,
             app.input_field == InputField::GlobalExamWeight,
-            field_area(layout[idx]),
+            layout[idx],
         );
     }
 
@@ -252,7 +255,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
             m.global_min_grade,
             &app.edit_global_min_grade,
             app.input_field == InputField::GlobalMinGrade,
-            field_area(layout[idx]),
+            layout[idx],
         );
     }
     if let Some(idx) = max_grade_idx {
@@ -261,8 +264,20 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
             m.global_max_grade,
             &app.edit_global_max_grade,
             app.input_field == InputField::GlobalMaxGrade,
-            field_area(layout[idx]),
+            layout[idx],
         );
+    }
+
+    // -- Contextual help hint (always at bottom of popup) --
+    let help_slot = layout.len() - 1;
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(t.text_muted))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(help_widget, layout[help_slot]);
+
+    // -- Full help overlay (when ? is pressed) --
+    if app.show_field_help {
+        draw_course_help_overlay(frame, m);
     }
 }
 
@@ -285,7 +300,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let popup_width = 50u16;
     // Inner text width = popup - 2*margin - 2*border = 50 - 4 - 2 = 44
     let inner_text_width = popup_width.saturating_sub(6).max(1) as usize;
-    let help_text = contextual_field_help(app.input_field, m);
+    let help_text = contextual_field_help(app, m);
     let help_lines_needed: u16 = if help_text.is_empty() {
         1
     } else {

@@ -426,7 +426,27 @@ impl Course {
             .collect();
 
         if !requires_global_failures.is_empty() {
-            needs_global = true;
+            if self.global_policy == GlobalExamPolicy::None {
+                // No global exam configured — treat RequiresGlobal as
+                // FinalEqualsAverage so the course shows as FAILED with
+                // the worst failing category's average as its grade.
+                if let Some(worst) = requires_global_failures.iter().min_by(|a, b| {
+                    a.average
+                        .partial_cmp(&b.average)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                }) {
+                    return CourseGradeResult {
+                        grade: worst.average,
+                        overridden_by: Some(worst.category_name.clone()),
+                        needs_global: false,
+                        failed_minimums,
+                        eval_violations,
+                        grade_after_global: None,
+                    };
+                }
+            } else {
+                needs_global = true;
+            }
         }
 
         // Compute post-global grade if a global exam grade has been entered

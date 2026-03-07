@@ -149,7 +149,7 @@ pub struct App {
 
     /// Whether advanced rules section is expanded in the category popup.
     pub show_advanced_rules: bool,
-    /// Whether the field help panel is visible in the category popup.
+    /// Whether the field help panel is visible in the category/course popup.
     pub show_field_help: bool,
 
     // Global exam editing state

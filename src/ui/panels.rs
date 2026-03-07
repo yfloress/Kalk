@@ -453,9 +453,18 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 available_width,
             )
         }
-        Screen::EditingCourse { .. }
-        | Screen::EditingEvaluation { .. }
-        | Screen::SavingTemplate => styled_keybindings(
+        Screen::EditingCourse { .. } => styled_keybindings(
+            &[
+                ("Tab", m.next_field),
+                ("Enter", m.confirm),
+                ("Esc", m.cancel),
+                ("?", m.help_toggle),
+            ],
+            t,
+            ic,
+            available_width,
+        ),
+        Screen::EditingEvaluation { .. } | Screen::SavingTemplate => styled_keybindings(
             &[
                 ("Tab", m.next_field),
                 ("Enter", m.confirm),

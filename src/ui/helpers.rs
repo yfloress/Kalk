@@ -21,9 +21,11 @@
 //! and `popups.rs` (overlay dialogs). Extracting them keeps both of those files
 //! under the ~600-line guideline.
 
-use crate::app::InputField;
+use crate::app::{App, InputField};
 use crate::i18n::Messages;
-use crate::model::{Course, CourseGradeResult, MAX_GRADE, NeededGradeStatus, WeightValidation};
+use crate::model::{
+    Course, CourseGradeResult, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation,
+};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -260,8 +262,8 @@ pub fn render_toggle_field(
 // =============================================================================
 
 /// Return a short contextual help string for the currently focused field.
-pub fn contextual_field_help(field: InputField, m: &Messages) -> String {
-    match field {
+pub fn contextual_field_help(app: &App, m: &Messages) -> String {
+    match app.input_field {
         InputField::Name => m.help_name.to_string(),
         InputField::Weight => m.help_weight.to_string(),
         InputField::DropLowest => m.help_drop_lowest.to_string(),
@@ -270,6 +272,18 @@ pub fn contextual_field_help(field: InputField, m: &Messages) -> String {
         InputField::OnMinNotMet => m.help_on_min_not_met.to_string(),
         InputField::MinPerEval => m.help_min_per_eval.to_string(),
         InputField::RoundBeforeWeight => m.help_round_before_weighting.to_string(),
+        InputField::PassingGrade => m.help_passing_grade.to_string(),
+        InputField::GlobalPolicy => match &app.edit_global_policy {
+            GlobalExamPolicy::None => String::new(),
+            GlobalExamPolicy::Weighted { .. } => m.help_global_weights.to_string(),
+            GlobalExamPolicy::ReplacesWorstGrade => m.help_global_policy.to_string(),
+        },
+        InputField::GlobalSemesterWeight | InputField::GlobalExamWeight => {
+            m.help_global_weights.to_string()
+        }
+        InputField::GlobalMinGrade | InputField::GlobalMaxGrade => {
+            m.help_global_eligibility.to_string()
+        }
         _ => String::new(),
     }
 }
@@ -336,6 +350,75 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
         Line::from(vec![
             Span::styled(format!("{}: ", m.round_before_weighting), label_style),
             Span::styled(m.help_round_before_weighting, desc_style),
+        ]),
+    ];
+
+    let block = Block::default()
+        .title(format!(" {} ", m.help_toggle))
+        .borders(Borders::ALL)
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.status_info));
+
+    let paragraph = Paragraph::new(help_lines)
+        .block(block)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw a full-screen help overlay explaining every course field.
+pub fn draw_course_help_overlay(frame: &mut Frame, m: &Messages) {
+    let t = theme();
+    let area = centered_rect(70, 55, frame.size());
+    frame.render_widget(Clear, area);
+
+    let label_style = Style::default()
+        .fg(t.input_active)
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(t.text_primary);
+
+    let help_lines = vec![
+        Line::from(Span::styled(
+            format!("  {} ", m.edit_course),
+            Style::default()
+                .fg(t.status_info)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.name), label_style),
+            Span::styled(m.help_name, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.passing_grade), label_style),
+            Span::styled(m.help_passing_grade, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("── {} ──", m.global_exam),
+            Style::default().fg(t.status_info),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.global_policy), label_style),
+            Span::styled(m.help_global_policy, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                format!("{} / {}: ", m.global_semester_weight, m.global_exam_weight),
+                label_style,
+            ),
+            Span::styled(m.help_global_weights, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                format!("{} / {}: ", m.global_min_grade, m.global_max_grade),
+                label_style,
+            ),
+            Span::styled(m.help_global_eligibility, desc_style),
         ]),
     ];
 

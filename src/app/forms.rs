@@ -47,6 +47,7 @@ impl App {
         self.edit_name.clear();
         self.edit_passing_grade = format!("{DEFAULT_PASSING_GRADE:.0}");
         self.init_global_fields_default();
+        self.show_field_help = false;
     }
 
     pub fn start_edit_course(&mut self) {
@@ -59,6 +60,7 @@ impl App {
 
         self.screen = Screen::EditingCourse { is_new: false };
         self.input_field = InputField::Name;
+        self.show_field_help = false;
         self.edit_name = course.name.clone();
         let pg = course.passing_grade;
         self.edit_passing_grade = format!("{pg:.0}");

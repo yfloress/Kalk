@@ -316,9 +316,45 @@ fn test_course_grade_with_requires_global() {
     course.categories.push(quizzes);
 
     let result = course.compute_grade();
-    // Certamenes avg = 40 < 55 → needs global
+    // Certamenes avg = 40 < 55 → RequiresGlobal, but no global policy
+    // configured, so it falls back to FinalEqualsAverage behavior.
+    assert!(!result.needs_global);
+    assert_eq!(result.overridden_by, Some("Certamenes".to_string()));
+    assert!((result.grade - 40.0).abs() < 0.01);
+}
+
+#[test]
+fn test_course_grade_with_requires_global_and_global_policy() {
+    // When a global policy IS configured, RequiresGlobal should set
+    // needs_global = true (not fall back to FinalEqualsAverage).
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let mut certs = Category::new("Certamenes".to_string(), 85.0);
+    certs.rules.minimum_average = Some(55.0);
+    certs.rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 40.0));
+
+    let mut quizzes = Category::new("Quizzes".to_string(), 15.0);
+    quizzes
+        .evaluations
+        .push(Evaluation::with_grade("Q1".to_string(), 70.0));
+
+    course.categories.push(certs);
+    course.categories.push(quizzes);
+
+    let result = course.compute_grade();
+    // Certamenes avg = 40 < 55 → RequiresGlobal, and course HAS a global
+    // policy, so needs_global should be true.
     assert!(result.needs_global);
     assert!(result.overridden_by.is_none());
+    // Normal weighted grade: (40*85/100) + (70*15/100) = 34 + 10.5 = 44.5
+    assert!((result.grade - 44.5).abs() < 0.01);
 }
 
 // =========================================================================
@@ -923,11 +959,11 @@ fn test_compute_grade_mixed_minimum_actions() {
     course.categories.push(cat_b);
 
     let result = course.compute_grade();
-    // Certs fails minimum → requires global, but no FinalEqualsAverage
-    assert!(result.needs_global);
-    assert!(result.overridden_by.is_none());
-    // Normal grade: (40*70/100) + (90*30/100) = 28 + 27 = 55
-    assert!((result.grade - 55.0).abs() < 0.01);
+    // Certs fails minimum → RequiresGlobal, but no global policy
+    // configured, so falls back to FinalEqualsAverage (grade = cat avg).
+    assert!(!result.needs_global);
+    assert_eq!(result.overridden_by, Some("Certs".to_string()));
+    assert!((result.grade - 40.0).abs() < 0.01);
 }
 
 #[test]
@@ -1113,10 +1149,11 @@ fn test_compute_grade_per_eval_minimum_requires_global() {
     course.categories.push(cat);
 
     let result = course.compute_grade();
-    // Per-eval violation triggers RequiresGlobal
-    assert!(result.needs_global);
-    assert!(result.overridden_by.is_none());
-    // Normal weighted grade is still computed: (70+40)/2 = 55
+    // Per-eval violation triggers RequiresGlobal, but no global policy
+    // configured, so falls back to FinalEqualsAverage (grade = cat avg).
+    assert!(!result.needs_global);
+    assert_eq!(result.overridden_by, Some("Certs".to_string()));
+    // Category average: (70+40)/2 = 55
     assert!((result.grade - 55.0).abs() < 0.01);
 }
 
