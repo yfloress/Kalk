@@ -19,11 +19,31 @@
 //!
 //! Every colour used by the rendering code is defined here so that the entire
 //! palette can be swapped by switching to a different `Theme` instance.
-//! The default theme preserves the original look of Kalk while using rounded
-//! borders for a more modern feel.
+//! The default theme uses the Catppuccin Mocha palette with rounded borders.
 
 use ratatui::style::Color;
 use ratatui::widgets::BorderType;
+
+// =============================================================================
+// Catppuccin Mocha Palette
+// =============================================================================
+
+const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
+const SURFACE2: Color = Color::Rgb(0x58, 0x5b, 0x70);
+const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
+const OVERLAY1: Color = Color::Rgb(0x7f, 0x84, 0x9c);
+const SUBTEXT0: Color = Color::Rgb(0xa6, 0xad, 0xc8);
+const SUBTEXT1: Color = Color::Rgb(0xba, 0xc2, 0xde);
+const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
+const FLAMINGO: Color = Color::Rgb(0xf2, 0xcd, 0xcd);
+const MAUVE: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
+const RED: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
+const PEACH: Color = Color::Rgb(0xfa, 0xb3, 0x87);
+const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
+const GREEN: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
+const SAPPHIRE: Color = Color::Rgb(0x74, 0xc7, 0xec);
+const BLUE: Color = Color::Rgb(0x89, 0xb4, 0xfa);
+const LAVENDER: Color = Color::Rgb(0xb4, 0xbe, 0xfe);
 
 /// A complete semantic colour theme used by every UI component.
 #[derive(Debug, Clone, Copy)]
@@ -96,51 +116,50 @@ pub struct Theme {
     pub user_template: Color,
 }
 
-/// The default Kalk theme — modernised with rounded borders but keeping the
-/// original colour choices so existing users feel at home.
+/// The default Kalk theme — Catppuccin Mocha with rounded borders.
 pub const DEFAULT_THEME: Theme = Theme {
-    // Borders
-    border_focused: Color::Cyan,
-    border_unfocused: Color::DarkGray,
+    // Borders — Lavender for focused, Overlay 0 for unfocused
+    border_focused: LAVENDER,
+    border_unfocused: OVERLAY0,
     border_type: BorderType::Rounded,
 
-    // Text
-    text_primary: Color::White,
-    text_secondary: Color::Gray,
-    text_muted: Color::DarkGray,
+    // Text — Catppuccin text hierarchy
+    text_primary: TEXT,
+    text_secondary: SUBTEXT1,
+    text_muted: OVERLAY1,
 
-    // Semantic status
-    status_pass: Color::Green,
-    status_fail: Color::Red,
-    status_warn: Color::Yellow,
-    status_info: Color::Cyan,
+    // Semantic status — standard Catppuccin accent mapping
+    status_pass: GREEN,
+    status_fail: RED,
+    status_warn: YELLOW,
+    status_info: SAPPHIRE,
 
-    // Special
-    status_override: Color::Magenta,
+    // Special — Mauve for rule overrides (distinctive from pass/fail/warn)
+    status_override: MAUVE,
 
-    // Highlight
-    highlight_bg: Color::DarkGray,
-    highlight_fg: Color::White,
+    // Highlight — Surface 2 bg keeps items readable
+    highlight_bg: SURFACE2,
+    highlight_fg: TEXT,
 
-    // Input fields
-    input_active: Color::Yellow,
-    input_inactive: Color::Reset,
+    // Input fields — Peach for active (warm accent), Overlay 0 for inactive
+    input_active: PEACH,
+    input_inactive: OVERLAY0,
 
-    // Footer
-    footer_key: Color::Cyan,
-    footer_desc: Color::DarkGray,
-    footer_border: Color::DarkGray,
+    // Footer — Blue keys, Subtext 0 descriptions, Surface 1 border
+    footer_key: BLUE,
+    footer_desc: SUBTEXT0,
+    footer_border: SURFACE1,
 
-    // Popups
-    popup_border: Color::Cyan,
-    popup_border_danger: Color::Red,
-    popup_separator: Color::DarkGray,
+    // Popups — Lavender border, Red for danger, Surface 1 separators
+    popup_border: LAVENDER,
+    popup_border_danger: RED,
+    popup_separator: SURFACE1,
 
-    // Weight label
-    weight_label: Color::Yellow,
+    // Weight label — Peach (warm, distinct from status colours)
+    weight_label: PEACH,
 
-    // User template
-    user_template: Color::Yellow,
+    // User template — Flamingo (soft pink, distinct from system templates)
+    user_template: FLAMINGO,
 };
 
 /// Return a reference to the active theme.
