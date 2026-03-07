@@ -99,6 +99,22 @@ impl InputField {
                 | InputField::GlobalPolicy
         )
     }
+
+    /// Returns true if this field only accepts numeric input (digits, dot, comma).
+    pub fn is_numeric(&self) -> bool {
+        matches!(
+            self,
+            InputField::PassingGrade
+                | InputField::Weight
+                | InputField::Grade
+                | InputField::MinimumAverage
+                | InputField::MinPerEval
+                | InputField::GlobalSemesterWeight
+                | InputField::GlobalExamWeight
+                | InputField::GlobalMinGrade
+                | InputField::GlobalMaxGrade
+        )
+    }
 }
 
 // =============================================================================

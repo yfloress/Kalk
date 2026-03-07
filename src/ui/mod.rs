@@ -141,10 +141,27 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let auto_compact = normal_needed > (total_width * 2 / 5) || total_width < 100;
     let effective_compact = app.compact_courses || auto_compact;
 
+    // Minimum width = title text so it never gets clipped
+    // Title: " {icon}Courses (N) " + 2 border columns
+    let title_width = {
+        let count_digits = if app.courses.is_empty() {
+            1
+        } else {
+            (app.courses.len() as f64).log10().floor() as u16 + 1
+        };
+        // " " + icon + label + " (" + digits + ") " + borders
+        1 + ic.course.chars().count() as u16
+            + m.courses.chars().count() as u16
+            + 2
+            + count_digits
+            + 2
+            + 2
+    };
+
     let courses_constraint = if effective_compact {
         // Dynamic width: name + space + grade(3) + borders(2) + highlight + pad(1)
         let needed = max_name_len + 1 + 3 + 2 + highlight_len + 1;
-        Constraint::Length(needed.clamp(12, 30))
+        Constraint::Length(needed.max(title_width).clamp(12, 30))
     } else {
         // Dynamic width based on actual content, clamped to reasonable bounds
         Constraint::Length(normal_needed.clamp(15, total_width / 2))

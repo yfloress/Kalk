@@ -355,8 +355,8 @@ pub const EN: Messages = Messages {
 
     // Category rules labels
     advanced_rules: "Advanced Rules",
-    advanced_rules_show: "Shift+A: Show rules",
-    advanced_rules_hide: "Shift+A: Hide rules",
+    advanced_rules_show: "Show rules",
+    advanced_rules_hide: "Hide rules",
     drop_lowest: "Drop Lowest",
     averaging_method: "Average Method",
     averaging_arithmetic: "Arithmetic",
@@ -372,7 +372,7 @@ pub const EN: Messages = Messages {
     no: "No",
 
     // Field help descriptions
-    help_toggle: "?: Help",
+    help_toggle: "Help",
     help_name: "Category label (e.g. Exams, Quizzes, Labs).",
     help_weight: "How much this category counts toward the final grade (0-100%).",
     help_drop_lowest: "Discard the N worst grades before averaging. 0 = keep all.",
@@ -543,8 +543,8 @@ pub const ES: Messages = Messages {
 
     // Category rules labels
     advanced_rules: "Reglas Avanzadas",
-    advanced_rules_show: "Shift+A: Mostrar reglas",
-    advanced_rules_hide: "Shift+A: Ocultar reglas",
+    advanced_rules_show: "Mostrar reglas",
+    advanced_rules_hide: "Ocultar reglas",
     drop_lowest: "Eliminar Peores",
     averaging_method: "Método de Promedio",
     averaging_arithmetic: "Aritmético",
@@ -560,7 +560,7 @@ pub const ES: Messages = Messages {
     no: "No",
 
     // Field help descriptions
-    help_toggle: "?: Ayuda",
+    help_toggle: "Ayuda",
     help_name: "Etiqueta de la categoría (ej: Certámenes, Controles, Labs).",
     help_weight: "Cuánto vale esta categoría en la nota final (0-100%).",
     help_drop_lowest: "Descarta las N peores notas antes de promediar. 0 = no eliminar.",

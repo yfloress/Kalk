@@ -411,7 +411,13 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Weight hint (inline, no border)
     if let Some(course) = app.current_course() {
         let current_total = course.total_weight();
-        let hint = format!("  {}: {:.0}%", m.current_total, current_total);
+        // Avoid displaying "-0%" when total is negative zero
+        let display_total = if current_total == 0.0 {
+            0.0
+        } else {
+            current_total
+        };
+        let hint = format!("  {}: {:.0}%", m.current_total, display_total);
         let hint_color = if current_total > 100.0 {
             t.status_fail
         } else if current_total < 100.0 {
@@ -430,7 +436,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     let toggle_text = if show_advanced {
         format!(
-            "{}{} ──────────────────",
+            "{}{} (Shift+A) ────────",
             ic.advanced_collapse, m.advanced_rules
         )
     } else {

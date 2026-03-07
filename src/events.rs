@@ -100,7 +100,13 @@ fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: 
             app.current_input_buffer().pop();
         }
         KeyCode::Char(c) => {
-            app.current_input_buffer().push(c);
+            if app.input_field.is_numeric() {
+                if c.is_ascii_digit() || c == '.' || c == ',' {
+                    app.current_input_buffer().push(c);
+                }
+            } else {
+                app.current_input_buffer().push(c);
+            }
         }
         _ => {}
     }
