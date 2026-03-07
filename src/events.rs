@@ -44,6 +44,15 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(app.should_quit);
         }
 
+        // Global: Ctrl+S for settings (works from main screen)
+        if key.code == KeyCode::Char('s')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+            && app.screen == Screen::Main
+        {
+            app.show_settings();
+            return Ok(app.should_quit);
+        }
+
         // Shift+A toggles advanced rules in category edit popup
         if key.code == KeyCode::Char('A')
             && key.modifiers.contains(KeyModifiers::SHIFT)
@@ -69,6 +78,7 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             Screen::ConfirmDeleteTemplate => handle_delete_template_keys(app, key.code),
             Screen::SavingTemplate => handle_save_template_keys(app, key.code),
             Screen::SelectingLanguage => handle_language_keys(app, key.code),
+            Screen::Settings => handle_settings_keys(app, key.code),
         }
     }
     Ok(app.should_quit)
@@ -226,4 +236,20 @@ fn handle_language_keys(app: &mut App, key: KeyCode) {
 /// Handle keys in the save template screen.
 fn handle_save_template_keys(app: &mut App, key: KeyCode) {
     handle_form_keys(app, key, App::confirm_save_template, App::cancel_edit);
+}
+
+/// Handle keys in the settings screen.
+fn handle_settings_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.cancel_settings(),
+        KeyCode::Enter => app.confirm_settings(),
+        KeyCode::Up | KeyCode::Char('k') => app.previous_setting(),
+        KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => app.next_setting(),
+        KeyCode::Char(' ')
+        | KeyCode::Left
+        | KeyCode::Right
+        | KeyCode::Char('h')
+        | KeyCode::Char('l') => app.toggle_current_setting(),
+        _ => {}
+    }
 }

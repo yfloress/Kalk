@@ -20,29 +20,35 @@
 //! This module handles the main layout and the courses/categories panels.
 //! The evaluations panel and footer live in `panels`, popup dialogs in `popups`,
 //! rendering helpers and formatting in `helpers`.
+//! Icon sets live in `icons`, colour themes in `theme`.
 //! All calculation logic lives in `model/` — this module only formats and renders.
 
 pub(crate) mod helpers;
+pub(crate) mod icons;
 mod panels;
 mod popups;
+pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
 use crate::model::{MinimumNotMetAction, WeightValidation};
 use helpers::{
     focused_border_style, format_course_average, format_course_status, format_weight_validation,
 };
+use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
     draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
-    draw_evaluation_popup, draw_language_popup, draw_save_template_popup, draw_template_popup,
+    draw_evaluation_popup, draw_language_popup, draw_save_template_popup, draw_settings_popup,
+    draw_template_popup,
 };
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
+use theme::theme;
 
 // =============================================================================
 // Main Draw
@@ -80,6 +86,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::ConfirmDeleteTemplate => draw_delete_template_popup(frame, app),
         Screen::SavingTemplate => draw_save_template_popup(frame, app),
         Screen::SelectingLanguage => draw_language_popup(frame, app),
+        Screen::Settings => draw_settings_popup(frame, app),
         Screen::Main => {}
     }
 }
@@ -90,6 +97,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
 fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
+    let t = theme();
+    let ic = icons(app.use_nerd_fonts);
     let is_focused = app.focus == Focus::Courses;
     let border_style = focused_border_style(is_focused);
 
@@ -101,24 +110,29 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
 
             // Weight validation indicator
             let weight_status = match c.validate_weights() {
-                WeightValidation::Valid => Span::styled(" [OK]", Style::default().fg(Color::Green)),
-                WeightValidation::Under(w) => {
-                    Span::styled(format!(" [{:.0}%]", w), Style::default().fg(Color::Yellow))
-                }
-                WeightValidation::Over(w) => {
-                    Span::styled(format!(" [{:.0}%!]", w), Style::default().fg(Color::Red))
-                }
+                WeightValidation::Valid => Span::styled(
+                    format!(" [{}]", ic.weight_ok),
+                    Style::default().fg(t.status_pass),
+                ),
+                WeightValidation::Under(w) => Span::styled(
+                    format!(" [{}{:.0}%]", ic.weight_warn, w),
+                    Style::default().fg(t.status_warn),
+                ),
+                WeightValidation::Over(w) => Span::styled(
+                    format!(" [{}{:.0}%]", ic.weight_error, w),
+                    Style::default().fg(t.status_fail),
+                ),
                 WeightValidation::Empty => Span::styled(
                     format!(" [{}]", m.no_categories),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(t.text_muted),
                 ),
             };
 
             // Current grade color
             let grade_color = match c.current_grade() {
-                Some(g) if c.is_passing_grade(g) => Color::Green,
-                Some(_) => Color::Red,
-                None => Color::DarkGray,
+                Some(g) if c.is_passing_grade(g) => t.status_pass,
+                Some(_) => t.status_fail,
+                None => t.text_muted,
             };
 
             ListItem::new(vec![
@@ -134,20 +148,21 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let title = format!(" {} ({}) ", m.courses, app.courses.len());
+    let title = format!(" {}{} ({}) ", ic.course, m.courses, app.courses.len());
     let list = List::new(items)
         .block(
             Block::default()
                 .title(title)
                 .borders(Borders::ALL)
+                .border_type(t.border_type)
                 .border_style(border_style),
         )
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(t.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol(ic.highlight);
 
     let mut state = ListState::default();
     state.select(app.selected_course);
@@ -157,13 +172,16 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
 
 fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
+    let t = theme();
+    let ic = icons(app.use_nerd_fonts);
     let is_focused = app.focus == Focus::Categories;
     let border_style = focused_border_style(is_focused);
 
     let Some(course) = app.current_course() else {
         let block = Block::default()
-            .title(format!(" {} ", m.categories))
+            .title(format!(" {}{} ", ic.category, m.categories))
             .borders(Borders::ALL)
+            .border_type(t.border_type)
             .border_style(border_style);
         let paragraph = Paragraph::new(m.select_course_to_view)
             .block(block)
@@ -185,10 +203,10 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     // Course info header with weight validation
     let validation = course.validate_weights();
     let validation_color = match &validation {
-        WeightValidation::Valid => Color::Green,
-        WeightValidation::Under(_) => Color::Yellow,
-        WeightValidation::Over(_) => Color::Red,
-        WeightValidation::Empty => Color::DarkGray,
+        WeightValidation::Valid => t.status_pass,
+        WeightValidation::Under(_) => t.status_warn,
+        WeightValidation::Over(_) => t.status_fail,
+        WeightValidation::Empty => t.text_muted,
     };
 
     let validation_msg = format_weight_validation(&validation, m);
@@ -205,6 +223,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .title(format!(" {} ", course.name))
                 .borders(Borders::ALL)
+                .border_type(t.border_type)
                 .border_style(border_style),
         );
     frame.render_widget(header, chunks[0]);
@@ -215,6 +234,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     let avg_block = Block::default()
         .title(format!(" {} ", m.course_average))
         .borders(Borders::ALL)
+        .border_type(t.border_type)
         .border_style(Style::default().fg(avg_color));
     let avg_widget = Paragraph::new(avg_text)
         .style(Style::default().fg(avg_color))
@@ -257,14 +277,14 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 .iter()
                 .any(|ev| ev.category_idx == cat_idx && !ev.failing_indices.is_empty());
 
-            // Color based on passing status, but override with Magenta if minimum not met
+            // Color based on passing status, but override with override colour if minimum not met
             let avg_color = if failed_min.is_some() {
-                Color::Magenta
+                t.status_override
             } else {
                 match cat.is_passing(passing_grade) {
-                    Some(true) => Color::Green,
-                    Some(false) => Color::Red,
-                    None => Color::DarkGray,
+                    Some(true) => t.status_pass,
+                    Some(false) => t.status_fail,
+                    None => t.text_muted,
                 }
             };
 
@@ -273,19 +293,19 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Span::styled(&cat.name, Style::default().add_modifier(Modifier::BOLD)),
                 Span::styled(
                     format!(" ({:.0}%)", cat.weight),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(t.weight_label),
                 ),
             ];
             if !cat.rules.is_default() {
                 name_spans.push(Span::styled(
-                    format!(" [{}]", m.rules_active),
-                    Style::default().fg(Color::Cyan),
+                    format!(" [{}{}]", ic.rules_active, m.rules_active),
+                    Style::default().fg(t.status_info),
                 ));
             }
             if has_eval_violations {
                 name_spans.push(Span::styled(
-                    format!(" ({})", m.eval_below_min),
-                    Style::default().fg(Color::Magenta),
+                    format!(" ({}{})", ic.below_min, m.eval_below_min),
+                    Style::default().fg(t.status_override),
                 ));
             }
 
@@ -295,7 +315,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Span::styled(avg, Style::default().fg(avg_color)),
                 Span::styled(
                     format!(" | {}", progress),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(t.text_muted),
                 ),
             ];
             if let Some(fm) = failed_min {
@@ -308,7 +328,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                         " {:.1} < {:.0} {}{}",
                         fm.average, fm.required, m.minimum_not_met, action_hint
                     ),
-                    Style::default().fg(Color::Magenta),
+                    Style::default().fg(t.status_override),
                 ));
             }
 
@@ -316,20 +336,26 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let title = format!(" {} ({}) ", m.categories, course.categories.len());
+    let title = format!(
+        " {}{} ({}) ",
+        ic.category,
+        m.categories,
+        course.categories.len()
+    );
     let list = List::new(items)
         .block(
             Block::default()
                 .title(title)
                 .borders(Borders::ALL)
+                .border_type(t.border_type)
                 .border_style(border_style),
         )
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(t.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol(ic.highlight);
 
     let mut state = ListState::default();
     state.select(app.selected_category);

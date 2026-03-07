@@ -32,6 +32,8 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
+use super::theme::theme;
+
 // =============================================================================
 // Delete Confirmation Helper
 // =============================================================================
@@ -48,6 +50,7 @@ pub fn render_delete_confirmation(
     confirm_label: &str,
     cancel_label: &str,
 ) {
+    let t = theme();
     let term = frame.size();
     let popup_w = 46u16.min(term.width);
     let popup_h = 11u16.min(term.height);
@@ -59,7 +62,8 @@ pub fn render_delete_confirmation(
     let block = Block::default()
         .title(format!(" {} ", title))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Red));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border_danger));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -80,7 +84,7 @@ pub fn render_delete_confirmation(
         Span::styled(
             question,
             Style::default()
-                .fg(Color::White)
+                .fg(t.text_primary)
                 .add_modifier(Modifier::BOLD),
         ),
     ]))
@@ -89,24 +93,24 @@ pub fn render_delete_confirmation(
 
     let sep = Paragraph::new(Line::from(Span::styled(
         "──────────────────────────────────────────",
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(t.popup_separator),
     )));
     frame.render_widget(sep, chunks[1]);
 
     let warn = Paragraph::new(Line::from(vec![
-        Span::styled("  ! ", Style::default().fg(Color::Yellow)),
-        Span::styled(warning_text, Style::default().fg(Color::Yellow)),
+        Span::styled("  ! ", Style::default().fg(t.status_warn)),
+        Span::styled(warning_text, Style::default().fg(t.status_warn)),
     ]));
     frame.render_widget(warn, chunks[2]);
 
     let hints = Paragraph::new(Line::from(vec![
         Span::styled(
             format!("  Enter/y: {}  ", confirm_label),
-            Style::default().fg(Color::Red),
+            Style::default().fg(t.status_fail),
         ),
         Span::styled(
             format!("Esc/n: {}", cancel_label),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(t.text_muted),
         ),
     ]));
     frame.render_widget(hints, chunks[4]);
@@ -118,10 +122,11 @@ pub fn render_delete_confirmation(
 
 /// Return a border style that highlights when the panel is focused.
 pub fn focused_border_style(is_focused: bool) -> Style {
+    let t = theme();
     if is_focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(t.border_focused)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(t.border_unfocused)
     }
 }
 
@@ -147,8 +152,7 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 /// Render a single-line text input field with a label border.
-/// When `is_active` the field is highlighted in yellow and a cursor pipe is
-/// appended.
+/// When `is_active` the field is highlighted and a cursor pipe is appended.
 pub fn render_input_field(
     frame: &mut Frame,
     label: &str,
@@ -156,10 +160,11 @@ pub fn render_input_field(
     is_active: bool,
     area: Rect,
 ) {
+    let t = theme();
     let style = if is_active {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(t.input_active)
     } else {
-        Style::default()
+        Style::default().fg(t.input_inactive)
     };
 
     // Show cursor indicator when active
@@ -173,6 +178,7 @@ pub fn render_input_field(
         Block::default()
             .title(label)
             .borders(Borders::ALL)
+            .border_type(t.border_type)
             .border_style(style),
     );
 
@@ -189,10 +195,11 @@ pub fn render_toggle_field(
     is_active: bool,
     area: Rect,
 ) {
+    let t = theme();
     let style = if is_active {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(t.input_active)
     } else {
-        Style::default()
+        Style::default().fg(t.input_inactive)
     };
 
     let display = if is_active {
@@ -205,6 +212,7 @@ pub fn render_toggle_field(
         Block::default()
             .title(label)
             .borders(Borders::ALL)
+            .border_type(t.border_type)
             .border_style(style),
     );
 
@@ -232,19 +240,20 @@ pub fn contextual_field_help(field: InputField, m: &Messages) -> String {
 
 /// Draw a full-screen help overlay explaining every category field.
 pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
+    let t = theme();
     let area = centered_rect(70, 60, frame.size());
     frame.render_widget(Clear, area);
 
     let label_style = Style::default()
-        .fg(Color::Yellow)
+        .fg(t.input_active)
         .add_modifier(Modifier::BOLD);
-    let desc_style = Style::default().fg(Color::White);
+    let desc_style = Style::default().fg(t.text_primary);
 
     let help_lines = vec![
         Line::from(Span::styled(
             format!("  {} ", m.advanced_rules),
             Style::default()
-                .fg(Color::Cyan)
+                .fg(t.status_info)
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
@@ -260,7 +269,7 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
         Line::from(""),
         Line::from(Span::styled(
             format!("── {} ──", m.advanced_rules),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(t.status_info),
         )),
         Line::from(""),
         Line::from(vec![
@@ -297,7 +306,8 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
     let block = Block::default()
         .title(format!(" {} ", m.help_toggle))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.status_info));
 
     let paragraph = Paragraph::new(help_lines)
         .block(block)
@@ -319,18 +329,19 @@ pub fn format_course_average(
     grade_result: &CourseGradeResult,
     m: &Messages,
 ) -> (String, Color) {
+    let t = theme();
     if let Some(ref cat_name) = grade_result.overridden_by {
         let text = format!(
             "{}: {:.1} ({} {})",
             m.current, grade_result.grade, m.grade_capped_by, cat_name
         );
-        (text, Color::Magenta)
+        (text, t.status_override)
     } else if grade_result.needs_global {
         let text = format!(
             "{}: {:.1} | {}",
             m.current, grade_result.grade, m.needs_global
         );
-        (text, Color::Yellow)
+        (text, t.status_warn)
     } else {
         match course.current_grade() {
             Some(grade) => {
@@ -342,13 +353,13 @@ pub fn format_course_average(
                 };
                 let text = format!("{}: {:.1} -> {:.0} ({})", m.current, grade, rounded, status);
                 let color = if course.is_passing_grade(grade) {
-                    Color::Green
+                    t.status_pass
                 } else {
-                    Color::Red
+                    t.status_fail
                 };
                 (text, color)
             }
-            None => (m.no_grades_yet.to_string(), Color::DarkGray),
+            None => (m.no_grades_yet.to_string(), t.text_muted),
         }
     }
 }

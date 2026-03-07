@@ -536,7 +536,10 @@ impl App {
             self.built_in_templates = crate::templates::built_in_templates(new_lang);
 
             // Save config
-            let config = persistence::Config { language: new_lang };
+            let config = persistence::Config {
+                language: new_lang,
+                use_nerd_fonts: self.use_nerd_fonts,
+            };
             if persistence::save_config(&config).is_err() {
                 let msg = self.messages().config_save_error.to_string();
                 self.set_status(msg);
@@ -548,6 +551,64 @@ impl App {
 
     /// Cancel language selection.
     pub fn cancel_language_selection(&mut self) {
+        self.screen = Screen::Main;
+    }
+
+    // =========================================================================
+    // Settings
+    // =========================================================================
+
+    /// Show the settings popup.
+    pub fn show_settings(&mut self) {
+        self.selected_setting = 0;
+        self.screen = Screen::Settings;
+    }
+
+    /// Move to the next setting in the list.
+    pub fn next_setting(&mut self) {
+        // Currently only 1 setting (nerd fonts), but prepared for more.
+        let count = 1usize;
+        if count > 0 {
+            self.selected_setting = (self.selected_setting + 1) % count;
+        }
+    }
+
+    /// Move to the previous setting in the list.
+    pub fn previous_setting(&mut self) {
+        let count = 1usize;
+        if count > 0 {
+            self.selected_setting = if self.selected_setting == 0 {
+                count - 1
+            } else {
+                self.selected_setting - 1
+            };
+        }
+    }
+
+    /// Toggle the currently selected setting value.
+    pub fn toggle_current_setting(&mut self) {
+        if self.selected_setting == 0 {
+            self.use_nerd_fonts = !self.use_nerd_fonts;
+        }
+    }
+
+    /// Confirm and persist settings, then return to the main screen.
+    pub fn confirm_settings(&mut self) {
+        let config = persistence::Config {
+            language: self.language,
+            use_nerd_fonts: self.use_nerd_fonts,
+        };
+        if persistence::save_config(&config).is_err() {
+            let msg = self.messages().config_save_error.to_string();
+            self.set_status(msg);
+        }
+        self.screen = Screen::Main;
+    }
+
+    /// Cancel settings without saving — restore persisted values.
+    pub fn cancel_settings(&mut self) {
+        let (config, _) = persistence::load_config();
+        self.use_nerd_fonts = config.use_nerd_fonts;
         self.screen = Screen::Main;
     }
 }

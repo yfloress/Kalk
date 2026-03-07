@@ -200,6 +200,14 @@ pub struct Messages {
     pub grade_capped_by: &'static str,
     pub dropped: &'static str,
     pub eval_below_min: &'static str,
+
+    // Settings
+    pub settings: &'static str,
+    pub settings_nerd_fonts: &'static str,
+    pub settings_nerd_fonts_desc: &'static str,
+    pub enabled: &'static str,
+    pub disabled: &'static str,
+    pub toggle: &'static str,
 }
 
 /// English messages.
@@ -356,6 +364,14 @@ pub const EN: Messages = Messages {
     grade_capped_by: "capped by",
     dropped: "dropped",
     eval_below_min: "below min",
+
+    // Settings
+    settings: "Settings",
+    settings_nerd_fonts: "Nerd Font Icons",
+    settings_nerd_fonts_desc: "Use Nerd Font glyphs (requires a patched font)",
+    enabled: "Enabled",
+    disabled: "Disabled",
+    toggle: "Toggle",
 };
 
 /// Spanish messages.
@@ -512,6 +528,14 @@ pub const ES: Messages = Messages {
     grade_capped_by: "limitado por",
     dropped: "eliminada",
     eval_below_min: "bajo min",
+
+    // Settings
+    settings: "Ajustes",
+    settings_nerd_fonts: "Iconos Nerd Font",
+    settings_nerd_fonts_desc: "Usar glifos Nerd Font (requiere fuente parcheada)",
+    enabled: "Activado",
+    disabled: "Desactivado",
+    toggle: "Alternar",
 };
 
 impl Language {

@@ -18,8 +18,9 @@
 //! Popup dialogs for the UI layer.
 //!
 //! This module contains all overlay popups (template selection, course/category/
-//! evaluation editing, delete confirmations, language selection, save-as-template).
-//! Rendering helpers and formatting functions live in `helpers.rs`.
+//! evaluation editing, delete confirmations, language selection, save-as-template,
+//! and settings). Rendering helpers and formatting functions live in `helpers.rs`.
+//! Icon sets live in `icons.rs`, colour themes in `theme.rs`.
 
 use crate::app::{App, Focus, InputField};
 use crate::i18n::Language;
@@ -27,7 +28,7 @@ use crate::model::{AveragingMethod, MinimumNotMetAction, NeededGradeStatus};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
@@ -36,6 +37,8 @@ use super::helpers::{
     centered_rect, contextual_field_help, draw_category_help_overlay, format_course_status,
     format_needed_grade, render_delete_confirmation, render_input_field, render_toggle_field,
 };
+use super::icons::icons;
+use super::theme::theme;
 
 // =============================================================================
 // Popup Drawing
@@ -43,13 +46,16 @@ use super::helpers::{
 
 pub fn draw_template_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
+    let t = theme();
+    let ic = icons(app.use_nerd_fonts);
     let area = centered_rect(60, 70, frame.size());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
         .title(format!(" {} ", m.select_course_template))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -61,21 +67,25 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
     let items: Vec<ListItem> = all_templates
         .iter()
         .enumerate()
-        .map(|(i, t)| {
+        .map(|(i, tmpl)| {
             let is_user_template = i >= built_in_count;
-            let prefix = if is_user_template { "★ " } else { "" };
+            let prefix = if is_user_template {
+                ic.user_template
+            } else {
+                ic.template
+            };
 
             ListItem::new(vec![
                 Line::from(Span::styled(
-                    format!("{}{}", prefix, t.name),
+                    format!("{}{}", prefix, tmpl.name),
                     Style::default().add_modifier(Modifier::BOLD),
                 )),
                 Line::from(Span::styled(
-                    format!("  {}", t.description),
+                    format!("  {}", tmpl.description),
                     Style::default().fg(if is_user_template {
-                        Color::Yellow
+                        t.user_template
                     } else {
-                        Color::Gray
+                        t.text_secondary
                     }),
                 )),
             ])
@@ -85,10 +95,10 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
     let list = List::new(items)
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(t.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol(ic.highlight);
 
     let mut state = ListState::default();
     state.select(Some(app.selected_template));
@@ -98,6 +108,7 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
 
 pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let m = app.messages();
+    let t = theme();
     // Fixed height: border(1) + top_pad + field(3) + spacing(1) + field(3) + bot_pad + border(1)
     let popup_h = 13u16;
     let popup_w = 50u16;
@@ -116,7 +127,8 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -163,6 +175,8 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
 pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let m = app.messages();
+    let t = theme();
+    let ic = icons(app.use_nerd_fonts);
     let show_advanced = app.show_advanced_rules;
     let show_help = app.show_field_help;
 
@@ -217,7 +231,8 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
 
     frame.render_widget(block, area);
 
@@ -285,11 +300,11 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         let current_total = course.total_weight();
         let hint = format!("  {}: {:.0}%", m.current_total, current_total);
         let hint_color = if current_total > 100.0 {
-            Color::Red
+            t.status_fail
         } else if current_total < 100.0 {
-            Color::Yellow
+            t.status_warn
         } else {
-            Color::Green
+            t.status_pass
         };
         let hint_widget = Paragraph::new(hint).style(Style::default().fg(hint_color));
         frame.render_widget(hint_widget, inner[slot]);
@@ -301,14 +316,20 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // =====================================================================
 
     let toggle_text = if show_advanced {
-        format!("▼ {} ──────────────────", m.advanced_rules)
+        format!(
+            "{}{} ──────────────────",
+            ic.advanced_collapse, m.advanced_rules
+        )
     } else {
-        format!("▶ {} (Shift+A) ───────", m.advanced_rules)
+        format!(
+            "{}{} (Shift+A) ───────",
+            ic.advanced_expand, m.advanced_rules
+        )
     };
     let toggle_color = if show_advanced {
-        Color::Cyan
+        t.status_info
     } else {
-        Color::DarkGray
+        t.text_muted
     };
     let toggle_widget = Paragraph::new(toggle_text).style(Style::default().fg(toggle_color));
     frame.render_widget(toggle_widget, inner[slot]);
@@ -404,7 +425,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // =====================================================================
 
     let help_widget = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::DarkGray))
+        .style(Style::default().fg(t.text_muted))
         .wrap(Wrap { trim: true });
     frame.render_widget(help_widget, inner[slot]);
 
@@ -420,6 +441,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let is_editing = !is_new;
     let m = app.messages();
+    let t = theme();
     let area = centered_rect(60, 50, frame.size());
     frame.render_widget(Clear, area);
 
@@ -432,7 +454,8 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
 
     frame.render_widget(block, area);
 
@@ -473,18 +496,18 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
         {
             let needed = course.needed_grade_for_evaluation(cat_idx, eval_idx, is_editing);
             let color = match needed.status {
-                NeededGradeStatus::Success => Color::Green,
-                NeededGradeStatus::Failure => Color::Red,
-                NeededGradeStatus::Warning => Color::Yellow,
-                NeededGradeStatus::Info => Color::DarkGray,
+                NeededGradeStatus::Success => t.status_pass,
+                NeededGradeStatus::Failure => t.status_fail,
+                NeededGradeStatus::Warning => t.status_warn,
+                NeededGradeStatus::Info => t.text_muted,
             };
             (format_needed_grade(&needed, m), color)
         } else {
             let text = format_course_status(course, m);
             let color = match course.current_grade() {
-                Some(g) if course.is_passing_grade(g) => Color::Green,
-                Some(_) => Color::Red,
-                None => Color::DarkGray,
+                Some(g) if course.is_passing_grade(g) => t.status_pass,
+                Some(_) => t.status_fail,
+                None => t.text_muted,
             };
             (text, color)
         };
@@ -502,13 +525,15 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
 pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
+    let t = theme();
     let area = centered_rect(60, 40, frame.size());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
         .title(format!(" {} ", m.save_as_template_title))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
 
     frame.render_widget(block, area);
 
@@ -548,7 +573,7 @@ pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
             course.categories.len(),
             course.name
         );
-        let info_widget = Paragraph::new(info).style(Style::default().fg(Color::DarkGray));
+        let info_widget = Paragraph::new(info).style(Style::default().fg(t.text_muted));
         frame.render_widget(info_widget, inner[4]);
     }
 }
@@ -591,13 +616,16 @@ pub fn draw_delete_popup(frame: &mut Frame, app: &App) {
 
 pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
+    let t = theme();
+    let ic = icons(app.use_nerd_fonts);
     let area = centered_rect(40, 30, frame.size());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(format!(" {} ", m.select_language))
+        .title(format!(" {}{} ", ic.language, m.select_language))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -606,10 +634,14 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
         .iter()
         .map(|lang| {
             let is_current = *lang == app.language;
-            let prefix = if is_current { "● " } else { "  " };
+            let prefix = if is_current {
+                ic.selected
+            } else {
+                ic.unselected
+            };
             let style = if is_current {
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(t.status_pass)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -625,13 +657,128 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     let list = List::new(items)
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(t.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol(ic.highlight);
 
     let mut state = ListState::default();
     state.select(Some(app.selected_language));
 
     frame.render_stateful_widget(list, inner, &mut state);
+}
+
+// =============================================================================
+// Settings Popup
+// =============================================================================
+
+pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
+    let m = app.messages();
+    let t = theme();
+    let ic = icons(app.use_nerd_fonts);
+
+    let popup_w = 52u16;
+    let popup_h = 12u16;
+    let term = frame.size();
+    let x = term.x + term.width.saturating_sub(popup_w) / 2;
+    let y = term.y + term.height.saturating_sub(popup_h) / 2;
+    let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(format!(" {}{} ", ic.settings, m.settings))
+        .borders(Borders::ALL)
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // padding
+            Constraint::Length(1), // nerd fonts toggle
+            Constraint::Length(1), // padding
+            Constraint::Length(2), // description
+            Constraint::Min(0),    // spacer
+            Constraint::Length(1), // hint
+        ])
+        .split(inner);
+
+    // Nerd Fonts toggle row
+    let is_selected = app.selected_setting == 0;
+    let nf_status = if app.use_nerd_fonts {
+        m.enabled
+    } else {
+        m.disabled
+    };
+    let nf_color = if app.use_nerd_fonts {
+        t.status_pass
+    } else {
+        t.text_muted
+    };
+
+    let row_style = if is_selected {
+        Style::default()
+            .bg(t.highlight_bg)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+    };
+
+    let prefix = if is_selected { ic.highlight } else { "  " };
+
+    let nf_line = Line::from(vec![
+        Span::styled(prefix, row_style),
+        Span::styled(
+            format!("{}: ", m.settings_nerd_fonts),
+            row_style.fg(t.text_primary),
+        ),
+        Span::styled(format!("< {} >", nf_status), Style::default().fg(nf_color)),
+    ]);
+    frame.render_widget(Paragraph::new(nf_line), chunks[1]);
+
+    // Description
+    let desc = Paragraph::new(Line::from(Span::styled(
+        format!("  {}", m.settings_nerd_fonts_desc),
+        Style::default().fg(t.text_secondary),
+    )))
+    .wrap(Wrap { trim: true });
+    frame.render_widget(desc, chunks[3]);
+
+    // Bottom hint
+    let hint = Line::from(vec![
+        Span::styled(
+            "  Space",
+            Style::default()
+                .fg(t.footer_key)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(": {}  ", m.toggle),
+            Style::default().fg(t.footer_desc),
+        ),
+        Span::styled(
+            "Enter",
+            Style::default()
+                .fg(t.footer_key)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(": {}  ", m.confirm),
+            Style::default().fg(t.footer_desc),
+        ),
+        Span::styled(
+            "Esc",
+            Style::default()
+                .fg(t.footer_key)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(": {}", m.cancel),
+            Style::default().fg(t.footer_desc),
+        ),
+    ]);
+    frame.render_widget(Paragraph::new(hint), chunks[5]);
 }

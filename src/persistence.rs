@@ -32,12 +32,15 @@ use std::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub language: Language,
+    #[serde(default)]
+    pub use_nerd_fonts: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             language: Language::English,
+            use_nerd_fonts: true,
         }
     }
 }
@@ -257,5 +260,6 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.language, Language::English);
+        assert!(config.use_nerd_fonts);
     }
 }

@@ -58,6 +58,7 @@ pub enum Screen {
     ConfirmDeleteTemplate,
     SavingTemplate,
     SelectingLanguage,
+    Settings,
 }
 
 /// Input field being edited.
@@ -141,6 +142,11 @@ pub struct App {
     pub show_advanced_rules: bool,
     /// Whether the field help panel is visible in the category popup.
     pub show_field_help: bool,
+
+    /// Whether to use Nerd Font icons (persisted in config).
+    pub use_nerd_fonts: bool,
+    /// Index of the focused setting in the settings popup.
+    pub selected_setting: usize,
 }
 
 impl Default for App {
@@ -174,6 +180,8 @@ impl Default for App {
             edit_round_before_weighting: false,
             show_advanced_rules: false,
             show_field_help: false,
+            use_nerd_fonts: true,
+            selected_setting: 0,
         }
     }
 }
@@ -188,6 +196,7 @@ impl App {
         // Load config first to get language
         let (config, config_warning) = persistence::load_config();
         let language = config.language;
+        let use_nerd_fonts = config.use_nerd_fonts;
         let m = language.messages();
         let mut status_message: Option<String> = None;
 
@@ -232,6 +241,7 @@ impl App {
             selected_category,
             status_message,
             language,
+            use_nerd_fonts,
             ..Default::default()
         }
     }
