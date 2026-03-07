@@ -171,30 +171,27 @@ pub fn save_user_templates(templates: &[CourseTemplate]) -> Result<()> {
 
 /// Load configuration from disk.
 /// Returns default config if the file doesn't exist or can't be parsed.
-pub fn load_config() -> Config {
+/// The optional string contains a warning message to surface to the user.
+pub fn load_config() -> (Config, Option<String>) {
     let Some(path) = config_path() else {
-        return Config::default();
+        return (Config::default(), None);
     };
 
     if !path.exists() {
-        return Config::default();
+        return (Config::default(), None);
     }
 
     let file = match File::open(&path) {
         Ok(file) => file,
-        Err(err) => {
-            eprintln!("Warning: failed to open config file, using defaults: {err}");
-            return Config::default();
+        Err(_) => {
+            return (Config::default(), Some("config_load_warning".to_string()));
         }
     };
 
     let reader = BufReader::new(file);
     match serde_json::from_reader(reader) {
-        Ok(cfg) => cfg,
-        Err(err) => {
-            eprintln!("Warning: failed to parse config file, using defaults: {err}");
-            Config::default()
-        }
+        Ok(cfg) => (cfg, None),
+        Err(_) => (Config::default(), Some("config_load_warning".to_string())),
     }
 }
 

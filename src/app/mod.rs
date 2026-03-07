@@ -31,6 +31,9 @@ use crate::model::{
 use crate::persistence;
 use crate::templates;
 
+/// Maximum value for the "drop lowest" toggle cycle (0..=MAX_DROP_LOWEST).
+const MAX_DROP_LOWEST: usize = 5;
+
 // =============================================================================
 // Enums
 // =============================================================================
@@ -183,10 +186,15 @@ impl App {
     /// Load application state from disk, or create empty state if file doesn't exist.
     pub fn load() -> Self {
         // Load config first to get language
-        let config = persistence::load_config();
+        let (config, config_warning) = persistence::load_config();
         let language = config.language;
         let m = language.messages();
         let mut status_message: Option<String> = None;
+
+        // Surface config load warning via i18n
+        if config_warning.is_some() {
+            status_message = Some(m.config_load_warning.to_string());
+        }
 
         let courses = match persistence::load_data() {
             Ok(courses) => courses,
@@ -209,20 +217,12 @@ impl App {
 
         let selected_course = if courses.is_empty() { None } else { Some(0) };
 
-        // If we have a course selected, also select first category if exists
-        let selected_category = if let Some(idx) = selected_course {
-            if let Some(course) = courses.get(idx) {
-                if course.categories.is_empty() {
-                    None
-                } else {
-                    Some(0)
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let selected_category = selected_course.and_then(|idx| {
+            courses
+                .get(idx)
+                .filter(|c| !c.categories.is_empty())
+                .map(|_| 0)
+        });
 
         Self {
             courses,
@@ -285,6 +285,31 @@ impl App {
             .and_then(|c| self.selected_evaluation.and_then(|i| c.evaluations.get(i)))
     }
 
+    /// Reset category selection to the first category of the current course
+    /// (or None if the course has no categories). Also clears evaluation selection.
+    pub fn reset_category_selection(&mut self) {
+        self.selected_category = self.current_course().and_then(|c| {
+            if c.categories.is_empty() {
+                None
+            } else {
+                Some(0)
+            }
+        });
+        self.selected_evaluation = None;
+    }
+
+    /// Reset evaluation selection to the first evaluation of the current category
+    /// (or None if the category has no evaluations).
+    pub fn reset_evaluation_selection(&mut self) {
+        self.selected_evaluation = self.current_category().and_then(|c| {
+            if c.evaluations.is_empty() {
+                None
+            } else {
+                Some(0)
+            }
+        });
+    }
+
     /// Get all templates combined: built-in first, then user templates.
     pub fn all_templates(&self) -> Vec<&CourseTemplate> {
         self.built_in_templates
@@ -316,15 +341,7 @@ impl App {
             Some(i) => (i + 1).min(self.courses.len() - 1),
             None => 0,
         });
-        // Auto-select first category when changing course
-        self.selected_category = self.current_course().and_then(|c| {
-            if c.categories.is_empty() {
-                None
-            } else {
-                Some(0)
-            }
-        });
-        self.selected_evaluation = None;
+        self.reset_category_selection();
     }
 
     pub fn previous_course(&mut self) {
@@ -336,15 +353,7 @@ impl App {
             Some(i) => i.saturating_sub(1),
             None => 0,
         });
-        // Auto-select first category when changing course
-        self.selected_category = self.current_course().and_then(|c| {
-            if c.categories.is_empty() {
-                None
-            } else {
-                Some(0)
-            }
-        });
-        self.selected_evaluation = None;
+        self.reset_category_selection();
     }
 
     pub fn next_category(&mut self) {
@@ -360,14 +369,7 @@ impl App {
             Some(i) => (i + 1).min(len - 1),
             None => 0,
         });
-        // Auto-select first evaluation when changing category
-        self.selected_evaluation = self.current_category().and_then(|c| {
-            if c.evaluations.is_empty() {
-                None
-            } else {
-                Some(0)
-            }
-        });
+        self.reset_evaluation_selection();
     }
 
     pub fn previous_category(&mut self) {
@@ -382,14 +384,7 @@ impl App {
             Some(i) => i.saturating_sub(1),
             None => 0,
         });
-        // Auto-select first evaluation when changing category
-        self.selected_evaluation = self.current_category().and_then(|c| {
-            if c.evaluations.is_empty() {
-                None
-            } else {
-                Some(0)
-            }
-        });
+        self.reset_evaluation_selection();
     }
 
     pub fn next_evaluation(&mut self) {
@@ -536,13 +531,18 @@ impl App {
             InputField::Description => &mut self.edit_description,
             InputField::MinimumAverage => &mut self.edit_min_average,
             InputField::MinPerEval => &mut self.edit_min_per_eval,
-            // Toggle fields don't have text buffers — return a dummy
-            // (these are cycled, not typed into)
+            // Toggle fields don't have text buffers — they are cycled, not typed into.
+            // This branch should never be reached in practice.
             InputField::DropLowest
             | InputField::AvgMethod
             | InputField::OnMinNotMet
             | InputField::RoundBeforeWeight => {
-                &mut self.edit_name // unreachable in practice: toggles use cycle_toggle_field()
+                debug_assert!(
+                    false,
+                    "current_input_buffer called on toggle field {:?}",
+                    self.input_field
+                );
+                &mut self.edit_description
             }
         }
     }
@@ -551,8 +551,7 @@ impl App {
     pub fn cycle_toggle_field(&mut self) {
         match self.input_field {
             InputField::DropLowest => {
-                // Cycle 0 → 1 → 2 → 3 → 4 → 5 → 0
-                self.edit_drop_lowest = (self.edit_drop_lowest + 1) % 6;
+                self.edit_drop_lowest = (self.edit_drop_lowest + 1) % (MAX_DROP_LOWEST + 1);
             }
             InputField::AvgMethod => {
                 self.edit_averaging_method = match self.edit_averaging_method {
@@ -577,9 +576,8 @@ impl App {
     pub fn cycle_toggle_field_reverse(&mut self) {
         match self.input_field {
             InputField::DropLowest => {
-                // Cycle 0 ← 5 ← 4 ← 3 ← 2 ← 1 ← 0
                 self.edit_drop_lowest = if self.edit_drop_lowest == 0 {
-                    5
+                    MAX_DROP_LOWEST
                 } else {
                     self.edit_drop_lowest - 1
                 };

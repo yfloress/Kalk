@@ -427,6 +427,12 @@ fn test_from_template_with_rules() {
 }
 
 #[test]
+fn test_generate_template_description_empty() {
+    let course = Course::new("Empty".to_string(), DEFAULT_PASSING_GRADE);
+    assert_eq!(course.generate_template_description(), "");
+}
+
+#[test]
 fn test_generate_template_description() {
     let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
     course.categories.push(Category::with_evaluations(

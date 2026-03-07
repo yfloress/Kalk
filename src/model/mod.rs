@@ -302,17 +302,11 @@ impl Course {
             .filter(|f| f.action == MinimumNotMetAction::FinalEqualsAverage)
             .collect();
 
-        if !final_equals_avg_failures.is_empty() {
-            // The final grade is the lowest failing category average
-            let worst = final_equals_avg_failures
-                .iter()
-                .min_by(|a, b| {
-                    a.average
-                        .partial_cmp(&b.average)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .unwrap();
-
+        if let Some(worst) = final_equals_avg_failures.iter().min_by(|a, b| {
+            a.average
+                .partial_cmp(&b.average)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }) {
             return CourseGradeResult {
                 grade: worst.average,
                 overridden_by: Some(worst.category_name.clone()),
@@ -439,9 +433,10 @@ impl Course {
 
     /// Generate a description string based on course structure.
     /// Format: "3x Certamen (80%) + 3x Control (20%)"
+    /// Returns an empty string if there are no categories (caller handles i18n).
     pub fn generate_template_description(&self) -> String {
         if self.categories.is_empty() {
-            return "Empty template".to_string();
+            return String::new();
         }
 
         self.categories

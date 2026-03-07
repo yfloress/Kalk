@@ -28,7 +28,8 @@ src/
 │   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
 │   └── tests.rs     # All model unit tests (cfg(test) only)
 ├── ui/
-│   ├── mod.rs       # Main draw, panel rendering (courses, categories, evaluations), footer
+│   ├── mod.rs       # Main draw, panel rendering (courses, categories)
+│   ├── panels.rs    # Evaluations panel and footer rendering
 │   ├── popups.rs    # Popup dialogs (template, course, category, eval, delete, language)
 │   └── helpers.rs   # Shared rendering helpers (input fields, toggles) and formatting functions
 ├── templates.rs     # Built-in course templates (language-aware)
@@ -48,7 +49,8 @@ src/
 - **`model/category.rs`** owns Category, CategoryRules, and related enums (AveragingMethod, MinimumNotMetAction).
 - **`model/tests.rs`** contains all model unit tests — tests are separated from production code.
 - **`ui/` only renders** — it reads state from `App` and formats for display. No mutations, no calculations beyond formatting strings.
-- **`ui/mod.rs`** handles the main layout, three panels (courses, categories, evaluations), and footer.
+- **`ui/mod.rs`** handles the main layout, courses panel, and categories panel.
+- **`ui/panels.rs`** handles the evaluations panel and footer rendering (extracted to keep files under ~600 lines).
 - **`ui/popups.rs`** handles all popup overlays (template selection, course/category/evaluation editing, deletions, language).
 - **`ui/helpers.rs`** contains shared rendering helpers (`centered_rect`, `render_input_field`, `render_toggle_field`, `focused_border_style`) and formatting functions (`format_course_status`, `format_course_average`, `format_weight_validation`, `format_needed_grade`).
 - **`app/mod.rs` coordinates** — holds state, navigation, getters, delegates to `model/` for domain logic and `persistence.rs` for disk I/O.

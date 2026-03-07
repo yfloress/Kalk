@@ -83,24 +83,8 @@ impl App {
                 };
                 self.courses.push(course);
                 self.selected_course = Some(self.courses.len() - 1);
-
-                // Auto-select first category if course was created from template
-                self.selected_category = self.current_course().and_then(|c| {
-                    if c.categories.is_empty() {
-                        None
-                    } else {
-                        Some(0)
-                    }
-                });
-
-                // Auto-select first evaluation if category has evaluations
-                self.selected_evaluation = self.current_category().and_then(|c| {
-                    if c.evaluations.is_empty() {
-                        None
-                    } else {
-                        Some(0)
-                    }
-                });
+                self.reset_category_selection();
+                self.reset_evaluation_selection();
             }
             Screen::EditingCourse { is_new: false } => {
                 if let Some(idx) = self.selected_course
@@ -221,7 +205,7 @@ impl App {
         let weight: f64 = self
             .edit_weight
             .parse::<f64>()
-            .unwrap_or(20.0)
+            .unwrap_or(MIN_GRADE)
             .clamp(MIN_GRADE, MAX_GRADE);
 
         if name.is_empty() {
@@ -366,15 +350,7 @@ impl App {
                     } else {
                         Some(idx.min(self.courses.len() - 1))
                     };
-                    // Update category selection for new course
-                    self.selected_category = self.current_course().and_then(|c| {
-                        if c.categories.is_empty() {
-                            None
-                        } else {
-                            Some(0)
-                        }
-                    });
-                    self.selected_evaluation = None;
+                    self.reset_category_selection();
                 }
             }
             super::Focus::Categories => {
@@ -437,9 +413,14 @@ impl App {
             return;
         };
 
-        // Pre-fill with course name and auto-generated description
-        let name = format!("{} Template", course.name);
+        let m = self.messages();
+        let name = format!("{} {}", course.name, m.template_suffix);
         let description = course.generate_template_description();
+        let description = if description.is_empty() {
+            m.empty_template_desc.to_string()
+        } else {
+            description
+        };
 
         self.edit_name = name;
         self.edit_description = description;

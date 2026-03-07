@@ -304,11 +304,7 @@ pub fn format_weight_validation(validation: &WeightValidation, m: &Messages) -> 
 }
 
 /// Format the result of a needed-grade calculation into a user-friendly string.
-pub fn format_needed_grade(
-    course: &Course,
-    needed: &crate::model::NeededGrade,
-    m: &Messages,
-) -> String {
+pub fn format_needed_grade(needed: &crate::model::NeededGrade, m: &Messages) -> String {
     match needed.status {
         NeededGradeStatus::Success => {
             if let Some(value) = needed.value {
@@ -316,18 +312,7 @@ pub fn format_needed_grade(
                     format!("{}: 0+ ({})", m.need, m.need_grade_any)
                 } else {
                     // Already graded and passing
-                    let eval_name = course
-                        .categories
-                        .iter()
-                        .flat_map(|c| c.evaluations.iter())
-                        .find(|e| e.grade == Some(value))
-                        .map(|e| e.name.as_str())
-                        .unwrap_or("");
-                    if eval_name.is_empty() {
-                        format!("{}: {:.0} ({})", m.need, value, m.passing)
-                    } else {
-                        format!("{}: {:.0} ({})", eval_name, value, m.passing)
-                    }
+                    format!("{:.0} ({})", value, m.passing)
                 }
             } else {
                 format!("{}: 0+ ({})", m.need, m.need_grade_any)

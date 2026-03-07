@@ -397,7 +397,8 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     }
 }
 
-pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool, is_editing: bool) {
+pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
+    let is_editing = !is_new;
     let m = app.messages();
     let area = centered_rect(60, 50, frame.size());
     frame.render_widget(Clear, area);
@@ -457,7 +458,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool, is_edit
                 NeededGradeStatus::Warning => Color::Yellow,
                 NeededGradeStatus::Info => Color::DarkGray,
             };
-            (format_needed_grade(course, &needed, m), color)
+            (format_needed_grade(&needed, m), color)
         } else {
             let text = format_course_status(course, m);
             let color = match course.current_grade() {
@@ -540,7 +541,7 @@ pub fn draw_delete_template_popup(frame: &mut Frame, app: &App) {
     let template_name = app
         .current_template()
         .map(|t| t.name.as_str())
-        .unwrap_or("Unknown");
+        .unwrap_or(m.unknown);
 
     let block = Block::default()
         .title(format!(" {} ", m.delete_template))
