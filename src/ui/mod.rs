@@ -137,18 +137,24 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
             let grade_result = c.compute_grade();
             let has_evals = c.has_evaluations();
 
-            // True pass/fail color: accounts for rule overrides (FailCourse, etc.)
+            // True pass/fail color: accounts for rule overrides and needs_global.
+            // A course is only truly passing when:
+            // - grade >= passing_grade
+            // - no rule overrides (overridden_by is None)
+            // - no needs_global flag
+            // - no failed_minimums at all
+            let has_rule_issues = grade_result.overridden_by.is_some()
+                || grade_result.needs_global
+                || !grade_result.failed_minimums.is_empty();
+
             let true_color = if !has_evals {
                 t.text_muted
-            } else if grade_result.overridden_by.is_some()
-                && !c.is_passing_grade(grade_result.grade)
-            {
-                // Rule override caused failure (e.g., FailCourse → grade 0)
+            } else if grade_result.needs_global {
+                t.status_warn
+            } else if has_rule_issues || !c.is_passing_grade(grade_result.grade) {
                 t.status_fail
-            } else if c.is_passing_grade(grade_result.grade) {
-                t.status_pass
             } else {
-                t.status_fail
+                t.status_pass
             };
 
             if compact {
@@ -187,19 +193,13 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
                 // Normal: two lines with full status info (rule-aware)
                 let status = if has_evals {
                     let rounded = Course::round_grade(grade_result.grade);
-                    let is_truly_passing = c.is_passing_grade(grade_result.grade)
-                        && grade_result.overridden_by.is_none();
+                    let is_truly_passing =
+                        c.is_passing_grade(grade_result.grade) && !has_rule_issues;
                     let label = if is_truly_passing { m.passed } else { m.failed };
                     if let Some(ref cat_name) = grade_result.overridden_by {
-                        format!(
-                            "{}: {:.1} -> {:.0} ({}) [{}]",
-                            m.current, grade_result.grade, rounded, label, cat_name
-                        )
+                        format!("{}: {:.0} ({}) [{}]", m.current, rounded, label, cat_name)
                     } else {
-                        format!(
-                            "{}: {:.1} -> {:.0} ({})",
-                            m.current, grade_result.grade, rounded, label
-                        )
+                        format!("{}: {:.0} ({})", m.current, rounded, label)
                     }
                 } else {
                     m.no_evaluations.to_string()

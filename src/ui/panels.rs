@@ -232,7 +232,7 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
             Constraint::Length(3),
             Constraint::Min(6),
             Constraint::Length(5),
-            Constraint::Length(10),
+            Constraint::Min(10),
         ]
     } else {
         vec![
