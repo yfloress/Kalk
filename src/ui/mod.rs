@@ -64,9 +64,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
     // narrow for the normal two-line courses layout to display without clipping.
     let total_width = chunks[0].width;
     let ic = icons(app.use_nerd_fonts);
+    let m = app.messages();
 
-    // Calculate the width the normal (non-compact) courses panel would need:
-    // longest "NAME [OK]" first line + longest "  Actual: 100 (REPROBADO)" second line
     let highlight_len = ic.highlight.chars().count() as u16;
     let max_name_len = app
         .courses
@@ -74,11 +73,70 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .map(|c| c.name.chars().count() as u16)
         .max()
         .unwrap_or(4);
-    // Rough width for normal mode: name + weight_status(~6) + borders(2) + highlight + pad
-    let normal_needed = max_name_len + 6 + 2 + highlight_len + 1;
-    // Auto-compact when 25% of terminal width is smaller than what normal mode needs,
-    // or when the overall terminal is narrow enough that panels would be cramped.
-    let auto_compact = (total_width / 4) < normal_needed || total_width < 100;
+
+    // Calculate the exact width normal mode needs per course, then take the max.
+    // Line 1: highlight + "NAME [OK]"  (name + weight_status)
+    // Line 2: highlight + "  Actual: 100 (REPROBADO) [CatName]"
+    let normal_needed = {
+        let weight_status_max: u16 = app
+            .courses
+            .iter()
+            .map(|c| match c.validate_weights() {
+                WeightValidation::Valid => {
+                    // " [✓]"
+                    2 + ic.weight_ok.chars().count() as u16 + 1
+                }
+                WeightValidation::Under(w) | WeightValidation::Over(w) => {
+                    // " [!80%]"
+                    let digits = format!("{:.0}", w).len() as u16;
+                    2 + 1 + digits + 1 + 1 // " [" + icon + digits + "%" + "]"
+                }
+                WeightValidation::Empty => {
+                    // " [Sin categorias]"
+                    2 + m.no_categories.chars().count() as u16 + 1
+                }
+            })
+            .max()
+            .unwrap_or(4);
+
+        // Longest second line: "  Actual: 100 (REPROBADO)"
+        // or "  Actual: 0 (REPROBADO) [CatName]"
+        let status_line_max: u16 = app
+            .courses
+            .iter()
+            .map(|c| {
+                let grade_result = c.compute_grade();
+                let has_rule_issues = grade_result.overridden_by.is_some()
+                    || grade_result.needs_global
+                    || !grade_result.failed_minimums.is_empty();
+                if !c.has_evaluations() {
+                    // "  Sin evaluaciones"
+                    2 + m.no_evaluations.chars().count() as u16
+                } else {
+                    let rounded = Course::round_grade(grade_result.grade);
+                    let is_truly_passing =
+                        c.is_passing_grade(grade_result.grade) && !has_rule_issues;
+                    let label = if is_truly_passing { m.passed } else { m.failed };
+                    let base = if let Some(ref cat_name) = grade_result.overridden_by {
+                        // "  Actual: 0 (REPROBADO) [CatName]"
+                        format!("{}: {:.0} ({}) [{}]", m.current, rounded, label, cat_name)
+                    } else {
+                        format!("{}: {:.0} ({})", m.current, rounded, label)
+                    };
+                    2 + base.chars().count() as u16 // "  " prefix
+                }
+            })
+            .max()
+            .unwrap_or(10);
+
+        let line1_w = highlight_len + max_name_len + weight_status_max;
+        let line2_w = highlight_len + status_line_max;
+        line1_w.max(line2_w) + 2 // +2 for borders
+    };
+
+    // Auto-compact when the normal layout would need more width than
+    // available, or when the terminal is very narrow overall.
+    let auto_compact = normal_needed > (total_width * 2 / 5) || total_width < 100;
     let effective_compact = app.compact_courses || auto_compact;
 
     let courses_constraint = if effective_compact {
@@ -86,7 +144,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
         let needed = max_name_len + 1 + 3 + 2 + highlight_len + 1;
         Constraint::Length(needed.clamp(12, 30))
     } else {
-        Constraint::Percentage(25)
+        // Dynamic width based on actual content, clamped to reasonable bounds
+        Constraint::Length(normal_needed.clamp(15, total_width / 2))
     };
 
     let main_chunks = Layout::default()
@@ -100,7 +159,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         } else {
             [
                 courses_constraint,
-                Constraint::Percentage(35),
+                Constraint::Min(0),
                 Constraint::Percentage(40),
             ]
         })
@@ -352,17 +411,21 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 progress.push_str(&format!(" (-{})", cat.rules.drop_lowest));
             }
 
-            // Check if this category has a failed minimum in the grade result
+            // Check if this category has a failed minimum in the grade result.
+            // Skip per-eval violations here — they are already shown via the
+            // "(! bajo min)" indicator on the name line.  Showing them again
+            // with "avg < required" produces confusing text (e.g. "78.0 < 50").
             let failed_min = grade_result
                 .failed_minimums
                 .iter()
-                .find(|fm| fm.category_idx == cat_idx);
+                .find(|fm| fm.category_idx == cat_idx && !fm.from_per_eval);
 
             // Check if this category has eval violations in the grade result
-            let has_eval_violations = grade_result
+            let eval_violation = grade_result
                 .eval_violations
                 .iter()
-                .any(|ev| ev.category_idx == cat_idx && !ev.failing_indices.is_empty());
+                .find(|ev| ev.category_idx == cat_idx && !ev.failing_indices.is_empty());
+            let has_eval_violations = eval_violation.is_some();
 
             // Color based on passing status, but override with override colour if minimum not met
             let avg_color = if failed_min.is_some() {
@@ -428,6 +491,23 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 };
                 avg_spans.push(Span::styled(
                     min_text,
+                    Style::default().fg(t.status_override),
+                ));
+            } else if let Some(ev) = eval_violation {
+                // Per-eval violation: show "<REQUIRED ACTION" (e.g. "<50 !G")
+                let per_eval_fm = grade_result
+                    .failed_minimums
+                    .iter()
+                    .find(|fm| fm.category_idx == cat_idx && fm.from_per_eval);
+                let action_hint = per_eval_fm
+                    .map(|fm| match fm.action {
+                        MinimumNotMetAction::FinalEqualsAverage => "",
+                        MinimumNotMetAction::RequiresGlobal => " !G",
+                        MinimumNotMetAction::FailCourse => " !F",
+                    })
+                    .unwrap_or("");
+                avg_spans.push(Span::styled(
+                    format!(" <{:.0}{}", ev.required, action_hint),
                     Style::default().fg(t.status_override),
                 ));
             }

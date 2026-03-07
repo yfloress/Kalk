@@ -179,6 +179,9 @@ pub struct FailedMinimum {
     pub average: f64,
     pub required: f64,
     pub action: MinimumNotMetAction,
+    /// True when this entry was created from a per-evaluation minimum
+    /// violation rather than a category-level minimum average failure.
+    pub from_per_eval: bool,
 }
 
 /// A category with individual evaluation violations.
@@ -271,6 +274,7 @@ impl Course {
                     average: avg,
                     required: min_avg,
                     action: cat.rules.on_minimum_not_met,
+                    from_per_eval: false,
                 });
             }
 
@@ -296,6 +300,7 @@ impl Course {
                         average: avg,
                         required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
                         action: cat.rules.on_minimum_not_met,
+                        from_per_eval: true,
                     });
                 }
             }
