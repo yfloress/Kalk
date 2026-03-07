@@ -467,7 +467,7 @@ pub fn format_course_average(
                 "{}: {:.1} ({} {})",
                 m.current, grade_result.grade, m.grade_capped_by, cat_name
             );
-            (text, t.status_override)
+            (text, t.status_fail)
         }
     } else if grade_result.needs_global {
         if let Some(after) = grade_result.grade_after_global {
@@ -522,7 +522,7 @@ pub fn format_course_average(
                 "{}: {:.1} | {}{}",
                 m.current, grade_result.grade, m.needs_global, needed_hint
             );
-            (text, t.status_warn)
+            (text, t.status_override)
         }
     } else {
         match course.current_grade() {

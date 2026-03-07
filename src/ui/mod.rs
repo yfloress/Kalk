@@ -222,7 +222,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
             let true_color = if !has_evals {
                 t.text_muted
             } else if grade_result.needs_global {
-                t.status_warn
+                t.status_override
             } else if has_rule_issues || !c.is_passing_grade(grade_result.grade) {
                 t.status_fail
             } else {
@@ -251,7 +251,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 {
                     Span::styled(
                         format!(" [{}]", ic.warning),
-                        Style::default().fg(t.status_warn),
+                        Style::default().fg(t.status_override),
                     )
                 } else if has_rule_issues
                     && !grade_result.needs_global

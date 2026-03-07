@@ -205,15 +205,14 @@ fn handle_delete_template_keys(app: &mut App, key: KeyCode) {
 }
 
 /// Handle keys in the course editing screen.
-/// Toggle fields (GlobalPolicy) cycle on Space/Enter instead of confirming.
+/// Toggle fields (GlobalPolicy) cycle on Space/Left/Right; Enter always confirms.
 fn handle_edit_course_keys(app: &mut App, key: KeyCode) {
     if app.input_field.is_toggle() {
         match key {
             KeyCode::Esc => app.cancel_edit(),
             KeyCode::Tab => app.next_input_field(),
-            KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => {
-                app.cycle_toggle_field()
-            }
+            KeyCode::Enter => app.confirm_course(),
+            KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.cycle_toggle_field(),
             KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
             _ => {}
         }
@@ -223,16 +222,15 @@ fn handle_edit_course_keys(app: &mut App, key: KeyCode) {
 }
 
 /// Handle keys in the category editing screen.
-/// Toggle fields (AvgMethod, OnMinNotMet, RoundBeforeWeight) cycle on Space/Enter
-/// instead of confirming the form.
+/// Toggle fields (AvgMethod, OnMinNotMet, RoundBeforeWeight) cycle on Space/Left/Right;
+/// Enter always confirms.
 fn handle_edit_category_keys(app: &mut App, key: KeyCode) {
     if app.input_field.is_toggle() {
         match key {
             KeyCode::Esc => app.cancel_edit(),
             KeyCode::Tab => app.next_input_field(),
-            KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => {
-                app.cycle_toggle_field()
-            }
+            KeyCode::Enter => app.confirm_category(),
+            KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.cycle_toggle_field(),
             KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
             _ => {}
         }
