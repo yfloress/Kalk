@@ -36,11 +36,10 @@ const SUBTEXT0: Color = Color::Rgb(0xa6, 0xad, 0xc8);
 const SUBTEXT1: Color = Color::Rgb(0xba, 0xc2, 0xde);
 const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
 const FLAMINGO: Color = Color::Rgb(0xf2, 0xcd, 0xcd);
-const MAUVE: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
 const RED: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
 const PEACH: Color = Color::Rgb(0xfa, 0xb3, 0x87);
 const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
-const GREEN: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
+const GREEN: Color = Color::Rgb(0x00, 0x99, 0x6b);
 const SAPPHIRE: Color = Color::Rgb(0x74, 0xc7, 0xec);
 const BLUE: Color = Color::Rgb(0x89, 0xb4, 0xfa);
 const LAVENDER: Color = Color::Rgb(0xb4, 0xbe, 0xfe);
@@ -134,8 +133,8 @@ pub const DEFAULT_THEME: Theme = Theme {
     status_warn: YELLOW,
     status_info: SAPPHIRE,
 
-    // Special — Mauve for rule overrides (distinctive from pass/fail/warn)
-    status_override: MAUVE,
+    // Special — Peach (orange) for rule overrides (alarm/warning semantics)
+    status_override: PEACH,
 
     // Highlight — Surface 2 bg keeps items readable
     highlight_bg: SURFACE2,
