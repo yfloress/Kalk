@@ -331,11 +331,25 @@ pub fn format_course_average(
 ) -> (String, Color) {
     let t = theme();
     if let Some(ref cat_name) = grade_result.overridden_by {
-        let text = format!(
-            "{}: {:.1} ({} {})",
-            m.current, grade_result.grade, m.grade_capped_by, cat_name
-        );
-        (text, t.status_override)
+        // FailCourse overrides produce grade 0 which is never passing —
+        // show as FAILED in red instead of "capped by" in magenta.
+        if !course.is_passing_grade(grade_result.grade) {
+            let text = format!(
+                "{}: {:.1} -> {:.0} ({}) [{}]",
+                m.current,
+                grade_result.grade,
+                Course::round_grade(grade_result.grade),
+                m.failed,
+                cat_name
+            );
+            (text, t.status_fail)
+        } else {
+            let text = format!(
+                "{}: {:.1} ({} {})",
+                m.current, grade_result.grade, m.grade_capped_by, cat_name
+            );
+            (text, t.status_override)
+        }
     } else if grade_result.needs_global {
         let text = format!(
             "{}: {:.1} | {}",

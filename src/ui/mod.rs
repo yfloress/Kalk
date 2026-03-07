@@ -30,7 +30,7 @@ mod popups;
 pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
-use crate::model::{MinimumNotMetAction, WeightValidation};
+use crate::model::{Course, MinimumNotMetAction, WeightValidation};
 use helpers::{
     focused_border_style, format_course_average, format_course_status, format_weight_validation,
 };
@@ -62,13 +62,22 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .split(frame.size());
 
     // Main area: 3-column layout for Course -> Category -> Evaluation hierarchy
+    // When compact_courses is active, the courses panel is narrower.
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Percentage(35),
-            Constraint::Percentage(40),
-        ])
+        .constraints(if app.compact_courses {
+            [
+                Constraint::Percentage(15),
+                Constraint::Percentage(40),
+                Constraint::Percentage(45),
+            ]
+        } else {
+            [
+                Constraint::Percentage(25),
+                Constraint::Percentage(35),
+                Constraint::Percentage(40),
+            ]
+        })
         .split(chunks[0]);
 
     draw_courses_panel(frame, app, main_chunks[0]);
@@ -102,12 +111,12 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
     let is_focused = app.focus == Focus::Courses;
     let border_style = focused_border_style(is_focused);
 
+    let compact = app.compact_courses;
+
     let items: Vec<ListItem> = app
         .courses
         .iter()
         .map(|c| {
-            let status = format_course_status(c, m);
-
             // Weight validation indicator
             let weight_status = match c.validate_weights() {
                 WeightValidation::Valid => Span::styled(
@@ -135,16 +144,34 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
                 None => t.text_muted,
             };
 
-            ListItem::new(vec![
-                Line::from(vec![
+            if compact {
+                // Compact: single line — "NAME [OK] 54.5→55"
+                let short_grade = match c.current_grade() {
+                    Some(g) => {
+                        let r = Course::round_grade(g);
+                        format!(" {:.0}\u{2192}{:.0}", g, r)
+                    }
+                    None => String::new(),
+                };
+                ListItem::new(Line::from(vec![
                     Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
                     weight_status,
-                ]),
-                Line::from(Span::styled(
-                    format!("  {}", status),
-                    Style::default().fg(grade_color),
-                )),
-            ])
+                    Span::styled(short_grade, Style::default().fg(grade_color)),
+                ]))
+            } else {
+                // Normal: two lines
+                let status = format_course_status(c, m);
+                ListItem::new(vec![
+                    Line::from(vec![
+                        Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
+                        weight_status,
+                    ]),
+                    Line::from(Span::styled(
+                        format!("  {}", status),
+                        Style::default().fg(grade_color),
+                    )),
+                ])
+            }
         })
         .collect();
 
@@ -322,6 +349,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 let action_hint = match fm.action {
                     MinimumNotMetAction::FinalEqualsAverage => "",
                     MinimumNotMetAction::RequiresGlobal => " !G",
+                    MinimumNotMetAction::FailCourse => " !F",
                 };
                 avg_spans.push(Span::styled(
                     format!(

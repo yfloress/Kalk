@@ -29,7 +29,7 @@ Gestiona ramos, registra notas por categorías y calcula automáticamente la not
 | **Iconos Nerd Font** | Iconos elegantes con Nerd Fonts (activados por defecto), con fallback Unicode |
 | **UI con temas** | Bordes redondeados, colores semánticos y atajos estilizados |
 | **Ajustes** | Activar/desactivar iconos Nerd Font, cambiar idioma — todo persistido en disco |
-| **Bilingüe** | Soporte completo en inglés y español (`Ctrl+L` para cambiar) |
+| **Bilingüe** | Soporte completo en inglés y español (`L` para cambiar) |
 | **Persistencia automática** | Los datos se guardan localmente (`XDG_DATA_HOME/kalk`) y persisten entre sesiones |
 | **Solo teclado** | TUI rápido y ligero — no se necesita mouse |
 
@@ -108,8 +108,8 @@ El entorno Nix incluye `cargo-audit` para análisis de seguridad.
 | `d` | Eliminar item seleccionado |
 | `t` | Guardar ramo actual como plantilla |
 | `b` | Auto-balancear pesos de categorías |
-| `Ctrl+S` | Abrir ajustes |
-| `Ctrl+L` | Cambiar idioma |
+| `S` | Abrir ajustes |
+| `L` | Cambiar idioma |
 | `q` | Salir |
 
 ### En Popups de Edición

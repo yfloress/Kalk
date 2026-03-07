@@ -53,6 +53,8 @@ pub enum MinimumNotMetAction {
     FinalEqualsAverage,
     /// Student must take Certamen Global (handled at course level)
     RequiresGlobal,
+    /// Course is automatically failed (grade capped at 0)
+    FailCourse,
 }
 
 // =============================================================================

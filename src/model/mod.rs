@@ -281,9 +281,23 @@ impl Course {
                 eval_violations.push(EvalViolation {
                     category_idx: idx,
                     category_name: cat.name.clone(),
-                    failing_indices: failing,
+                    failing_indices: failing.clone(),
                     required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
                 });
+
+                // Per-eval violations also trigger the on_minimum_not_met action
+                // (only if not already added from minimum_average check above)
+                let already_failed = failed_minimums.iter().any(|fm| fm.category_idx == idx);
+                if !already_failed {
+                    let avg = cat.average_grade().unwrap_or(0.0);
+                    failed_minimums.push(FailedMinimum {
+                        category_idx: idx,
+                        category_name: cat.name.clone(),
+                        average: avg,
+                        required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
+                        action: cat.rules.on_minimum_not_met,
+                    });
+                }
             }
         }
 
@@ -295,6 +309,26 @@ impl Course {
             .sum();
 
         // Apply minimum-not-met consequences
+        // FailCourse takes highest priority — grade is 0, course is auto-failed
+        let fail_course_failures: Vec<&FailedMinimum> = failed_minimums
+            .iter()
+            .filter(|f| f.action == MinimumNotMetAction::FailCourse)
+            .collect();
+
+        if let Some(worst) = fail_course_failures.iter().min_by(|a, b| {
+            a.average
+                .partial_cmp(&b.average)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }) {
+            return CourseGradeResult {
+                grade: 0.0,
+                overridden_by: Some(worst.category_name.clone()),
+                needs_global: false,
+                failed_minimums,
+                eval_violations,
+            };
+        }
+
         // If any category with FinalEqualsAverage fails, use the worst one
         let final_equals_avg_failures: Vec<&FailedMinimum> = failed_minimums
             .iter()

@@ -145,6 +145,8 @@ pub struct App {
 
     /// Whether to use Nerd Font icons (persisted in config).
     pub use_nerd_fonts: bool,
+    /// Whether to show courses in compact mode (single line per course).
+    pub compact_courses: bool,
     /// Index of the focused setting in the settings popup.
     pub selected_setting: usize,
 }
@@ -181,6 +183,7 @@ impl Default for App {
             show_advanced_rules: false,
             show_field_help: false,
             use_nerd_fonts: true,
+            compact_courses: false,
             selected_setting: 0,
         }
     }
@@ -197,6 +200,7 @@ impl App {
         let (config, config_warning) = persistence::load_config();
         let language = config.language;
         let use_nerd_fonts = config.use_nerd_fonts;
+        let compact_courses = config.compact_courses;
         let m = language.messages();
         let mut status_message: Option<String> = None;
 
@@ -242,6 +246,7 @@ impl App {
             status_message,
             language,
             use_nerd_fonts,
+            compact_courses,
             ..Default::default()
         }
     }
@@ -572,7 +577,8 @@ impl App {
             InputField::OnMinNotMet => {
                 self.edit_on_min_not_met = match self.edit_on_min_not_met {
                     MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
+                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
+                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
                 };
             }
             InputField::RoundBeforeWeight => {
@@ -593,8 +599,14 @@ impl App {
                 };
             }
             // Two-state toggles: reverse == forward
-            InputField::AvgMethod | InputField::OnMinNotMet | InputField::RoundBeforeWeight => {
-                self.cycle_toggle_field()
+            InputField::AvgMethod | InputField::RoundBeforeWeight => self.cycle_toggle_field(),
+            // Three-state toggle: reverse cycle
+            InputField::OnMinNotMet => {
+                self.edit_on_min_not_met = match self.edit_on_min_not_met {
+                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
+                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
+                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
+                };
             }
             _ => {}
         }

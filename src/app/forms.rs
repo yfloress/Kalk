@@ -539,6 +539,7 @@ impl App {
             let config = persistence::Config {
                 language: new_lang,
                 use_nerd_fonts: self.use_nerd_fonts,
+                compact_courses: self.compact_courses,
             };
             if persistence::save_config(&config).is_err() {
                 let msg = self.messages().config_save_error.to_string();
@@ -558,6 +559,9 @@ impl App {
     // Settings
     // =========================================================================
 
+    /// Number of settings entries in the settings popup.
+    const SETTINGS_COUNT: usize = 3;
+
     /// Show the settings popup.
     pub fn show_settings(&mut self) {
         self.selected_setting = 0;
@@ -566,29 +570,50 @@ impl App {
 
     /// Move to the next setting in the list.
     pub fn next_setting(&mut self) {
-        // Currently only 1 setting (nerd fonts), but prepared for more.
-        let count = 1usize;
-        if count > 0 {
-            self.selected_setting = (self.selected_setting + 1) % count;
-        }
+        self.selected_setting = (self.selected_setting + 1) % Self::SETTINGS_COUNT;
     }
 
     /// Move to the previous setting in the list.
     pub fn previous_setting(&mut self) {
-        let count = 1usize;
-        if count > 0 {
-            self.selected_setting = if self.selected_setting == 0 {
-                count - 1
-            } else {
-                self.selected_setting - 1
-            };
-        }
+        self.selected_setting = if self.selected_setting == 0 {
+            Self::SETTINGS_COUNT - 1
+        } else {
+            self.selected_setting - 1
+        };
     }
 
     /// Toggle the currently selected setting value.
     pub fn toggle_current_setting(&mut self) {
-        if self.selected_setting == 0 {
-            self.use_nerd_fonts = !self.use_nerd_fonts;
+        match self.selected_setting {
+            // 0: Nerd Fonts
+            0 => self.use_nerd_fonts = !self.use_nerd_fonts,
+            // 1: Language — cycle forward through available languages
+            1 => {
+                let langs = Language::all();
+                let cur = langs.iter().position(|&l| l == self.language).unwrap_or(0);
+                let next = (cur + 1) % langs.len();
+                self.language = langs[next];
+                self.built_in_templates = crate::templates::built_in_templates(self.language);
+            }
+            // 2: Compact courses
+            2 => self.compact_courses = !self.compact_courses,
+            _ => {}
+        }
+    }
+
+    /// Toggle the currently selected setting in reverse direction.
+    pub fn toggle_current_setting_reverse(&mut self) {
+        match self.selected_setting {
+            0 => self.use_nerd_fonts = !self.use_nerd_fonts,
+            1 => {
+                let langs = Language::all();
+                let cur = langs.iter().position(|&l| l == self.language).unwrap_or(0);
+                let prev = if cur == 0 { langs.len() - 1 } else { cur - 1 };
+                self.language = langs[prev];
+                self.built_in_templates = crate::templates::built_in_templates(self.language);
+            }
+            2 => self.compact_courses = !self.compact_courses,
+            _ => {}
         }
     }
 
@@ -597,6 +622,7 @@ impl App {
         let config = persistence::Config {
             language: self.language,
             use_nerd_fonts: self.use_nerd_fonts,
+            compact_courses: self.compact_courses,
         };
         if persistence::save_config(&config).is_err() {
             let msg = self.messages().config_save_error.to_string();
@@ -609,6 +635,29 @@ impl App {
     pub fn cancel_settings(&mut self) {
         let (config, _) = persistence::load_config();
         self.use_nerd_fonts = config.use_nerd_fonts;
+        self.compact_courses = config.compact_courses;
+        if self.language != config.language {
+            self.language = config.language;
+            self.built_in_templates = crate::templates::built_in_templates(self.language);
+        }
         self.screen = Screen::Main;
+    }
+
+    // =========================================================================
+    // Compact Courses Toggle
+    // =========================================================================
+
+    /// Toggle compact courses view and persist immediately.
+    pub fn toggle_compact_courses(&mut self) {
+        self.compact_courses = !self.compact_courses;
+        let config = persistence::Config {
+            language: self.language,
+            use_nerd_fonts: self.use_nerd_fonts,
+            compact_courses: self.compact_courses,
+        };
+        if persistence::save_config(&config).is_err() {
+            let msg = self.messages().config_save_error.to_string();
+            self.set_status(msg);
+        }
     }
 }

@@ -34,6 +34,8 @@ pub struct Config {
     pub language: Language,
     #[serde(default)]
     pub use_nerd_fonts: bool,
+    #[serde(default)]
+    pub compact_courses: bool,
 }
 
 impl Default for Config {
@@ -41,6 +43,7 @@ impl Default for Config {
         Self {
             language: Language::English,
             use_nerd_fonts: true,
+            compact_courses: false,
         }
     }
 }
@@ -261,5 +264,6 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.language, Language::English);
         assert!(config.use_nerd_fonts);
+        assert!(!config.compact_courses);
     }
 }

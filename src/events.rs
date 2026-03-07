@@ -35,18 +35,18 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(false);
         }
 
-        // Global: Ctrl+L for language selection (works from main screen)
-        if key.code == KeyCode::Char('l')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
+        // Global: Shift+L for language selection (works from main screen)
+        if key.code == KeyCode::Char('L')
+            && key.modifiers.contains(KeyModifiers::SHIFT)
             && app.screen == Screen::Main
         {
             app.show_language_popup();
             return Ok(app.should_quit);
         }
 
-        // Global: Ctrl+S for settings (works from main screen)
-        if key.code == KeyCode::Char('s')
-            && key.modifiers.contains(KeyModifiers::CONTROL)
+        // Global: Shift+S for settings (works from main screen)
+        if key.code == KeyCode::Char('S')
+            && key.modifiers.contains(KeyModifiers::SHIFT)
             && app.screen == Screen::Main
         {
             app.show_settings();
@@ -157,6 +157,13 @@ fn handle_main_keys(app: &mut App, key: KeyCode) {
             }
         }
 
+        // Toggle compact courses view (only when focused on Courses)
+        KeyCode::Char('c') => {
+            if app.focus == Focus::Courses {
+                app.toggle_compact_courses();
+            }
+        }
+
         _ => {}
     }
 }
@@ -245,11 +252,8 @@ fn handle_settings_keys(app: &mut App, key: KeyCode) {
         KeyCode::Enter => app.confirm_settings(),
         KeyCode::Up | KeyCode::Char('k') => app.previous_setting(),
         KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => app.next_setting(),
-        KeyCode::Char(' ')
-        | KeyCode::Left
-        | KeyCode::Right
-        | KeyCode::Char('h')
-        | KeyCode::Char('l') => app.toggle_current_setting(),
+        KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.toggle_current_setting(),
+        KeyCode::Left | KeyCode::Char('h') => app.toggle_current_setting_reverse(),
         _ => {}
     }
 }

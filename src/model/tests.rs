@@ -960,6 +960,191 @@ fn test_compute_grade_final_equals_avg_takes_priority_over_requires_global() {
     assert!(!result.needs_global);
 }
 
+#[test]
+fn test_compute_grade_fail_course_basic() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category with avg=30, min=50, action=FailCourse
+    let mut cat = Category::new("Certs".to_string(), 100.0);
+    cat.rules.minimum_average = Some(50.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    // FailCourse → grade is 0, overridden by the failing category
+    assert!((result.grade - 0.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("Certs".to_string()));
+    assert!(!result.needs_global);
+    assert_eq!(result.failed_minimums.len(), 1);
+    assert_eq!(
+        result.failed_minimums[0].action,
+        MinimumNotMetAction::FailCourse
+    );
+}
+
+#[test]
+fn test_compute_grade_fail_course_takes_priority_over_final_equals_avg() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category 0: avg=40, min=50, FinalEqualsAverage
+    let mut cat_a = Category::new("CatA".to_string(), 50.0);
+    cat_a.rules.minimum_average = Some(50.0);
+    cat_a.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat_a
+        .evaluations
+        .push(Evaluation::with_grade("A1".to_string(), 40.0));
+
+    // Category 1: avg=30, min=50, FailCourse
+    let mut cat_b = Category::new("CatB".to_string(), 50.0);
+    cat_b.rules.minimum_average = Some(50.0);
+    cat_b.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat_b
+        .evaluations
+        .push(Evaluation::with_grade("B1".to_string(), 30.0));
+
+    course.categories.push(cat_a);
+    course.categories.push(cat_b);
+
+    let result = course.compute_grade();
+    // FailCourse has highest priority → grade is 0
+    assert!((result.grade - 0.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("CatB".to_string()));
+    assert!(!result.needs_global);
+}
+
+#[test]
+fn test_compute_grade_fail_course_takes_priority_over_requires_global() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category 0: avg=40, min=50, RequiresGlobal
+    let mut cat_a = Category::new("CatA".to_string(), 50.0);
+    cat_a.rules.minimum_average = Some(50.0);
+    cat_a.rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+    cat_a
+        .evaluations
+        .push(Evaluation::with_grade("A1".to_string(), 40.0));
+
+    // Category 1: avg=20, min=50, FailCourse
+    let mut cat_b = Category::new("CatB".to_string(), 50.0);
+    cat_b.rules.minimum_average = Some(50.0);
+    cat_b.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat_b
+        .evaluations
+        .push(Evaluation::with_grade("B1".to_string(), 20.0));
+
+    course.categories.push(cat_a);
+    course.categories.push(cat_b);
+
+    let result = course.compute_grade();
+    // FailCourse overrides RequiresGlobal → grade is 0, no needs_global
+    assert!((result.grade - 0.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("CatB".to_string()));
+    assert!(!result.needs_global);
+    assert_eq!(result.failed_minimums.len(), 2);
+}
+
+#[test]
+fn test_compute_grade_fail_course_minimum_met_no_effect() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category with avg=60, min=50, action=FailCourse — minimum IS met
+    let mut cat = Category::new("Certs".to_string(), 100.0);
+    cat.rules.minimum_average = Some(50.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 60.0));
+
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    // Minimum is met, so FailCourse does not trigger
+    assert!((result.grade - 60.0).abs() < 0.01);
+    assert!(result.overridden_by.is_none());
+    assert!(!result.needs_global);
+    assert!(result.failed_minimums.is_empty());
+}
+
+#[test]
+fn test_compute_grade_fail_course_from_per_eval_minimum() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category with min_per_eval=40, action=FailCourse
+    // One eval is below 40 → should trigger FailCourse via per-eval violation
+    let mut cat = Category::new("Certs".to_string(), 100.0);
+    cat.rules.minimum_per_evaluation = Some(40.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 80.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 30.0)); // below 40
+
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    // Per-eval violation triggers on_minimum_not_met = FailCourse → grade 0
+    assert!((result.grade - 0.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("Certs".to_string()));
+    assert!(!result.needs_global);
+    assert!(!result.eval_violations.is_empty());
+    assert!(!result.failed_minimums.is_empty());
+    assert_eq!(
+        result.failed_minimums[0].action,
+        MinimumNotMetAction::FailCourse
+    );
+}
+
+#[test]
+fn test_compute_grade_per_eval_minimum_requires_global() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category with min_per_eval=50, action=RequiresGlobal
+    // One eval below 50 → should trigger RequiresGlobal
+    let mut cat = Category::new("Certs".to_string(), 100.0);
+    cat.rules.minimum_per_evaluation = Some(50.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 70.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 40.0)); // below 50
+
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    // Per-eval violation triggers RequiresGlobal
+    assert!(result.needs_global);
+    assert!(result.overridden_by.is_none());
+    // Normal weighted grade is still computed: (70+40)/2 = 55
+    assert!((result.grade - 55.0).abs() < 0.01);
+}
+
+#[test]
+fn test_compute_grade_per_eval_minimum_all_passing_no_trigger() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Category with min_per_eval=30, action=FailCourse
+    // All evals above 30 → no violation, FailCourse should NOT trigger
+    let mut cat = Category::new("Certs".to_string(), 100.0);
+    cat.rules.minimum_per_evaluation = Some(30.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 50.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 60.0));
+
+    course.categories.push(cat);
+
+    let result = course.compute_grade();
+    // No violations → normal grade: (50+60)/2 = 55
+    assert!((result.grade - 55.0).abs() < 0.01);
+    assert!(result.overridden_by.is_none());
+    assert!(!result.needs_global);
+    assert!(result.failed_minimums.is_empty());
+    assert!(result.eval_violations.is_empty());
+}
+
 // =========================================================================
 // auto_balance_weights edge cases
 // =========================================================================

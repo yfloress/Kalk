@@ -31,7 +31,7 @@ Manage courses, track grades by categories, and automatically calculate the exac
 | **Nerd Font Icons** | Beautiful icons with Nerd Fonts (enabled by default), with Unicode fallback |
 | **Themed UI** | Rounded borders, semantic colours, and styled keybindings |
 | **Settings** | Toggle Nerd Font icons, change language — all persisted to disk |
-| **Bilingual** | Full English and Spanish support (`Ctrl+L` to switch) |
+| **Bilingual** | Full English and Spanish support (`L` to switch) |
 | **Automatic Persistence** | Data saved locally (`XDG_DATA_HOME/kalk`) and persists across restarts |
 | **Keyboard-driven** | Fast, lightweight TUI — no mouse needed |
 
@@ -110,8 +110,8 @@ The Nix environment includes `cargo-audit` for security scanning.
 | `d` | Delete selected item |
 | `t` | Save current course as template |
 | `b` | Auto-balance category weights |
-| `Ctrl+S` | Open settings |
-| `Ctrl+L` | Change language |
+| `S` | Open settings |
+| `L` | Change language |
 | `q` | Quit |
 
 ### In Edit Popups
