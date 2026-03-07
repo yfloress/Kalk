@@ -27,6 +27,7 @@ pub(crate) mod helpers;
 pub(crate) mod icons;
 mod panels;
 mod popups;
+mod settings_popup;
 pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
@@ -36,7 +37,7 @@ use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
     draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
-    draw_evaluation_popup, draw_language_popup, draw_save_template_popup, draw_settings_popup,
+    draw_evaluation_popup, draw_global_grade_popup, draw_language_popup, draw_save_template_popup,
     draw_template_popup,
 };
 use ratatui::{
@@ -46,6 +47,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
+use settings_popup::draw_settings_popup;
 use theme::theme;
 
 // =============================================================================
@@ -181,6 +183,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::SavingTemplate => draw_save_template_popup(frame, app),
         Screen::SelectingLanguage => draw_language_popup(frame, app),
         Screen::Settings => draw_settings_popup(frame, app),
+        Screen::EnteringGlobalGrade => draw_global_grade_popup(frame, app),
         Screen::Main => {}
     }
 }

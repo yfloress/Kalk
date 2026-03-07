@@ -360,6 +360,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("n", m.new),
                     ("Enter", m.edit),
                     ("d", m.delete),
+                    ("g", m.global_exam),
                     ("t", m.save_as_template),
                     ("b", m.balance),
                     ("c", m.compact),
@@ -472,6 +473,12 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ),
         Screen::Settings => styled_keybindings(
             &[("Space", m.toggle), ("Enter", m.confirm), ("Esc", m.cancel)],
+            t,
+            ic,
+            available_width,
+        ),
+        Screen::EnteringGlobalGrade => styled_keybindings(
+            &[("Enter", m.confirm), ("Esc", m.cancel)],
             t,
             ic,
             available_width,

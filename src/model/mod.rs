@@ -29,6 +29,7 @@
 //! Grade scale: 0-100, with 55 as passing grade by default.
 
 mod category;
+mod global;
 
 #[cfg(test)]
 mod tests;
@@ -153,13 +154,50 @@ impl NeededGrade {
 }
 
 // =============================================================================
+// Global Exam
+// =============================================================================
+
+/// How the global exam affects the final grade.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub enum GlobalExamPolicy {
+    /// No global exam available for this course.
+    #[default]
+    None,
+
+    /// `nota_final = nota_semestral * semester_weight + nota_global * global_weight`
+    ///
+    /// `semester_weight + global_weight` should equal 1.0 (validated at input).
+    Weighted {
+        semester_weight: f64,
+        global_weight: f64,
+    },
+
+    /// The global exam grade replaces the worst evaluation in the target
+    /// category, then the entire course grade is recalculated from scratch.
+    ReplacesWorstGrade,
+}
+
+/// Eligibility requirements to take the global exam.
+///
+/// Both fields default to `None` (no restriction — anyone can take it).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GlobalEligibility {
+    /// Minimum semester grade required to be eligible. `None` = no minimum.
+    #[serde(default)]
+    pub min_grade: Option<f64>,
+    /// Maximum semester grade allowed to be eligible. `None` = no maximum.
+    #[serde(default)]
+    pub max_grade: Option<f64>,
+}
+
+// =============================================================================
 // Course Grade Result
 // =============================================================================
 
 /// The result of computing a course's final grade, accounting for category rules.
 #[derive(Debug, Clone)]
 pub struct CourseGradeResult {
-    /// The computed final grade
+    /// The computed final grade (semester grade, before global)
     pub grade: f64,
     /// Whether the grade was overridden by a failed minimum requirement
     pub overridden_by: Option<String>,
@@ -169,6 +207,9 @@ pub struct CourseGradeResult {
     pub failed_minimums: Vec<FailedMinimum>,
     /// Categories with individual evaluations below the per-eval minimum
     pub eval_violations: Vec<EvalViolation>,
+    /// Grade after applying the global exam. `None` when no global was taken
+    /// or the course has no global policy configured.
+    pub grade_after_global: Option<f64>,
 }
 
 /// A category that failed its minimum average requirement.
@@ -205,6 +246,20 @@ pub struct Course {
     /// Minimum grade required to pass (default: 55.0)
     pub passing_grade: f64,
     pub categories: Vec<Category>,
+
+    /// Global exam policy for this course.
+    #[serde(default)]
+    pub global_policy: GlobalExamPolicy,
+    /// Eligibility requirements to take the global exam.
+    #[serde(default)]
+    pub global_eligibility: GlobalEligibility,
+    /// Grade obtained in the global exam. `None` = hasn't taken it yet.
+    #[serde(default)]
+    pub global_exam_grade: Option<f64>,
+    /// For `ReplacesWorstGrade`: which category the global targets.
+    /// `None` = auto-detect from the category that triggered `RequiresGlobal`.
+    #[serde(default)]
+    pub global_target_category: Option<usize>,
 }
 
 impl Course {
@@ -214,6 +269,10 @@ impl Course {
             name,
             passing_grade: passing_grade.clamp(MIN_GRADE, MAX_GRADE),
             categories: Vec::new(),
+            global_policy: GlobalExamPolicy::None,
+            global_eligibility: GlobalEligibility::default(),
+            global_exam_grade: None,
+            global_target_category: None,
         }
     }
 
@@ -236,6 +295,10 @@ impl Course {
             name,
             passing_grade: passing_grade.clamp(MIN_GRADE, MAX_GRADE),
             categories,
+            global_policy: GlobalExamPolicy::None,
+            global_eligibility: GlobalEligibility::default(),
+            global_exam_grade: None,
+            global_target_category: None,
         }
     }
 
@@ -331,6 +394,7 @@ impl Course {
                 needs_global: false,
                 failed_minimums,
                 eval_violations,
+                grade_after_global: None,
             };
         }
 
@@ -351,6 +415,7 @@ impl Course {
                 needs_global: false,
                 failed_minimums,
                 eval_violations,
+                grade_after_global: None,
             };
         }
 
@@ -364,12 +429,16 @@ impl Course {
             needs_global = true;
         }
 
+        // Compute post-global grade if a global exam grade has been entered
+        let grade_after_global = self.compute_grade_after_global(normal_grade);
+
         CourseGradeResult {
             grade: normal_grade,
             overridden_by: None,
             needs_global,
             failed_minimums,
             eval_violations,
+            grade_after_global,
         }
     }
 

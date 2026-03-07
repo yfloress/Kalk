@@ -24,7 +24,8 @@
 
 use crate::i18n::Language;
 use crate::model::{
-    Category, CategoryRules, Course, DEFAULT_PASSING_GRADE, Evaluation, MAX_GRADE, MIN_GRADE,
+    Category, CategoryRules, Course, DEFAULT_PASSING_GRADE, Evaluation, GlobalEligibility,
+    GlobalExamPolicy, MAX_GRADE, MIN_GRADE,
 };
 use crate::persistence;
 
@@ -45,6 +46,7 @@ impl App {
         self.input_field = InputField::Name;
         self.edit_name.clear();
         self.edit_passing_grade = format!("{DEFAULT_PASSING_GRADE:.0}");
+        self.init_global_fields_default();
     }
 
     pub fn start_edit_course(&mut self) {
@@ -60,6 +62,32 @@ impl App {
         self.edit_name = course.name.clone();
         let pg = course.passing_grade;
         self.edit_passing_grade = format!("{pg:.0}");
+
+        // Load global exam fields from the course
+        self.edit_global_policy = course.global_policy.clone();
+        match &course.global_policy {
+            GlobalExamPolicy::Weighted {
+                semester_weight,
+                global_weight,
+            } => {
+                self.edit_global_semester_weight = format!("{:.0}", semester_weight * 100.0);
+                self.edit_global_exam_weight = format!("{:.0}", global_weight * 100.0);
+            }
+            _ => {
+                self.edit_global_semester_weight = "70".to_string();
+                self.edit_global_exam_weight = "30".to_string();
+            }
+        }
+        self.edit_global_min_grade = course
+            .global_eligibility
+            .min_grade
+            .map(|g| format!("{g:.0}"))
+            .unwrap_or_default();
+        self.edit_global_max_grade = course
+            .global_eligibility
+            .max_grade
+            .map(|g| format!("{g:.0}"))
+            .unwrap_or_default();
     }
 
     pub fn confirm_course(&mut self) {
@@ -74,13 +102,19 @@ impl App {
             return;
         }
 
+        // Build global policy from form fields
+        let global_policy = self.build_global_policy();
+        let global_eligibility = self.build_global_eligibility();
+
         match self.screen {
             Screen::EditingCourse { is_new: true } => {
-                let course = if let Some(template) = self.current_template() {
+                let mut course = if let Some(template) = self.current_template() {
                     Course::from_template(name, passing_grade, template)
                 } else {
                     Course::new(name, passing_grade)
                 };
+                course.global_policy = global_policy;
+                course.global_eligibility = global_eligibility;
                 self.courses.push(course);
                 self.selected_course = Some(self.courses.len() - 1);
                 self.reset_category_selection();
@@ -92,6 +126,8 @@ impl App {
                 {
                     course.name = name;
                     course.passing_grade = passing_grade;
+                    course.global_policy = global_policy;
+                    course.global_eligibility = global_eligibility;
                 }
             }
             _ => {}
@@ -100,6 +136,59 @@ impl App {
         self.screen = Screen::Main;
         self.clear_status();
         self.persist();
+    }
+
+    /// Initialise global exam form fields to defaults (no global).
+    fn init_global_fields_default(&mut self) {
+        self.edit_global_policy = GlobalExamPolicy::None;
+        self.edit_global_semester_weight = "70".to_string();
+        self.edit_global_exam_weight = "30".to_string();
+        self.edit_global_min_grade.clear();
+        self.edit_global_max_grade.clear();
+    }
+
+    /// Build a `GlobalExamPolicy` from the current form fields.
+    fn build_global_policy(&self) -> GlobalExamPolicy {
+        match &self.edit_global_policy {
+            GlobalExamPolicy::None => GlobalExamPolicy::None,
+            GlobalExamPolicy::Weighted { .. } => {
+                let sw = self
+                    .edit_global_semester_weight
+                    .parse::<f64>()
+                    .unwrap_or(70.0)
+                    .clamp(0.0, 100.0)
+                    / 100.0;
+                let gw = self
+                    .edit_global_exam_weight
+                    .parse::<f64>()
+                    .unwrap_or(30.0)
+                    .clamp(0.0, 100.0)
+                    / 100.0;
+                GlobalExamPolicy::Weighted {
+                    semester_weight: sw,
+                    global_weight: gw,
+                }
+            }
+            GlobalExamPolicy::ReplacesWorstGrade => GlobalExamPolicy::ReplacesWorstGrade,
+        }
+    }
+
+    /// Build `GlobalEligibility` from the current form fields.
+    fn build_global_eligibility(&self) -> GlobalEligibility {
+        GlobalEligibility {
+            min_grade: self
+                .edit_global_min_grade
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|g| g.clamp(MIN_GRADE, MAX_GRADE)),
+            max_grade: self
+                .edit_global_max_grade
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .map(|g| g.clamp(MIN_GRADE, MAX_GRADE)),
+        }
     }
 
     // =========================================================================
@@ -655,9 +744,87 @@ impl App {
             use_nerd_fonts: self.use_nerd_fonts,
             compact_courses: self.compact_courses,
         };
-        if persistence::save_config(&config).is_err() {
-            let msg = self.messages().config_save_error.to_string();
-            self.set_status(msg);
+        if let Err(e) = persistence::save_config(&config) {
+            let m = self.messages();
+            self.set_status(format!("{}: {}", m.config_save_error, e));
         }
+    }
+
+    // =========================================================================
+    // Form Handling — Global Grade Entry
+    // =========================================================================
+
+    /// Open the global grade entry popup for the current course.
+    pub fn start_global_grade_entry(&mut self) {
+        let Some(idx) = self.selected_course else {
+            return;
+        };
+        let Some(course) = self.courses.get(idx) else {
+            return;
+        };
+
+        if course.global_policy == GlobalExamPolicy::None {
+            let m = self.messages();
+            self.set_status(m.global_no_policy.to_string());
+            return;
+        }
+
+        self.edit_global_grade = course
+            .global_exam_grade
+            .map(|g| format!("{g:.0}"))
+            .unwrap_or_default();
+        self.screen = Screen::EnteringGlobalGrade;
+        self.input_field = InputField::Grade;
+    }
+
+    /// Confirm the global grade entry and save to the current course.
+    pub fn confirm_global_grade(&mut self) {
+        let Some(idx) = self.selected_course else {
+            self.screen = Screen::Main;
+            return;
+        };
+        let Some(course) = self.courses.get_mut(idx) else {
+            self.screen = Screen::Main;
+            return;
+        };
+
+        let trimmed = self.edit_global_grade.trim();
+        if trimmed.is_empty() {
+            // Empty input clears the global grade
+            course.global_exam_grade = None;
+        } else if let Ok(grade) = trimmed.parse::<f64>() {
+            course.global_exam_grade = Some(grade.clamp(MIN_GRADE, MAX_GRADE));
+        }
+
+        // Auto-detect target category for ReplacesWorstGrade if not set
+        if course.global_policy == GlobalExamPolicy::ReplacesWorstGrade
+            && course.global_target_category.is_none()
+        {
+            // resolve_global_target_category will auto-detect; persist the result
+            // so it's stable across recalculations.
+            let result = course.compute_grade();
+            if result.needs_global {
+                // Find the first RequiresGlobal category that fails
+                for (i, fm) in result.failed_minimums.iter().enumerate() {
+                    if fm.action == crate::model::MinimumNotMetAction::RequiresGlobal {
+                        course.global_target_category = Some(fm.category_idx);
+                        break;
+                    }
+                    // Fallback: use first failure
+                    if i == 0 {
+                        course.global_target_category = Some(fm.category_idx);
+                    }
+                }
+            }
+        }
+
+        self.screen = Screen::Main;
+        self.clear_status();
+        self.persist();
+    }
+
+    /// Cancel global grade entry without saving.
+    pub fn cancel_global_grade(&mut self) {
+        self.screen = Screen::Main;
     }
 }

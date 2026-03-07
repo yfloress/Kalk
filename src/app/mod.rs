@@ -26,7 +26,8 @@ mod forms;
 
 use crate::i18n::{Language, Messages};
 use crate::model::{
-    AveragingMethod, Category, Course, CourseTemplate, Evaluation, MinimumNotMetAction,
+    AveragingMethod, Category, Course, CourseTemplate, Evaluation, GlobalExamPolicy,
+    MinimumNotMetAction,
 };
 use crate::persistence;
 use crate::templates;
@@ -59,6 +60,7 @@ pub enum Screen {
     SavingTemplate,
     SelectingLanguage,
     Settings,
+    EnteringGlobalGrade,
 }
 
 /// Input field being edited.
@@ -77,6 +79,12 @@ pub enum InputField {
     AvgMethod,
     OnMinNotMet,
     RoundBeforeWeight,
+    // Global exam fields (course form)
+    GlobalPolicy,
+    GlobalSemesterWeight,
+    GlobalExamWeight,
+    GlobalMinGrade,
+    GlobalMaxGrade,
 }
 
 impl InputField {
@@ -88,6 +96,7 @@ impl InputField {
                 | InputField::AvgMethod
                 | InputField::OnMinNotMet
                 | InputField::RoundBeforeWeight
+                | InputField::GlobalPolicy
         )
     }
 }
@@ -143,6 +152,15 @@ pub struct App {
     /// Whether the field help panel is visible in the category popup.
     pub show_field_help: bool,
 
+    // Global exam editing state
+    pub edit_global_policy: GlobalExamPolicy,
+    pub edit_global_semester_weight: String,
+    pub edit_global_exam_weight: String,
+    pub edit_global_min_grade: String,
+    pub edit_global_max_grade: String,
+    /// Temporary buffer for the global grade entry popup.
+    pub edit_global_grade: String,
+
     /// Whether to use Nerd Font icons (persisted in config).
     pub use_nerd_fonts: bool,
     /// Whether to show courses in compact mode (single line per course).
@@ -180,6 +198,12 @@ impl Default for App {
             edit_averaging_method: AveragingMethod::default(),
             edit_on_min_not_met: MinimumNotMetAction::default(),
             edit_round_before_weighting: false,
+            edit_global_policy: GlobalExamPolicy::default(),
+            edit_global_semester_weight: String::new(),
+            edit_global_exam_weight: String::new(),
+            edit_global_min_grade: String::new(),
+            edit_global_max_grade: String::new(),
+            edit_global_grade: String::new(),
             show_advanced_rules: false,
             show_field_help: false,
             use_nerd_fonts: true,
@@ -504,7 +528,24 @@ impl App {
     pub fn next_input_field(&mut self) {
         self.input_field = match (&self.screen, &self.input_field) {
             (Screen::EditingCourse { .. }, InputField::Name) => InputField::PassingGrade,
-            (Screen::EditingCourse { .. }, InputField::PassingGrade) => InputField::Name,
+            (Screen::EditingCourse { .. }, InputField::PassingGrade) => InputField::GlobalPolicy,
+            (Screen::EditingCourse { .. }, InputField::GlobalPolicy) => {
+                match self.edit_global_policy {
+                    GlobalExamPolicy::None => InputField::Name,
+                    GlobalExamPolicy::Weighted { .. } => InputField::GlobalSemesterWeight,
+                    GlobalExamPolicy::ReplacesWorstGrade => InputField::GlobalMinGrade,
+                }
+            }
+            (Screen::EditingCourse { .. }, InputField::GlobalSemesterWeight) => {
+                InputField::GlobalExamWeight
+            }
+            (Screen::EditingCourse { .. }, InputField::GlobalExamWeight) => {
+                InputField::GlobalMinGrade
+            }
+            (Screen::EditingCourse { .. }, InputField::GlobalMinGrade) => {
+                InputField::GlobalMaxGrade
+            }
+            (Screen::EditingCourse { .. }, InputField::GlobalMaxGrade) => InputField::Name,
             // Category: Name → Weight → (advanced fields if expanded) → Name
             (Screen::EditingCategory { .. }, InputField::Name) => InputField::Weight,
             (Screen::EditingCategory { .. }, InputField::Weight) => {
@@ -546,12 +587,17 @@ impl App {
             InputField::Description => &mut self.edit_description,
             InputField::MinimumAverage => &mut self.edit_min_average,
             InputField::MinPerEval => &mut self.edit_min_per_eval,
+            InputField::GlobalSemesterWeight => &mut self.edit_global_semester_weight,
+            InputField::GlobalExamWeight => &mut self.edit_global_exam_weight,
+            InputField::GlobalMinGrade => &mut self.edit_global_min_grade,
+            InputField::GlobalMaxGrade => &mut self.edit_global_max_grade,
             // Toggle fields don't have text buffers — they are cycled, not typed into.
             // This branch should never be reached in practice.
             InputField::DropLowest
             | InputField::AvgMethod
             | InputField::OnMinNotMet
-            | InputField::RoundBeforeWeight => {
+            | InputField::RoundBeforeWeight
+            | InputField::GlobalPolicy => {
                 debug_assert!(
                     false,
                     "current_input_buffer called on toggle field {:?}",
@@ -584,6 +630,16 @@ impl App {
             InputField::RoundBeforeWeight => {
                 self.edit_round_before_weighting = !self.edit_round_before_weighting;
             }
+            InputField::GlobalPolicy => {
+                self.edit_global_policy = match self.edit_global_policy {
+                    GlobalExamPolicy::None => GlobalExamPolicy::Weighted {
+                        semester_weight: 0.7,
+                        global_weight: 0.3,
+                    },
+                    GlobalExamPolicy::Weighted { .. } => GlobalExamPolicy::ReplacesWorstGrade,
+                    GlobalExamPolicy::ReplacesWorstGrade => GlobalExamPolicy::None,
+                };
+            }
             _ => {}
         }
     }
@@ -606,6 +662,17 @@ impl App {
                     MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
                     MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
                     MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
+                };
+            }
+            // Three-state toggle: reverse cycle
+            InputField::GlobalPolicy => {
+                self.edit_global_policy = match self.edit_global_policy {
+                    GlobalExamPolicy::None => GlobalExamPolicy::ReplacesWorstGrade,
+                    GlobalExamPolicy::ReplacesWorstGrade => GlobalExamPolicy::Weighted {
+                        semester_weight: 0.7,
+                        global_weight: 0.3,
+                    },
+                    GlobalExamPolicy::Weighted { .. } => GlobalExamPolicy::None,
                 };
             }
             _ => {}

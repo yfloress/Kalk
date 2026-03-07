@@ -79,6 +79,7 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             Screen::SavingTemplate => handle_save_template_keys(app, key.code),
             Screen::SelectingLanguage => handle_language_keys(app, key.code),
             Screen::Settings => handle_settings_keys(app, key.code),
+            Screen::EnteringGlobalGrade => handle_global_grade_keys(app, key.code),
         }
     }
     Ok(app.should_quit)
@@ -164,6 +165,13 @@ fn handle_main_keys(app: &mut App, key: KeyCode) {
             }
         }
 
+        // Enter global exam grade
+        KeyCode::Char('g') => {
+            if app.focus == Focus::Courses && app.current_course().is_some() {
+                app.start_global_grade_entry();
+            }
+        }
+
         _ => {}
     }
 }
@@ -192,8 +200,21 @@ fn handle_delete_template_keys(app: &mut App, key: KeyCode) {
 }
 
 /// Handle keys in the course editing screen.
+/// Toggle fields (GlobalPolicy) cycle on Space/Enter instead of confirming.
 fn handle_edit_course_keys(app: &mut App, key: KeyCode) {
-    handle_form_keys(app, key, App::confirm_course, App::cancel_edit);
+    if app.input_field.is_toggle() {
+        match key {
+            KeyCode::Esc => app.cancel_edit(),
+            KeyCode::Tab => app.next_input_field(),
+            KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => {
+                app.cycle_toggle_field()
+            }
+            KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
+            _ => {}
+        }
+    } else {
+        handle_form_keys(app, key, App::confirm_course, App::cancel_edit);
+    }
 }
 
 /// Handle keys in the category editing screen.
@@ -254,6 +275,21 @@ fn handle_settings_keys(app: &mut App, key: KeyCode) {
         KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => app.next_setting(),
         KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.toggle_current_setting(),
         KeyCode::Left | KeyCode::Char('h') => app.toggle_current_setting_reverse(),
+        _ => {}
+    }
+}
+
+/// Handle keys in the global grade entry popup.
+fn handle_global_grade_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.cancel_global_grade(),
+        KeyCode::Enter => app.confirm_global_grade(),
+        KeyCode::Backspace => {
+            app.edit_global_grade.pop();
+        }
+        KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
+            app.edit_global_grade.push(c);
+        }
         _ => {}
     }
 }

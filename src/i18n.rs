@@ -202,6 +202,21 @@ pub struct Messages {
     pub dropped: &'static str,
     pub eval_below_min: &'static str,
 
+    // Global exam
+    pub global_exam: &'static str,
+    pub global_policy: &'static str,
+    pub global_policy_none: &'static str,
+    pub global_policy_weighted: &'static str,
+    pub global_policy_replaces: &'static str,
+    pub global_semester_weight: &'static str,
+    pub global_exam_weight: &'static str,
+    pub global_min_grade: &'static str,
+    pub global_max_grade: &'static str,
+    pub global_grade: &'static str,
+    pub global_needed: &'static str,
+    pub global_result: &'static str,
+    pub global_no_policy: &'static str,
+
     // Settings
     pub settings: &'static str,
     pub settings_nerd_fonts: &'static str,
@@ -371,6 +386,21 @@ pub const EN: Messages = Messages {
     dropped: "dropped",
     eval_below_min: "below min",
 
+    // Global exam
+    global_exam: "Global Exam",
+    global_policy: "Global Exam",
+    global_policy_none: "No Global",
+    global_policy_weighted: "Weighted",
+    global_policy_replaces: "Replaces Worst",
+    global_semester_weight: "Semester Weight % (e.g. 70)",
+    global_exam_weight: "Global Weight % (e.g. 30)",
+    global_min_grade: "Min Grade for Global",
+    global_max_grade: "Max Grade for Global",
+    global_grade: "Global Grade",
+    global_needed: "Need in global",
+    global_result: "After global",
+    global_no_policy: "No global available",
+
     // Settings
     settings: "Settings",
     settings_nerd_fonts: "Nerd Font Icons",
@@ -539,6 +569,21 @@ pub const ES: Messages = Messages {
     grade_capped_by: "limitado por",
     dropped: "eliminada",
     eval_below_min: "bajo min",
+
+    // Global exam
+    global_exam: "Examen Global",
+    global_policy: "Examen Global",
+    global_policy_none: "Sin Global",
+    global_policy_weighted: "Ponderado",
+    global_policy_replaces: "Reemplaza Peor Nota",
+    global_semester_weight: "Peso Semestral % (ej: 70)",
+    global_exam_weight: "Peso Global % (ej: 30)",
+    global_min_grade: "Nota Min. para Global",
+    global_max_grade: "Nota Max. para Global",
+    global_grade: "Nota Global",
+    global_needed: "Necesitas en global",
+    global_result: "Despues del global",
+    global_no_policy: "Sin global disponible",
 
     // Settings
     settings: "Ajustes",

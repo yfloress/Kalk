@@ -24,7 +24,7 @@
 
 use crate::app::{App, Focus, InputField};
 use crate::i18n::Language;
-use crate::model::{AveragingMethod, MinimumNotMetAction, NeededGradeStatus};
+use crate::model::{AveragingMethod, GlobalExamPolicy, MinimumNotMetAction, NeededGradeStatus};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -109,9 +109,18 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
 pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let m = app.messages();
     let t = theme();
-    // Fixed height: border(1) + top_pad + field(3) + spacing(1) + field(3) + bot_pad + border(1)
-    let popup_h = 13u16;
-    let popup_w = 50u16;
+
+    // Dynamic height based on selected global policy:
+    // Base: border(2) + Name(3) + sp(1) + PassingGrade(3) + sp(1) + GlobalPolicy(3) = 13
+    // Weighted adds: sp(1) + SemWeight(3) + sp(1) + GlobWeight(3) = 8
+    // Both non-None add eligibility: sp(1) + MinGrade(3) + sp(1) + MaxGrade(3) = 8
+    let extra = match &app.edit_global_policy {
+        GlobalExamPolicy::None => 0u16,
+        GlobalExamPolicy::Weighted { .. } => 8 + 8, // weights + eligibility
+        GlobalExamPolicy::ReplacesWorstGrade => 8,  // eligibility only
+    };
+    let popup_h = (15 + extra).min(term_height_fallback(frame));
+    let popup_w = 55u16;
     let term = frame.size();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -133,16 +142,45 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    // Centre the two inputs vertically inside `inner`
+    // Build constraints dynamically
+    let mut constraints: Vec<Constraint> = vec![
+        Constraint::Length(1), // top spacer
+        Constraint::Length(3), // [1] Name field
+        Constraint::Length(1), // spacing
+        Constraint::Length(3), // [3] Passing Grade field
+        Constraint::Length(1), // spacing
+        Constraint::Length(3), // [5] Global Policy toggle
+    ];
+
+    // Indices for optional fields (tracked for rendering)
+    let mut weight_sem_idx: Option<usize> = None;
+    let mut weight_glob_idx: Option<usize> = None;
+    let mut min_grade_idx: Option<usize> = None;
+    let mut max_grade_idx: Option<usize> = None;
+
+    if matches!(app.edit_global_policy, GlobalExamPolicy::Weighted { .. }) {
+        constraints.push(Constraint::Length(1)); // spacing
+        weight_sem_idx = Some(constraints.len());
+        constraints.push(Constraint::Length(3)); // Semester Weight
+        constraints.push(Constraint::Length(1)); // spacing
+        weight_glob_idx = Some(constraints.len());
+        constraints.push(Constraint::Length(3)); // Global Weight
+    }
+
+    if !matches!(app.edit_global_policy, GlobalExamPolicy::None) {
+        constraints.push(Constraint::Length(1)); // spacing
+        min_grade_idx = Some(constraints.len());
+        constraints.push(Constraint::Length(3)); // Min Grade
+        constraints.push(Constraint::Length(1)); // spacing
+        max_grade_idx = Some(constraints.len());
+        constraints.push(Constraint::Length(3)); // Max Grade
+    }
+
+    constraints.push(Constraint::Min(0)); // bottom spacer
+
     let layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(0),    // top spacer
-            Constraint::Length(3), // Name field
-            Constraint::Length(1), // spacing
-            Constraint::Length(3), // Passing Grade field
-            Constraint::Min(0),    // bottom spacer
-        ])
+        .constraints(constraints)
         .split(inner);
 
     // Horizontal padding (inset fields by 2 columns on each side)
@@ -156,6 +194,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         )
     };
 
+    // -- Fixed fields --
     render_input_field(
         frame,
         m.name,
@@ -171,6 +210,65 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         app.input_field == InputField::PassingGrade,
         field_area(layout[3]),
     );
+
+    // Global Policy toggle
+    let policy_label = match &app.edit_global_policy {
+        GlobalExamPolicy::None => m.global_policy_none,
+        GlobalExamPolicy::Weighted { .. } => m.global_policy_weighted,
+        GlobalExamPolicy::ReplacesWorstGrade => m.global_policy_replaces,
+    };
+    render_toggle_field(
+        frame,
+        m.global_policy,
+        policy_label,
+        app.input_field == InputField::GlobalPolicy,
+        field_area(layout[5]),
+    );
+
+    // -- Conditional Weighted fields --
+    if let Some(idx) = weight_sem_idx {
+        render_input_field(
+            frame,
+            m.global_semester_weight,
+            &app.edit_global_semester_weight,
+            app.input_field == InputField::GlobalSemesterWeight,
+            field_area(layout[idx]),
+        );
+    }
+    if let Some(idx) = weight_glob_idx {
+        render_input_field(
+            frame,
+            m.global_exam_weight,
+            &app.edit_global_exam_weight,
+            app.input_field == InputField::GlobalExamWeight,
+            field_area(layout[idx]),
+        );
+    }
+
+    // -- Conditional Eligibility fields --
+    if let Some(idx) = min_grade_idx {
+        render_input_field(
+            frame,
+            m.global_min_grade,
+            &app.edit_global_min_grade,
+            app.input_field == InputField::GlobalMinGrade,
+            field_area(layout[idx]),
+        );
+    }
+    if let Some(idx) = max_grade_idx {
+        render_input_field(
+            frame,
+            m.global_max_grade,
+            &app.edit_global_max_grade,
+            app.input_field == InputField::GlobalMaxGrade,
+            field_area(layout[idx]),
+        );
+    }
+}
+
+/// Helper to get terminal height (avoids passing frame.size() everywhere).
+fn term_height_fallback(frame: &Frame) -> u16 {
+    frame.size().height
 }
 
 pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
@@ -672,24 +770,26 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
 }
 
 // =============================================================================
-// Settings Popup
+// Global Grade Entry Popup
 // =============================================================================
 
-pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
+pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
 
-    let popup_w = 56u16;
-    let popup_h = 18u16;
+    let popup_h = 11u16;
+    let popup_w = 50u16;
     let term = frame.size();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
     frame.render_widget(Clear, area);
 
+    let title = format!(" {}{} ", ic.grade, m.global_exam);
+
     let block = Block::default()
-        .title(format!(" {}{} ", ic.settings, m.settings))
+        .title(title)
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(t.popup_border));
@@ -697,139 +797,73 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let chunks = Layout::default()
+    // Show current course info and policy
+    let course = app.current_course();
+    let policy_label = course
+        .map(|c| match &c.global_policy {
+            GlobalExamPolicy::None => m.global_policy_none,
+            GlobalExamPolicy::Weighted { .. } => m.global_policy_weighted,
+            GlobalExamPolicy::ReplacesWorstGrade => m.global_policy_replaces,
+        })
+        .unwrap_or(m.global_policy_none);
+
+    let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1), // padding
-            Constraint::Length(1), // setting 0: nerd fonts
-            Constraint::Length(1), // setting 1: language
-            Constraint::Length(1), // setting 2: compact courses
-            Constraint::Length(1), // separator
-            Constraint::Length(2), // description of selected setting
+            Constraint::Length(1), // policy info
+            Constraint::Length(1), // needed grade info
+            Constraint::Length(1), // spacing
+            Constraint::Length(3), // grade input
             Constraint::Min(0),    // spacer
-            Constraint::Length(1), // hint
         ])
         .split(inner);
 
-    // --- Setting rows ---
-    struct SettingRow<'a> {
-        label: &'a str,
-        value: String,
-        value_color: ratatui::style::Color,
-    }
+    // Policy info line
+    let policy_info = Paragraph::new(Line::from(vec![
+        Span::styled(
+            format!("  {}: ", m.global_policy),
+            Style::default().fg(t.text_muted),
+        ),
+        Span::styled(policy_label, Style::default().fg(t.text_primary)),
+    ]));
+    frame.render_widget(policy_info, layout[0]);
 
-    let rows = [
-        SettingRow {
-            label: m.settings_nerd_fonts,
-            value: if app.use_nerd_fonts {
-                m.enabled
-            } else {
-                m.disabled
-            }
-            .to_string(),
-            value_color: if app.use_nerd_fonts {
-                t.status_pass
-            } else {
-                t.text_muted
-            },
-        },
-        SettingRow {
-            label: m.settings_language,
-            value: app.language.display_name().to_string(),
-            value_color: t.status_info,
-        },
-        SettingRow {
-            label: m.settings_compact_courses,
-            value: if app.compact_courses {
-                m.enabled
-            } else {
-                m.disabled
-            }
-            .to_string(),
-            value_color: if app.compact_courses {
-                t.status_pass
-            } else {
-                t.text_muted
-            },
-        },
-    ];
-
-    for (i, row) in rows.iter().enumerate() {
-        let is_selected = app.selected_setting == i;
-        let row_style = if is_selected {
-            Style::default()
-                .bg(t.highlight_bg)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
+    // Needed grade info line
+    if let Some(course) = course {
+        let needed = course.needed_global_grade();
+        let needed_text = format_needed_grade(&needed, m);
+        let needed_color = match needed.status {
+            NeededGradeStatus::Success => t.status_pass,
+            NeededGradeStatus::Failure => t.status_fail,
+            NeededGradeStatus::Warning => t.status_warn,
+            NeededGradeStatus::Info => t.text_muted,
         };
-        let prefix = if is_selected { ic.highlight } else { "  " };
-
-        let line = Line::from(vec![
-            Span::styled(prefix, row_style),
-            Span::styled(format!("{}: ", row.label), row_style.fg(t.text_primary)),
+        let needed_line = Paragraph::new(Line::from(vec![
             Span::styled(
-                format!("< {} >", row.value),
-                Style::default().fg(row.value_color),
+                format!("  {}: ", m.global_needed),
+                Style::default().fg(t.text_muted),
             ),
-        ]);
-        // chunks[1], chunks[2], chunks[3] for the 3 settings
-        frame.render_widget(Paragraph::new(line), chunks[1 + i]);
+            Span::styled(needed_text, Style::default().fg(needed_color)),
+        ]));
+        frame.render_widget(needed_line, layout[1]);
     }
 
-    // --- Separator ---
-    let sep = Paragraph::new(Line::from(Span::styled(
-        "  ──────────────────────────────────────────────",
-        Style::default().fg(t.popup_separator),
-    )));
-    frame.render_widget(sep, chunks[4]);
-
-    // --- Description of selected setting ---
-    let desc_text = match app.selected_setting {
-        0 => m.settings_nerd_fonts_desc,
-        1 => app.language.display_name(),
-        2 => m.settings_compact_courses_desc,
-        _ => "",
+    // Grade input field
+    let field_area = {
+        let pad = 2u16.min(layout[3].width / 2);
+        Rect::new(
+            layout[3].x + pad,
+            layout[3].y,
+            layout[3].width.saturating_sub(pad * 2),
+            layout[3].height,
+        )
     };
-    let desc = Paragraph::new(Line::from(Span::styled(
-        format!("  {}", desc_text),
-        Style::default().fg(t.text_secondary),
-    )))
-    .wrap(Wrap { trim: true });
-    frame.render_widget(desc, chunks[5]);
 
-    // --- Bottom hint ---
-    let hint = Line::from(vec![
-        Span::styled(
-            "  Space/\u{2190}\u{2192}",
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(": {}  ", m.toggle),
-            Style::default().fg(t.footer_desc),
-        ),
-        Span::styled(
-            "Enter",
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(": {}  ", m.confirm),
-            Style::default().fg(t.footer_desc),
-        ),
-        Span::styled(
-            "Esc",
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(": {}", m.cancel),
-            Style::default().fg(t.footer_desc),
-        ),
-    ]);
-    frame.render_widget(Paragraph::new(hint), chunks[7]);
+    render_input_field(
+        frame,
+        m.global_grade,
+        &app.edit_global_grade,
+        true,
+        field_area,
+    );
 }

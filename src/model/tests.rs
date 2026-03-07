@@ -1626,3 +1626,486 @@ fn test_compute_grade_drop_lowest_still_fails_minimum() {
     assert_eq!(result.overridden_by, Some("Tests".to_string()));
     assert_eq!(result.failed_minimums.len(), 1);
 }
+
+// =========================================================================
+// Global Exam tests
+// =========================================================================
+
+/// Helper: build a course with two categories (Certamenes 70%, Controles 30%)
+/// and the given grades. Returns the course ready for global-exam tests.
+fn make_global_test_course(cert_grades: &[f64], ctrl_grades: &[f64]) -> Course {
+    let mut course = Course::new("Fisica".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut certs = Category::new("Certamenes".to_string(), 70.0);
+    for (i, &g) in cert_grades.iter().enumerate() {
+        certs
+            .evaluations
+            .push(Evaluation::with_grade(format!("C{}", i + 1), g));
+    }
+    course.categories.push(certs);
+
+    let mut ctrls = Category::new("Controles".to_string(), 30.0);
+    for (i, &g) in ctrl_grades.iter().enumerate() {
+        ctrls
+            .evaluations
+            .push(Evaluation::with_grade(format!("Q{}", i + 1), g));
+    }
+    course.categories.push(ctrls);
+
+    course
+}
+
+// ---- Policy: None (default) ----
+
+#[test]
+fn test_global_policy_none_by_default() {
+    let course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    assert_eq!(course.global_policy, GlobalExamPolicy::None);
+    assert!(!course.is_eligible_for_global());
+}
+
+#[test]
+fn test_global_policy_none_grade_after_global_is_none() {
+    let mut course = make_global_test_course(&[40.0, 50.0, 60.0], &[70.0, 80.0]);
+    course.global_exam_grade = Some(90.0); // Even if a grade is set
+    let result = course.compute_grade();
+    assert!(result.grade_after_global.is_none());
+}
+
+// ---- Policy: Weighted ----
+
+#[test]
+fn test_global_weighted_basic() {
+    // Certamenes: avg=40, Controles: avg=60
+    // Semester = 40*0.7 + 60*0.3 = 28 + 18 = 46
+    let mut course = make_global_test_course(&[40.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_exam_grade = Some(80.0);
+
+    let result = course.compute_grade();
+    // grade_after_global = 46 * 0.7 + 80 * 0.3 = 32.2 + 24 = 56.2
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 56.2).abs() < 0.01);
+}
+
+#[test]
+fn test_global_weighted_still_fails() {
+    // Semester = 30*0.7 + 40*0.3 = 21 + 12 = 33
+    let mut course = make_global_test_course(&[30.0], &[40.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_exam_grade = Some(50.0);
+
+    let result = course.compute_grade();
+    // 33 * 0.7 + 50 * 0.3 = 23.1 + 15 = 38.1
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 38.1).abs() < 0.01);
+    assert!(!course.is_passing_grade(after));
+}
+
+#[test]
+fn test_global_weighted_no_grade_entered() {
+    let mut course = make_global_test_course(&[40.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    // No global_exam_grade set
+    let result = course.compute_grade();
+    assert!(result.grade_after_global.is_none());
+}
+
+#[test]
+fn test_global_weighted_60_40() {
+    // Different weights: 60/40
+    // Semester = 50*0.7 + 60*0.3 = 35 + 18 = 53
+    let mut course = make_global_test_course(&[50.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.6,
+        global_weight: 0.4,
+    };
+    course.global_exam_grade = Some(70.0);
+
+    let result = course.compute_grade();
+    // 53 * 0.6 + 70 * 0.4 = 31.8 + 28 = 59.8
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 59.8).abs() < 0.01);
+}
+
+// ---- Policy: ReplacesWorstGrade ----
+
+#[test]
+fn test_global_replaces_worst_basic() {
+    // Certamenes: [30, 60, 80] → avg=56.67, Controles: [70] → avg=70
+    // Semester = 56.67*0.7 + 70*0.3 = 39.67 + 21 = 60.67
+    let mut course = make_global_test_course(&[30.0, 60.0, 80.0], &[70.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    course.global_target_category = Some(0); // Certamenes
+    course.global_exam_grade = Some(90.0);
+
+    let result = course.compute_grade();
+    // Replace worst (30) with 90 → Certamenes: [90, 60, 80] → avg=76.67
+    // New grade = 76.67*0.7 + 70*0.3 = 53.67 + 21 = 74.67
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 74.67).abs() < 0.1);
+}
+
+#[test]
+fn test_global_replaces_worst_grade_can_lower() {
+    // Certamenes: [50, 60, 80] → avg=63.33
+    // Controles: [70] → avg=70
+    // Semester = 63.33*0.7 + 70*0.3 = 44.33 + 21 = 65.33
+    let mut course = make_global_test_course(&[50.0, 60.0, 80.0], &[70.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    course.global_target_category = Some(0);
+    // Global grade is LOWER than worst (50), so it lowers the average
+    course.global_exam_grade = Some(20.0);
+
+    let result = course.compute_grade();
+    // Replace worst (50) with 20 → Certamenes: [20, 60, 80] → avg=53.33
+    // New grade = 53.33*0.7 + 70*0.3 = 37.33 + 21 = 58.33
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 58.33).abs() < 0.1);
+    // Was 65.33 before global, now 58.33 — grade went DOWN
+    assert!(after < result.grade);
+}
+
+#[test]
+fn test_global_replaces_worst_auto_detect_category() {
+    // Certamenes has RequiresGlobal rule and fails minimum
+    let mut course = make_global_test_course(&[30.0, 40.0], &[80.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    // Don't set global_target_category — should auto-detect
+
+    course.categories[0].rules.minimum_average = Some(50.0);
+    course.categories[0].rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+
+    course.global_exam_grade = Some(70.0);
+
+    let result = course.compute_grade();
+    assert!(result.needs_global);
+    // Auto-detected target = Certamenes (idx 0)
+    // Replace worst (30) with 70 → [70, 40] → avg=55
+    // New grade = 55*0.7 + 80*0.3 = 38.5 + 24 = 62.5
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 62.5).abs() < 0.1);
+}
+
+#[test]
+fn test_global_replaces_worst_no_grade_entered() {
+    let mut course = make_global_test_course(&[30.0, 60.0], &[70.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    course.global_target_category = Some(0);
+    // No global grade
+    let result = course.compute_grade();
+    assert!(result.grade_after_global.is_none());
+}
+
+// ---- Eligibility ----
+
+#[test]
+fn test_global_eligibility_no_restriction() {
+    let mut course = make_global_test_course(&[40.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    // Default eligibility = no restrictions
+    assert!(course.is_eligible_for_global());
+}
+
+#[test]
+fn test_global_eligibility_within_range() {
+    // Semester = 40*0.7 + 60*0.3 = 46
+    let mut course = make_global_test_course(&[40.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_eligibility = GlobalEligibility {
+        min_grade: Some(45.0),
+        max_grade: Some(54.0),
+    };
+    // 46 is within [45, 54]
+    assert!(course.is_eligible_for_global());
+}
+
+#[test]
+fn test_global_eligibility_below_minimum() {
+    // Semester = 30*0.7 + 40*0.3 = 33
+    let mut course = make_global_test_course(&[30.0], &[40.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_eligibility = GlobalEligibility {
+        min_grade: Some(45.0),
+        max_grade: Some(54.0),
+    };
+    // 33 < 45 → not eligible
+    assert!(!course.is_eligible_for_global());
+}
+
+#[test]
+fn test_global_eligibility_above_maximum() {
+    // Semester = 70*0.7 + 80*0.3 = 73
+    let mut course = make_global_test_course(&[70.0], &[80.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_eligibility = GlobalEligibility {
+        min_grade: Some(45.0),
+        max_grade: Some(54.0),
+    };
+    // 73 > 54 → not eligible
+    assert!(!course.is_eligible_for_global());
+}
+
+#[test]
+fn test_global_eligibility_only_min() {
+    // Semester = 50*0.7 + 60*0.3 = 53
+    let mut course = make_global_test_course(&[50.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    course.global_eligibility = GlobalEligibility {
+        min_grade: Some(40.0),
+        max_grade: None,
+    };
+    // 53 >= 40, no max → eligible
+    assert!(course.is_eligible_for_global());
+}
+
+#[test]
+fn test_global_eligibility_replaces_worst_no_restriction() {
+    // ReplacesWorstGrade with no eligibility restrictions (anyone can take it)
+    let mut course = make_global_test_course(&[90.0], &[95.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    // Even with high grades, eligible since no restriction
+    assert!(course.is_eligible_for_global());
+}
+
+// ---- Needed Global Grade ----
+
+#[test]
+fn test_needed_global_weighted() {
+    // Semester = 40*0.7 + 60*0.3 = 46
+    // Need: 46*0.7 + X*0.3 >= 54.5 (55 - 0.5)
+    // 32.2 + 0.3X >= 54.5
+    // 0.3X >= 22.3
+    // X >= 74.33
+    let mut course = make_global_test_course(&[40.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Warning);
+    assert!((needed.value.unwrap() - 74.33).abs() < 0.1);
+}
+
+#[test]
+fn test_needed_global_weighted_impossible() {
+    // Semester = 20*0.7 + 20*0.3 = 20
+    // Need: 20*0.7 + X*0.3 >= 54.5
+    // 14 + 0.3X >= 54.5
+    // X >= 135 → impossible (> 100)
+    let mut course = make_global_test_course(&[20.0], &[20.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Failure);
+    assert!(needed.value.unwrap() > 100.0);
+}
+
+#[test]
+fn test_needed_global_weighted_already_passing() {
+    // Semester = 80*0.7 + 90*0.3 = 83
+    // Already passing, needed would be <= 0
+    let mut course = make_global_test_course(&[80.0], &[90.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Success);
+}
+
+#[test]
+fn test_needed_global_replaces_worst() {
+    // Certamenes: [30, 70, 80] → avg=60, Controles: [50] → avg=50
+    // Semester = 60*0.7 + 50*0.3 = 42 + 15 = 57
+    // Replace worst (30) with X → new avg = (X + 70 + 80)/3
+    // new_contribution_certs = ((X+150)/3) * 70/100
+    // total = ((X+150)/3)*0.7 + 15 >= 54.5
+    // ((X+150)/3)*0.7 >= 39.5
+    // (X+150)/3 >= 56.43
+    // X+150 >= 169.29
+    // X >= 19.29
+    let mut course = make_global_test_course(&[30.0, 70.0, 80.0], &[50.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    course.global_target_category = Some(0);
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Warning);
+    assert!((needed.value.unwrap() - 19.29).abs() < 0.5);
+}
+
+#[test]
+fn test_needed_global_replaces_worst_impossible() {
+    // Certamenes: [10, 10, 10] → avg=10, Controles: [10] → avg=10
+    // Semester = 10*0.7 + 10*0.3 = 10
+    // Replace worst (10) with X → avg = (X+10+10)/3
+    // ((X+20)/3)*0.7 + 3 >= 54.5
+    // ((X+20)/3)*0.7 >= 51.5
+    // (X+20)/3 >= 73.57
+    // X >= 200.71 → impossible
+    let mut course = make_global_test_course(&[10.0, 10.0, 10.0], &[10.0]);
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    course.global_target_category = Some(0);
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Failure);
+}
+
+#[test]
+fn test_needed_global_no_policy() {
+    let course = make_global_test_course(&[40.0], &[60.0]);
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Info);
+}
+
+#[test]
+fn test_needed_global_not_eligible() {
+    // Semester = 30*0.7 + 40*0.3 = 33 → below min eligibility of 45
+    let mut course = make_global_test_course(&[30.0], &[40.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_eligibility = GlobalEligibility {
+        min_grade: Some(45.0),
+        max_grade: Some(54.0),
+    };
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Failure);
+    assert!(needed.value.is_none());
+}
+
+#[test]
+fn test_needed_global_already_took_global_passing() {
+    // Semester = 46, global = 80, after = 46*0.7 + 80*0.3 = 56.2 → pass
+    let mut course = make_global_test_course(&[40.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_exam_grade = Some(80.0);
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Success);
+}
+
+#[test]
+fn test_needed_global_already_took_global_failing() {
+    // Semester = 46, global = 30, after = 46*0.7 + 30*0.3 = 32.2 + 9 = 41.2
+    let mut course = make_global_test_course(&[40.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_exam_grade = Some(30.0);
+
+    let needed = course.needed_global_grade();
+    assert_eq!(needed.status, NeededGradeStatus::Failure);
+}
+
+// ---- Serde backward compatibility ----
+
+#[test]
+fn test_global_fields_serde_default() {
+    // A course serialized without global fields should deserialize fine
+    let json = r#"{
+        "id": "00000000-0000-0000-0000-000000000001",
+        "name": "Old Course",
+        "passing_grade": 55.0,
+        "categories": []
+    }"#;
+
+    let course: Course = serde_json::from_str(json).unwrap();
+    assert_eq!(course.global_policy, GlobalExamPolicy::None);
+    assert!(course.global_eligibility.min_grade.is_none());
+    assert!(course.global_eligibility.max_grade.is_none());
+    assert!(course.global_exam_grade.is_none());
+    assert!(course.global_target_category.is_none());
+}
+
+#[test]
+fn test_global_weighted_serde_roundtrip() {
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_eligibility = GlobalEligibility {
+        min_grade: Some(45.0),
+        max_grade: Some(54.0),
+    };
+    course.global_exam_grade = Some(75.0);
+
+    let json = serde_json::to_string(&course).unwrap();
+    let deserialized: Course = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(deserialized.global_policy, course.global_policy);
+    assert_eq!(deserialized.global_eligibility.min_grade, Some(45.0));
+    assert_eq!(deserialized.global_eligibility.max_grade, Some(54.0));
+    assert_eq!(deserialized.global_exam_grade, Some(75.0));
+}
+
+// ---- Edge cases ----
+
+#[test]
+fn test_global_replaces_worst_with_drop_lowest() {
+    // Certamenes: [20, 40, 60, 80] with drop_lowest=1 → effective: [40, 60, 80] avg=60
+    // Controles: [50] → avg=50
+    // Semester = 60*0.7 + 50*0.3 = 42 + 15 = 57
+    let mut course = make_global_test_course(&[20.0, 40.0, 60.0, 80.0], &[50.0]);
+    course.categories[0].rules.drop_lowest = 1;
+    course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
+    course.global_target_category = Some(0);
+    // Replace worst GRADED eval (20) with 90
+    // After replacement: [90, 40, 60, 80] with drop_lowest=1 → effective: [60, 80, 90] avg=76.67
+    // New grade = 76.67*0.7 + 50*0.3 = 53.67 + 15 = 68.67
+    course.global_exam_grade = Some(90.0);
+
+    let result = course.compute_grade();
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 68.67).abs() < 0.1);
+}
+
+#[test]
+fn test_global_weighted_100_0_edge() {
+    // Edge case: semester_weight=1.0, global_weight=0.0
+    // Global doesn't matter at all
+    let mut course = make_global_test_course(&[50.0], &[60.0]);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 1.0,
+        global_weight: 0.0,
+    };
+    course.global_exam_grade = Some(100.0);
+
+    let result = course.compute_grade();
+    let after = result.grade_after_global.unwrap();
+    // 53 * 1.0 + 100 * 0.0 = 53 (semester grade unchanged)
+    assert!((after - result.grade).abs() < 0.01);
+}
