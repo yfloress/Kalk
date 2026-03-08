@@ -220,6 +220,7 @@ pub struct Messages {
     pub global_needed: &'static str,
     pub global_result: &'static str,
     pub global_no_policy: &'static str,
+    pub global_enter_hint: &'static str,
 
     // Settings
     pub settings: &'static str,
@@ -408,6 +409,7 @@ pub const EN: Messages = Messages {
     global_needed: "Need in global",
     global_result: "After global",
     global_no_policy: "No global available",
+    global_enter_hint: "Press Enter to enter the global exam grade.",
 
     // Settings
     settings: "Settings",
@@ -596,6 +598,7 @@ pub const ES: Messages = Messages {
     global_needed: "Necesitas en global",
     global_result: "Despues del global",
     global_no_policy: "Sin global disponible",
+    global_enter_hint: "Presiona Enter para ingresar la nota del examen global.",
 
     // Settings
     settings: "Ajustes",

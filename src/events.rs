@@ -141,19 +141,47 @@ fn handle_main_keys(app: &mut App, key: KeyCode) {
         // Create new item
         KeyCode::Char('n') => match app.focus {
             Focus::Courses => app.start_new_course(),
-            Focus::Categories => app.start_new_category(),
-            Focus::Evaluations => app.start_new_evaluation(),
+            Focus::Categories => {
+                if app.is_on_virtual_global() {
+                    app.start_global_grade_entry();
+                } else {
+                    app.start_new_category();
+                }
+            }
+            Focus::Evaluations => {
+                if app.is_on_virtual_global() {
+                    app.start_global_grade_entry();
+                } else {
+                    app.start_new_evaluation();
+                }
+            }
         },
 
         // Edit selected item
         KeyCode::Enter => match app.focus {
             Focus::Courses => app.start_edit_course(),
-            Focus::Categories => app.start_edit_category(),
-            Focus::Evaluations => app.start_edit_evaluation(),
+            Focus::Categories => {
+                if app.is_on_virtual_global() {
+                    app.start_global_grade_entry();
+                } else {
+                    app.start_edit_category();
+                }
+            }
+            Focus::Evaluations => {
+                if app.is_on_virtual_global() {
+                    app.start_global_grade_entry();
+                } else {
+                    app.start_edit_evaluation();
+                }
+            }
         },
 
-        // Delete selected item
-        KeyCode::Char('d') => app.request_delete(),
+        // Delete selected item (no-op on virtual global category)
+        KeyCode::Char('d') => {
+            if !app.is_on_virtual_global() {
+                app.request_delete();
+            }
+        }
 
         // Auto-balance weights for current course
         KeyCode::Char('b') => {
@@ -296,7 +324,7 @@ fn handle_global_grade_keys(app: &mut App, key: KeyCode) {
         KeyCode::Backspace => {
             app.edit_global_grade.pop();
         }
-        KeyCode::Char(c) if c.is_ascii_digit() || c == '.' => {
+        KeyCode::Char(c) if c.is_ascii_digit() || c == '.' || c == ',' => {
             app.edit_global_grade.push(c);
         }
         _ => {}

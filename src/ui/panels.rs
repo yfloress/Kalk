@@ -24,9 +24,10 @@ use super::helpers::focused_border_style;
 use super::icons::icons;
 use super::theme::theme;
 use crate::app::{App, Focus, Screen};
+use crate::model::{GlobalExamPolicy, MAX_GRADE, NeededGradeStatus};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap},
@@ -43,6 +44,13 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     let is_focused = app.focus == Focus::Evaluations;
     let border_style = focused_border_style(is_focused);
     let selected_cat_idx = app.selected_category;
+
+    // Virtual global category — render a dedicated panel instead of the
+    // normal evaluations table.
+    if app.is_on_virtual_global() {
+        draw_virtual_global_panel(frame, app, area);
+        return;
+    }
 
     let Some(category) = app.current_category() else {
         let block = Block::default()
@@ -263,6 +271,165 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     );
 
     frame.render_widget(table, chunks[1]);
+}
+
+// =============================================================================
+// Virtual Global Category Panel
+// =============================================================================
+
+/// Render the evaluations panel when the virtual "Global" category is selected.
+/// Shows the global exam grade (or a prompt to enter it), the needed grade,
+/// and the result after the global exam if a grade has been entered.
+fn draw_virtual_global_panel(frame: &mut Frame, app: &App, area: Rect) {
+    let m = app.messages();
+    let t = theme();
+    let ic = icons(app.use_nerd_fonts);
+    let is_focused = app.focus == Focus::Evaluations;
+    let border_style = focused_border_style(is_focused);
+
+    let Some(course) = app.current_course() else {
+        return;
+    };
+
+    let grade_result = course.compute_grade();
+
+    // Build content lines
+    let mut lines: Vec<Line> = Vec::new();
+
+    // 1. Global exam grade (or hint to enter it)
+    match course.global_exam_grade {
+        Some(g) => {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{}: ", m.global_grade),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(format!("{:.1}", g), Style::default().fg(t.status_info)),
+            ]));
+        }
+        None => {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{}: ", m.global_grade),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("-", Style::default().fg(t.text_muted)),
+            ]));
+        }
+    }
+
+    lines.push(Line::from(""));
+
+    // 2. Needed grade in global
+    let needed = course.needed_global_grade();
+    match needed.status {
+        NeededGradeStatus::Warning => {
+            if let Some(v) = needed.value {
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("{}: ", m.global_needed),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("{:.0}", v.ceil()),
+                        Style::default().fg(t.status_override),
+                    ),
+                ]));
+            }
+        }
+        NeededGradeStatus::Failure => {
+            let hint = if let Some(v) = needed.value {
+                if v > MAX_GRADE {
+                    format!("{} ({})", v.ceil() as i32, m.need_grade_impossible)
+                } else {
+                    m.cannot_pass.to_string()
+                }
+            } else {
+                m.cannot_pass.to_string()
+            };
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("{}: ", m.global_needed),
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(hint, Style::default().fg(t.status_fail)),
+            ]));
+        }
+        NeededGradeStatus::Success => {
+            if course.global_exam_grade.is_some() {
+                // Already took global and passed
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!("{}: ", m.global_result),
+                        Style::default().add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(m.passed, Style::default().fg(t.status_pass)),
+                ]));
+            }
+        }
+        NeededGradeStatus::Info => {}
+    }
+
+    // 3. Result after global (when grade has been entered)
+    if let Some(after) = grade_result.grade_after_global {
+        let rounded = crate::model::Course::round_grade(after);
+        let (status_text, status_color) = if course.is_passing_grade(after) {
+            (m.passed, t.status_pass)
+        } else {
+            (m.failed, t.status_fail)
+        };
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{}: ", m.global_result),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("{:.1} -> {:.0} ({})", after, rounded, status_text),
+                Style::default().fg(status_color),
+            ),
+        ]));
+    }
+
+    // 4. Policy info
+    lines.push(Line::from(""));
+    let policy_desc = match &course.global_policy {
+        GlobalExamPolicy::Weighted {
+            semester_weight,
+            global_weight,
+        } => format!(
+            "NF = NP * {:.0}% + CG * {:.0}%",
+            semester_weight * 100.0,
+            global_weight * 100.0
+        ),
+        GlobalExamPolicy::ReplacesWorstGrade => m.global_policy_replaces.to_string(),
+        GlobalExamPolicy::None => String::new(),
+    };
+    if !policy_desc.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            policy_desc,
+            Style::default().fg(t.text_muted),
+        )]));
+    }
+
+    // 5. Enter hint
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![Span::styled(
+        m.global_enter_hint,
+        Style::default().fg(t.text_muted),
+    )]));
+
+    let title = format!(" {}{} ", ic.evaluation, m.global_exam);
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(t.border_type)
+        .border_style(border_style);
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, area);
 }
 
 // =============================================================================

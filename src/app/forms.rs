@@ -31,6 +31,25 @@ use crate::persistence;
 
 use super::{App, InputField, Screen};
 
+/// Parse a decimal string that may use comma as the decimal separator.
+/// Normalises `,` → `.` before parsing.
+fn parse_decimal(s: &str) -> Result<f64, std::num::ParseFloatError> {
+    s.trim().replace(',', ".").parse::<f64>()
+}
+
+/// Format a grade for display in form fields.
+/// Shows decimals only when the value is not a whole number (e.g. 40.1 stays
+/// "40.1", but 55.0 becomes "55").
+fn format_grade(v: f64) -> String {
+    if (v - v.round()).abs() < 1e-9 {
+        format!("{:.0}", v)
+    } else {
+        // Up to 2 decimal places, trimming trailing zeros
+        let s = format!("{:.2}", v);
+        s.trim_end_matches('0').trim_end_matches('.').to_string()
+    }
+}
+
 impl App {
     // =========================================================================
     // Form Handling — Course
@@ -45,7 +64,7 @@ impl App {
         self.screen = Screen::EditingCourse { is_new: true };
         self.input_field = InputField::Name;
         self.edit_name.clear();
-        self.edit_passing_grade = format!("{DEFAULT_PASSING_GRADE:.0}");
+        self.edit_passing_grade = format_grade(DEFAULT_PASSING_GRADE);
         self.init_global_fields_default();
         self.show_field_help = false;
     }
@@ -63,7 +82,7 @@ impl App {
         self.show_field_help = false;
         self.edit_name = course.name.clone();
         let pg = course.passing_grade;
-        self.edit_passing_grade = format!("{pg:.0}");
+        self.edit_passing_grade = format_grade(pg);
 
         // Load global exam fields from the course
         self.edit_global_policy = course.global_policy.clone();
@@ -72,8 +91,8 @@ impl App {
                 semester_weight,
                 global_weight,
             } => {
-                self.edit_global_semester_weight = format!("{:.0}", semester_weight * 100.0);
-                self.edit_global_exam_weight = format!("{:.0}", global_weight * 100.0);
+                self.edit_global_semester_weight = format_grade(semester_weight * 100.0);
+                self.edit_global_exam_weight = format_grade(global_weight * 100.0);
             }
             _ => {
                 self.edit_global_semester_weight = "70".to_string();
@@ -83,20 +102,18 @@ impl App {
         self.edit_global_min_grade = course
             .global_eligibility
             .min_grade
-            .map(|g| format!("{g:.0}"))
+            .map(format_grade)
             .unwrap_or_default();
         self.edit_global_max_grade = course
             .global_eligibility
             .max_grade
-            .map(|g| format!("{g:.0}"))
+            .map(format_grade)
             .unwrap_or_default();
     }
 
     pub fn confirm_course(&mut self) {
         let name = self.edit_name.trim().to_string();
-        let passing_grade: f64 = self
-            .edit_passing_grade
-            .parse::<f64>()
+        let passing_grade: f64 = parse_decimal(&self.edit_passing_grade)
             .unwrap_or(DEFAULT_PASSING_GRADE)
             .clamp(MIN_GRADE, MAX_GRADE);
 
@@ -154,15 +171,11 @@ impl App {
         match &self.edit_global_policy {
             GlobalExamPolicy::None => GlobalExamPolicy::None,
             GlobalExamPolicy::Weighted { .. } => {
-                let sw = self
-                    .edit_global_semester_weight
-                    .parse::<f64>()
+                let sw = parse_decimal(&self.edit_global_semester_weight)
                     .unwrap_or(70.0)
                     .clamp(0.0, 100.0)
                     / 100.0;
-                let gw = self
-                    .edit_global_exam_weight
-                    .parse::<f64>()
+                let gw = parse_decimal(&self.edit_global_exam_weight)
                     .unwrap_or(30.0)
                     .clamp(0.0, 100.0)
                     / 100.0;
@@ -178,16 +191,10 @@ impl App {
     /// Build `GlobalEligibility` from the current form fields.
     fn build_global_eligibility(&self) -> GlobalEligibility {
         GlobalEligibility {
-            min_grade: self
-                .edit_global_min_grade
-                .trim()
-                .parse::<f64>()
+            min_grade: parse_decimal(&self.edit_global_min_grade)
                 .ok()
                 .map(|g| g.clamp(MIN_GRADE, MAX_GRADE)),
-            max_grade: self
-                .edit_global_max_grade
-                .trim()
-                .parse::<f64>()
+            max_grade: parse_decimal(&self.edit_global_max_grade)
                 .ok()
                 .map(|g| g.clamp(MIN_GRADE, MAX_GRADE)),
         }
@@ -231,14 +238,11 @@ impl App {
         // Populate rule fields from cloned rules
         self.edit_drop_lowest = rules.drop_lowest;
         self.edit_averaging_method = rules.averaging_method;
-        self.edit_min_average = rules
-            .minimum_average
-            .map(|v| format!("{v:.0}"))
-            .unwrap_or_default();
+        self.edit_min_average = rules.minimum_average.map(format_grade).unwrap_or_default();
         self.edit_on_min_not_met = rules.on_minimum_not_met;
         self.edit_min_per_eval = rules
             .minimum_per_evaluation
-            .map(|v| format!("{v:.0}"))
+            .map(format_grade)
             .unwrap_or_default();
         self.edit_round_before_weighting = rules.round_before_weighting;
 
@@ -264,9 +268,7 @@ impl App {
         let minimum_average = if self.edit_min_average.trim().is_empty() {
             None
         } else {
-            self.edit_min_average
-                .trim()
-                .parse::<f64>()
+            parse_decimal(&self.edit_min_average)
                 .ok()
                 .map(|v| v.clamp(MIN_GRADE, MAX_GRADE))
         };
@@ -274,9 +276,7 @@ impl App {
         let minimum_per_evaluation = if self.edit_min_per_eval.trim().is_empty() {
             None
         } else {
-            self.edit_min_per_eval
-                .trim()
-                .parse::<f64>()
+            parse_decimal(&self.edit_min_per_eval)
                 .ok()
                 .map(|v| v.clamp(MIN_GRADE, MAX_GRADE))
         };
@@ -293,9 +293,7 @@ impl App {
 
     pub fn confirm_category(&mut self) {
         let name = self.edit_name.trim().to_string();
-        let weight: f64 = self
-            .edit_weight
-            .parse::<f64>()
+        let weight: f64 = parse_decimal(&self.edit_weight)
             .unwrap_or(MIN_GRADE)
             .clamp(MIN_GRADE, MAX_GRADE);
 
@@ -361,7 +359,7 @@ impl App {
         self.input_field = InputField::Grade;
         self.edit_name = name;
         // Pre-fill with current grade so user doesn't lose it accidentally
-        self.edit_grade = grade.map(|g| format!("{g:.0}")).unwrap_or_default();
+        self.edit_grade = grade.map(format_grade).unwrap_or_default();
     }
 
     pub fn confirm_evaluation(&mut self) {
@@ -369,8 +367,7 @@ impl App {
         let grade: Option<f64> = if self.edit_grade.trim().is_empty() {
             None
         } else {
-            self.edit_grade
-                .parse::<f64>()
+            parse_decimal(&self.edit_grade)
                 .ok()
                 .map(|g: f64| g.clamp(MIN_GRADE, MAX_GRADE))
         };
@@ -773,7 +770,7 @@ impl App {
 
         self.edit_global_grade = course
             .global_exam_grade
-            .map(|g| format!("{g:.0}"))
+            .map(format_grade)
             .unwrap_or_default();
         self.screen = Screen::EnteringGlobalGrade;
         self.input_field = InputField::Grade;
@@ -794,7 +791,7 @@ impl App {
         if trimmed.is_empty() {
             // Empty input clears the global grade
             course.global_exam_grade = None;
-        } else if let Ok(grade) = trimmed.parse::<f64>() {
+        } else if let Ok(grade) = parse_decimal(trimmed) {
             course.global_exam_grade = Some(grade.clamp(MIN_GRADE, MAX_GRADE));
         }
 

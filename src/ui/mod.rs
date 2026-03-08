@@ -31,7 +31,7 @@ mod settings_popup;
 pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
-use crate::model::{Course, GlobalExamPolicy, NeededGradeStatus, WeightValidation};
+use crate::model::{Course, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation};
 use helpers::{focused_border_style, format_course_average, format_weight_validation};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
@@ -440,7 +440,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     // Inner width of the categories panel (excluding borders)
     let panel_inner_w = area.width.saturating_sub(2) as usize;
     let narrow = panel_inner_w < 50;
-    let items: Vec<ListItem> = course
+    let mut items: Vec<ListItem> = course
         .categories
         .iter()
         .enumerate()
@@ -555,12 +555,99 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let title = format!(
-        " {}{} ({}) ",
-        ic.category,
-        m.categories,
-        course.categories.len()
-    );
+    // Virtual "Global" category row — shown when the course needs a global exam
+    if app.shows_virtual_global() {
+        let global_grade_text = match course.global_exam_grade {
+            Some(g) => format!("{:.1}", g),
+            None => "-".to_string(),
+        };
+        let progress = if course.global_exam_grade.is_some() {
+            "1/1".to_string()
+        } else {
+            "0/1".to_string()
+        };
+
+        // Determine colour: pass/fail after global, or override if not yet taken
+        let global_color = if let Some(after) = grade_result.grade_after_global {
+            if course.is_passing_grade(after) {
+                t.status_pass
+            } else {
+                t.status_fail
+            }
+        } else {
+            // Not taken yet — check if achievable
+            let needed = course.needed_global_grade();
+            if matches!(needed.status, NeededGradeStatus::Failure) {
+                t.status_fail
+            } else {
+                t.status_override
+            }
+        };
+
+        // Build needed-grade hint
+        let needed_hint = if course.global_exam_grade.is_none() {
+            let needed = course.needed_global_grade();
+            match needed.status {
+                NeededGradeStatus::Warning => needed
+                    .value
+                    .map(|v| format!(" | {}: {:.0}", m.global_needed, v.ceil()))
+                    .unwrap_or_default(),
+                NeededGradeStatus::Failure => needed
+                    .value
+                    .filter(|&v| v > MAX_GRADE)
+                    .map(|v| {
+                        format!(
+                            " | {}: {} ({})",
+                            m.global_needed,
+                            v.ceil() as i32,
+                            m.need_grade_impossible
+                        )
+                    })
+                    .unwrap_or_else(|| format!(" | {}: {}", m.global_needed, m.cannot_pass)),
+                _ => String::new(),
+            }
+        } else {
+            String::new()
+        };
+
+        let global_policy_hint = match &course.global_policy {
+            GlobalExamPolicy::Weighted {
+                semester_weight,
+                global_weight,
+            } => format!(
+                " ({:.0}/{:.0})",
+                semester_weight * 100.0,
+                global_weight * 100.0
+            ),
+            GlobalExamPolicy::ReplacesWorstGrade => format!(" ({})", m.global_policy_replaces),
+            GlobalExamPolicy::None => String::new(),
+        };
+
+        let name_spans = vec![
+            Span::styled(
+                m.global_exam,
+                Style::default()
+                    .add_modifier(Modifier::BOLD)
+                    .fg(global_color),
+            ),
+            Span::styled(global_policy_hint, Style::default().fg(t.text_muted)),
+        ];
+        let avg_spans = vec![
+            Span::raw(format!("  {}: ", m.grade)),
+            Span::styled(global_grade_text, Style::default().fg(global_color)),
+            Span::styled(
+                format!(" | {}{}", progress, needed_hint),
+                Style::default().fg(t.text_muted),
+            ),
+        ];
+        items.push(ListItem::new(vec![
+            Line::from(name_spans),
+            Line::from(avg_spans),
+        ]));
+    }
+
+    let visible_count = items.len();
+    let title = format!(" {}{} ({}) ", ic.category, m.categories, visible_count);
     let list = List::new(items)
         .block(
             Block::default()

@@ -27,7 +27,7 @@ mod forms;
 use crate::i18n::{Language, Messages};
 use crate::model::{
     AveragingMethod, Category, Course, CourseTemplate, Evaluation, GlobalExamPolicy,
-    MinimumNotMetAction,
+    MinimumNotMetAction, NeededGradeStatus,
 };
 use crate::persistence;
 use crate::templates;
@@ -329,9 +329,49 @@ impl App {
     }
 
     /// Get the currently selected Category, if any.
+    /// Returns `None` when the virtual global category is selected.
     pub fn current_category(&self) -> Option<&Category> {
         self.current_course()
             .and_then(|c| self.selected_category.and_then(|i| c.categories.get(i)))
+    }
+
+    /// Whether the current course should display a virtual "Global" category
+    /// at the end of the category list.  True when the course needs a global
+    /// exam and it is still possible to pass (or the global grade has already
+    /// been entered).
+    pub fn shows_virtual_global(&self) -> bool {
+        let Some(course) = self.current_course() else {
+            return false;
+        };
+        if course.global_policy == GlobalExamPolicy::None {
+            return false;
+        }
+        let result = course.compute_grade();
+        if !result.needs_global {
+            return false;
+        }
+        // If a global grade was already entered, always show the row so the
+        // user can see / edit it.
+        if course.global_exam_grade.is_some() {
+            return true;
+        }
+        // Otherwise show only when it is still possible to pass.
+        !matches!(
+            course.needed_global_grade().status,
+            NeededGradeStatus::Failure
+        )
+    }
+
+    /// Whether the currently selected category index points to the virtual
+    /// global row (index == categories.len()).
+    pub fn is_on_virtual_global(&self) -> bool {
+        let Some(course) = self.current_course() else {
+            return false;
+        };
+        let Some(idx) = self.selected_category else {
+            return false;
+        };
+        idx == course.categories.len() && self.shows_virtual_global()
     }
 
     /// Get the currently selected Evaluation, if any.
@@ -340,16 +380,21 @@ impl App {
             .and_then(|c| self.selected_evaluation.and_then(|i| c.evaluations.get(i)))
     }
 
+    /// Total number of visible category rows for the current course,
+    /// including the virtual global row when applicable.
+    fn visible_category_count(&self) -> usize {
+        let Some(course) = self.current_course() else {
+            return 0;
+        };
+        let extra = if self.shows_virtual_global() { 1 } else { 0 };
+        course.categories.len() + extra
+    }
+
     /// Reset category selection to the first category of the current course
     /// (or None if the course has no categories). Also clears evaluation selection.
     pub fn reset_category_selection(&mut self) {
-        self.selected_category = self.current_course().and_then(|c| {
-            if c.categories.is_empty() {
-                None
-            } else {
-                Some(0)
-            }
-        });
+        let count = self.visible_category_count();
+        self.selected_category = if count == 0 { None } else { Some(0) };
         self.selected_evaluation = None;
     }
 
@@ -412,26 +457,21 @@ impl App {
     }
 
     pub fn next_category(&mut self) {
-        let Some(course) = self.current_course() else {
-            return;
-        };
-        if course.categories.is_empty() {
+        let count = self.visible_category_count();
+        if count == 0 {
             self.selected_category = None;
             return;
         }
-        let len = course.categories.len();
         self.selected_category = Some(match self.selected_category {
-            Some(i) => (i + 1).min(len - 1),
+            Some(i) => (i + 1).min(count - 1),
             None => 0,
         });
         self.reset_evaluation_selection();
     }
 
     pub fn previous_category(&mut self) {
-        let Some(course) = self.current_course() else {
-            return;
-        };
-        if course.categories.is_empty() {
+        let count = self.visible_category_count();
+        if count == 0 {
             self.selected_category = None;
             return;
         }
