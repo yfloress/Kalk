@@ -227,23 +227,38 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
             let has_evals = c.has_evaluations();
 
             // True pass/fail color: accounts for rule overrides and needs_global.
-            // A course is only truly passing when:
-            // - grade >= passing_grade
-            // - no rule overrides (overridden_by is None)
-            // - no needs_global flag
-            // - no failed_minimums at all
-            let has_rule_issues = grade_result.overridden_by.is_some()
-                || grade_result.needs_global
-                || !grade_result.failed_minimums.is_empty();
-
             // When needs_global is set, check whether it's actually possible
             // to pass via the global exam.  If impossible, treat as failed.
             let global_impossible = grade_result.needs_global
                 && c.global_policy != GlobalExamPolicy::None
                 && matches!(c.needed_global_grade().status, NeededGradeStatus::Failure);
 
+            // Check if the global was already taken and resolved the outcome
+            let global_taken_passing = grade_result.needs_global
+                && grade_result
+                    .grade_after_global
+                    .is_some_and(|g| c.is_passing_grade(g));
+            let global_taken_failing = grade_result.needs_global
+                && grade_result
+                    .grade_after_global
+                    .is_some_and(|g| !c.is_passing_grade(g));
+
+            // True pass/fail color: accounts for rule overrides and needs_global.
+            // A course is only truly passing when:
+            // - grade >= passing_grade
+            // - no rule overrides (overridden_by is None)
+            // - no unresolved needs_global flag
+            // - no failed_minimums at all
+            let has_rule_issues = grade_result.overridden_by.is_some()
+                || (grade_result.needs_global && !global_taken_passing)
+                || !grade_result.failed_minimums.is_empty();
+
             let true_color = if !has_evals {
                 t.text_muted
+            } else if global_taken_passing {
+                t.status_pass
+            } else if global_taken_failing {
+                t.status_fail
             } else if grade_result.needs_global && !global_impossible {
                 t.status_override
             } else if has_rule_issues || !c.is_passing_grade(grade_result.grade) {
@@ -255,7 +270,13 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
             if compact {
                 // Compact: single line — "NAME GRADE" with color = true pass/fail
                 let short_grade = if has_evals {
-                    let rounded = Course::round_grade(grade_result.grade);
+                    // When global was taken, show the after-global grade
+                    let display_grade = if let Some(after) = grade_result.grade_after_global {
+                        after
+                    } else {
+                        grade_result.grade
+                    };
+                    let rounded = Course::round_grade(display_grade);
                     format!(" {:.0}", rounded)
                 } else {
                     " -".to_string()
@@ -269,11 +290,22 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 // When weights are valid but the course has academic issues
                 // (needs_global, rule overrides, failed minimums), show the
                 // academic status icon instead so the user is not misled.
-                let recoverable_global = grade_result.needs_global && !global_impossible;
-                let effectively_failed =
-                    global_impossible || (has_rule_issues && !recoverable_global);
+                let recoverable_global = grade_result.needs_global
+                    && !global_impossible
+                    && !global_taken_passing
+                    && !global_taken_failing;
+                let effectively_failed = global_taken_failing
+                    || global_impossible
+                    || (has_rule_issues && !recoverable_global && !global_taken_passing);
 
-                let weight_status = if recoverable_global
+                let weight_status = if global_taken_passing
+                    && matches!(c.validate_weights(), WeightValidation::Valid)
+                {
+                    Span::styled(
+                        format!(" [{}]", ic.weight_ok),
+                        Style::default().fg(t.status_pass),
+                    )
+                } else if recoverable_global
                     && matches!(c.validate_weights(), WeightValidation::Valid)
                 {
                     Span::styled(
@@ -284,7 +316,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                     && matches!(c.validate_weights(), WeightValidation::Valid)
                 {
                     Span::styled(
-                        format!(" [{}]", ic.failed),
+                        format!(" [{}]", ic.failed.trim()),
                         Style::default().fg(t.status_fail),
                     )
                 } else {
@@ -310,20 +342,25 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
 
                 // Normal: two lines with full status info (rule-aware)
                 let status = if has_evals {
-                    let rounded = Course::round_grade(grade_result.grade);
-                    let is_truly_passing =
-                        c.is_passing_grade(grade_result.grade) && !has_rule_issues;
-                    let label = if is_truly_passing {
-                        m.passed
-                    } else if grade_result.needs_global {
-                        m.needs_global
-                    } else {
-                        m.failed
-                    };
-                    if let Some(ref cat_name) = grade_result.overridden_by {
-                        format!("{}: {:.0} ({}) [{}]", m.current, rounded, label, cat_name)
-                    } else {
+                    if let Some(after) = grade_result.grade_after_global {
+                        // Global was taken — show the final (after-global) grade
+                        let rounded = Course::round_grade(after);
+                        let label = if c.is_passing_grade(after) {
+                            m.passed
+                        } else {
+                            m.failed
+                        };
                         format!("{}: {:.0} ({})", m.current, rounded, label)
+                    } else {
+                        let rounded = Course::round_grade(grade_result.grade);
+                        let is_truly_passing =
+                            c.is_passing_grade(grade_result.grade) && !has_rule_issues;
+                        let label = if is_truly_passing { m.passed } else { m.failed };
+                        if let Some(ref cat_name) = grade_result.overridden_by {
+                            format!("{}: {:.0} ({}) [{}]", m.current, rounded, label, cat_name)
+                        } else {
+                            format!("{}: {:.0} ({})", m.current, rounded, label)
+                        }
                     }
                 } else {
                     m.no_evaluations.to_string()
