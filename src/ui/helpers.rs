@@ -26,6 +26,21 @@ use crate::i18n::Messages;
 use crate::model::{
     Course, CourseGradeResult, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation,
 };
+
+/// Truncate a grade to 1 decimal place (towards zero) so the displayed value
+/// never implies a higher integer rounding than what actually happens.
+///
+/// Example: 54.48 displays as "54.4" (not "54.5"), which is consistent with
+/// `round_grade(54.48) == 54`.  Without this, `format!("{:.1}", 54.48)` would
+/// print "54.5", making "54.5 -> 54" look like a bug.
+fn trunc_1dp(v: f64) -> f64 {
+    (v * 10.0).floor() / 10.0
+}
+
+/// Format a grade truncated to 1 decimal place for display.
+pub(crate) fn fmt_grade(v: f64) -> String {
+    format!("{:.1}", trunc_1dp(v))
+}
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -454,9 +469,9 @@ pub fn format_course_average(
         // show as FAILED in red instead of "capped by" in magenta.
         if !course.is_passing_grade(grade_result.grade) {
             let text = format!(
-                "{}: {:.1} -> {:.0} ({}) [{}]",
+                "{}: {} -> {:.0} ({}) [{}]",
                 m.current,
-                grade_result.grade,
+                fmt_grade(grade_result.grade),
                 Course::round_grade(grade_result.grade),
                 m.failed,
                 cat_name
@@ -464,8 +479,11 @@ pub fn format_course_average(
             (text, t.status_fail)
         } else {
             let text = format!(
-                "{}: {:.1} ({} {})",
-                m.current, grade_result.grade, m.grade_capped_by, cat_name
+                "{}: {} ({} {})",
+                m.current,
+                fmt_grade(grade_result.grade),
+                m.grade_capped_by,
+                cat_name
             );
             (text, t.status_fail)
         }
@@ -479,8 +497,13 @@ pub fn format_course_average(
                 m.failed
             };
             let text = format!(
-                "{}: {:.1} | {}: {:.1} -> {:.0} ({})",
-                m.current, grade_result.grade, m.global_result, after, rounded, status
+                "{}: {} | {}: {} -> {:.0} ({})",
+                m.current,
+                fmt_grade(grade_result.grade),
+                m.global_result,
+                fmt_grade(after),
+                rounded,
+                status
             );
             let color = if course.is_passing_grade(after) {
                 t.status_pass
@@ -497,8 +520,11 @@ pub fn format_course_average(
                 // Cannot pass even with a perfect global — show as failed
                 let rounded = Course::round_grade(grade_result.grade);
                 let text = format!(
-                    "{}: {:.1} -> {:.0} ({})",
-                    m.current, grade_result.grade, rounded, m.failed
+                    "{}: {} -> {:.0} ({})",
+                    m.current,
+                    fmt_grade(grade_result.grade),
+                    rounded,
+                    m.failed
                 );
                 (text, t.status_fail)
             } else {
@@ -513,8 +539,11 @@ pub fn format_course_average(
                     _ => String::new(),
                 };
                 let text = format!(
-                    "{}: {:.1} | {}{}",
-                    m.current, grade_result.grade, m.needs_global, needed_hint
+                    "{}: {} | {}{}",
+                    m.current,
+                    fmt_grade(grade_result.grade),
+                    m.needs_global,
+                    needed_hint
                 );
                 (text, t.status_override)
             }
@@ -528,7 +557,13 @@ pub fn format_course_average(
                 } else {
                     m.failed
                 };
-                let text = format!("{}: {:.1} -> {:.0} ({})", m.current, grade, rounded, status);
+                let text = format!(
+                    "{}: {} -> {:.0} ({})",
+                    m.current,
+                    fmt_grade(grade),
+                    rounded,
+                    status
+                );
                 let color = if course.is_passing_grade(grade) {
                     t.status_pass
                 } else {
@@ -555,7 +590,13 @@ pub fn format_course_status(course: &Course, m: &Messages) -> String {
             } else {
                 m.failed
             };
-            format!("{}: {:.1} -> {:.0} ({})", m.current, grade, rounded, status)
+            format!(
+                "{}: {} -> {:.0} ({})",
+                m.current,
+                fmt_grade(grade),
+                rounded,
+                status
+            )
         }
         None => m.no_evaluations.to_string(),
     }

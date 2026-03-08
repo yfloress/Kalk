@@ -20,7 +20,7 @@
 //! Contains `draw_evaluations_panel` and `draw_footer`, split out from
 //! `ui/mod.rs` to keep file sizes under the ~600-line guideline.
 
-use super::helpers::focused_border_style;
+use super::helpers::{fmt_grade, focused_border_style};
 use super::icons::icons;
 use super::theme::theme;
 use crate::app::{App, Focus, Screen};
@@ -385,7 +385,7 @@ fn draw_virtual_global_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("{:.1} -> {:.0} ({})", after, rounded, status_text),
+                format!("{} -> {:.0} ({})", fmt_grade(after), rounded, status_text),
                 Style::default().fg(status_color),
             ),
         ]));
