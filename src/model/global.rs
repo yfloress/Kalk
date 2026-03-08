@@ -90,27 +90,31 @@ impl Course {
             return Some(idx);
         }
 
-        // Auto-detect: find the first category with RequiresGlobal that fails
+        // Auto-detect: find the first category with any RequiresGlobal action
+        // that actually fails its corresponding rule.
         for (idx, cat) in self.categories.iter().enumerate() {
-            if cat.rules.on_minimum_not_met == MinimumNotMetAction::RequiresGlobal {
-                // Check if this category actually fails its minimum
-                let fails_avg = if let Some(min_avg) = cat.rules.minimum_average
-                    && let Some(avg) = cat.average_grade()
-                {
-                    avg < min_avg
-                } else {
-                    false
-                };
+            // Check minimum_average + on_minimum_not_met
+            if cat.rules.on_minimum_not_met == MinimumNotMetAction::RequiresGlobal
+                && let Some(min_avg) = cat.rules.minimum_average
+                && let Some(avg) = cat.average_grade()
+                && avg < min_avg
+            {
+                return Some(idx);
+            }
 
-                let fails_per_eval = if let Some(failing) = cat.evals_below_minimum() {
-                    !failing.is_empty()
-                } else {
-                    false
-                };
+            // Check minimum_per_evaluation + on_min_per_eval_not_met
+            if cat.rules.on_min_per_eval_not_met == MinimumNotMetAction::RequiresGlobal
+                && let Some(failing) = cat.evals_below_minimum()
+                && !failing.is_empty()
+            {
+                return Some(idx);
+            }
 
-                if fails_avg || fails_per_eval {
-                    return Some(idx);
-                }
+            // Check minimum_one_eval + on_min_one_eval_not_met
+            if cat.rules.on_min_one_eval_not_met == MinimumNotMetAction::RequiresGlobal
+                && let Some(false) = cat.any_eval_meets_minimum()
+            {
+                return Some(idx);
             }
         }
 

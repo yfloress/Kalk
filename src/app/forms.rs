@@ -244,6 +244,9 @@ impl App {
             .minimum_per_evaluation
             .map(format_grade)
             .unwrap_or_default();
+        self.edit_on_min_per_eval_not_met = rules.on_min_per_eval_not_met;
+        self.edit_min_one_eval = rules.minimum_one_eval.map(format_grade).unwrap_or_default();
+        self.edit_on_min_one_eval_not_met = rules.on_min_one_eval_not_met;
         self.edit_round_before_weighting = rules.round_before_weighting;
 
         // Auto-expand advanced rules if any non-default rules are configured
@@ -258,6 +261,9 @@ impl App {
         self.edit_min_average.clear();
         self.edit_on_min_not_met = Default::default();
         self.edit_min_per_eval.clear();
+        self.edit_on_min_per_eval_not_met = Default::default();
+        self.edit_min_one_eval.clear();
+        self.edit_on_min_one_eval_not_met = Default::default();
         self.edit_round_before_weighting = false;
     }
 
@@ -281,12 +287,23 @@ impl App {
                 .map(|v| v.clamp(MIN_GRADE, MAX_GRADE))
         };
 
+        let minimum_one_eval = if self.edit_min_one_eval.trim().is_empty() {
+            None
+        } else {
+            parse_decimal(&self.edit_min_one_eval)
+                .ok()
+                .map(|v| v.clamp(MIN_GRADE, MAX_GRADE))
+        };
+
         CategoryRules {
             drop_lowest,
             averaging_method: self.edit_averaging_method,
             minimum_average,
             on_minimum_not_met: self.edit_on_min_not_met,
             minimum_per_evaluation,
+            on_min_per_eval_not_met: self.edit_on_min_per_eval_not_met,
+            minimum_one_eval,
+            on_min_one_eval_not_met: self.edit_on_min_one_eval_not_met,
             round_before_weighting: self.edit_round_before_weighting,
         }
     }

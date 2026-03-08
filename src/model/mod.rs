@@ -341,7 +341,7 @@ impl Course {
                 });
             }
 
-            // Check per-evaluation minimum
+            // Check per-evaluation minimum (independent action)
             if let Some(failing) = cat.evals_below_minimum()
                 && !failing.is_empty()
             {
@@ -352,20 +352,28 @@ impl Course {
                     required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
                 });
 
-                // Per-eval violations also trigger the on_minimum_not_met action
-                // (only if not already added from minimum_average check above)
-                let already_failed = failed_minimums.iter().any(|fm| fm.category_idx == idx);
-                if !already_failed {
-                    let avg = cat.average_grade().unwrap_or(0.0);
-                    failed_minimums.push(FailedMinimum {
-                        category_idx: idx,
-                        category_name: cat.name.clone(),
-                        average: avg,
-                        required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
-                        action: cat.rules.on_minimum_not_met,
-                        from_per_eval: true,
-                    });
-                }
+                let avg = cat.average_grade().unwrap_or(0.0);
+                failed_minimums.push(FailedMinimum {
+                    category_idx: idx,
+                    category_name: cat.name.clone(),
+                    average: avg,
+                    required: cat.rules.minimum_per_evaluation.unwrap_or(0.0),
+                    action: cat.rules.on_min_per_eval_not_met,
+                    from_per_eval: true,
+                });
+            }
+
+            // Check "at least one eval >= X" requirement (independent action)
+            if let Some(false) = cat.any_eval_meets_minimum() {
+                let avg = cat.average_grade().unwrap_or(0.0);
+                failed_minimums.push(FailedMinimum {
+                    category_idx: idx,
+                    category_name: cat.name.clone(),
+                    average: avg,
+                    required: cat.rules.minimum_one_eval.unwrap_or(0.0),
+                    action: cat.rules.on_min_one_eval_not_met,
+                    from_per_eval: false,
+                });
             }
         }
 

@@ -14,24 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/agpl-3.0.html>.
 //
-
-//! Popup dialogs for the UI layer.
-//!
-//! This module contains all overlay popups (template selection, course/category/
-//! evaluation editing, delete confirmations, language selection, save-as-template,
-//! and settings). Rendering helpers and formatting functions live in `helpers.rs`.
-//! Icon sets live in `icons.rs`, colour themes in `theme.rs`.
-
-use crate::app::{App, Focus, InputField};
-use crate::i18n::Language;
-use crate::model::{AveragingMethod, GlobalExamPolicy, MinimumNotMetAction, NeededGradeStatus};
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
-};
+//! Popup dialogs: template selection, course/category/evaluation editing,
+//! delete confirmations, language selection, save-as-template, and settings.
 
 use super::helpers::{
     centered_rect, contextual_field_help, draw_category_help_overlay, draw_course_help_overlay,
@@ -40,10 +24,16 @@ use super::helpers::{
 };
 use super::icons::icons;
 use super::theme::theme;
-
-// =============================================================================
-// Popup Drawing
-// =============================================================================
+use crate::app::{App, Focus, InputField};
+use crate::i18n::{Language, Messages};
+use crate::model::{AveragingMethod, GlobalExamPolicy, MinimumNotMetAction, NeededGradeStatus};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+};
 
 pub fn draw_template_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
@@ -110,7 +100,6 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
 pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let m = app.messages();
     let t = theme();
-
     let popup_w = 55u16;
 
     // --- Compute help text height dynamically ---
@@ -132,7 +121,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         GlobalExamPolicy::Weighted { .. } => 8 + 8, // weights + eligibility
         GlobalExamPolicy::ReplacesWorstGrade => 8,  // eligibility only
     };
-    let popup_h = (12 + extra + help_lines_needed + 2).min(term_height_fallback(frame));
+    let popup_h = (12 + extra + help_lines_needed + 2).min(frame.size().height);
     let term = frame.size();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -281,9 +270,27 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     }
 }
 
-/// Helper to get terminal height (avoids passing frame.size() everywhere).
-fn term_height_fallback(frame: &Frame) -> u16 {
-    frame.size().height
+/// Render an "If Not Met" action toggle for a minimum rule.
+fn render_action_toggle(
+    frame: &mut Frame,
+    m: &Messages,
+    action: MinimumNotMetAction,
+    field: InputField,
+    current_field: InputField,
+    area: Rect,
+) {
+    let label = match action {
+        MinimumNotMetAction::FinalEqualsAverage => m.action_final_equals_avg,
+        MinimumNotMetAction::RequiresGlobal => m.action_requires_global,
+        MinimumNotMetAction::FailCourse => m.action_fail_course,
+    };
+    render_toggle_field(
+        frame,
+        m.on_minimum_not_met,
+        label,
+        current_field == field,
+        area,
+    );
 }
 
 pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
@@ -293,12 +300,12 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let show_advanced = app.show_advanced_rules;
     let show_help = app.show_field_help;
 
-    // Determine if OnMinNotMet field is visible (only when min average is set)
-    let show_on_min_not_met = show_advanced && !app.edit_min_average.trim().is_empty();
+    // Each rule has its own independent "If Not Met" toggle, shown only when that rule has a value
+    let show_on_min_avg_not_met = show_advanced && !app.edit_min_average.trim().is_empty();
+    let show_on_min_per_eval_not_met = show_advanced && !app.edit_min_per_eval.trim().is_empty();
+    let show_on_min_one_eval_not_met = show_advanced && !app.edit_min_one_eval.trim().is_empty();
 
-    // --- Compute help text height dynamically ---
     let popup_width = 50u16;
-    // Inner text width = popup - 2*margin - 2*border = 50 - 4 - 2 = 44
     let inner_text_width = popup_width.saturating_sub(6).max(1) as usize;
     let help_text = contextual_field_help(app, m);
     let help_lines_needed: u16 = if help_text.is_empty() {
@@ -307,22 +314,24 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         help_text.len().div_ceil(inner_text_width).max(1) as u16
     };
 
-    // --- Compute popup height based on what's visible ---
-    // Basic: Name(3) + spacing(1) + Weight(3) + hint(1) = 8
-    // Separator: 2
-    // Help hint area: dynamic
-    // Outer margin: 4 (margin(2) top+bottom)
     let base_height: u16 = 8 + 2 + help_lines_needed + 4;
     let advanced_height: u16 = if show_advanced {
-        let fields = if show_on_min_not_met { 6 } else { 5 };
-        fields * 3 + 1 // fields * 3 lines + 1 spacing
+        // Base: DropLowest + AvgMethod + MinAvg + MinPerEval + MinOneEval + RoundBeforeWeight = 6
+        let mut fields: u16 = 6;
+        if show_on_min_avg_not_met {
+            fields += 1;
+        }
+        if show_on_min_per_eval_not_met {
+            fields += 1;
+        }
+        if show_on_min_one_eval_not_met {
+            fields += 1;
+        }
+        fields * 3 + 1
     } else {
         0
     };
-    let total_height = base_height + advanced_height;
-
-    // Use absolute cell sizing for consistency
-    let popup_height = total_height;
+    let popup_height = base_height + advanced_height;
     let term = frame.size();
     let x = term.x + term.width.saturating_sub(popup_width) / 2;
     let y = term.y + term.height.saturating_sub(popup_height) / 2;
@@ -334,22 +343,18 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     );
 
     frame.render_widget(Clear, area);
-
     let title = if is_new {
         format!(" {} ", m.new_category_title)
     } else {
         format!(" {} ", m.edit_category)
     };
-
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(t.popup_border));
-
     frame.render_widget(block, area);
 
-    // --- Build layout constraints ---
     let mut constraints = vec![
         Constraint::Length(3), // Name
         Constraint::Length(1), // Spacing
@@ -357,20 +362,24 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         Constraint::Length(1), // Weight hint
         Constraint::Length(2), // Advanced rules toggle line
     ];
-
     if show_advanced {
-        constraints.push(Constraint::Length(1)); // Spacing after separator
+        constraints.push(Constraint::Length(1));
         constraints.push(Constraint::Length(3)); // Drop Lowest
-        constraints.push(Constraint::Length(3)); // Averaging Method (toggle)
+        constraints.push(Constraint::Length(3)); // Averaging Method
         constraints.push(Constraint::Length(3)); // Minimum Average
-        if show_on_min_not_met {
-            constraints.push(Constraint::Length(3)); // On Min Not Met (toggle)
+        if show_on_min_avg_not_met {
+            constraints.push(Constraint::Length(3));
         }
         constraints.push(Constraint::Length(3)); // Min Per Eval
-        constraints.push(Constraint::Length(3)); // Round Before Weighting (toggle)
+        if show_on_min_per_eval_not_met {
+            constraints.push(Constraint::Length(3));
+        }
+        constraints.push(Constraint::Length(3)); // Min One Eval
+        if show_on_min_one_eval_not_met {
+            constraints.push(Constraint::Length(3));
+        }
+        constraints.push(Constraint::Length(3)); // Round Before Weighting
     }
-
-    // Contextual help hint at the bottom (dynamically sized)
     constraints.push(Constraint::Length(help_lines_needed));
 
     let inner = Layout::default()
@@ -381,10 +390,6 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     let mut slot = 0;
 
-    // =====================================================================
-    // Basic Fields
-    // =====================================================================
-
     // Name
     render_input_field(
         frame,
@@ -394,9 +399,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         inner[slot],
     );
     slot += 1;
-
-    // Spacing
-    slot += 1;
+    slot += 1; // Spacing
 
     // Weight
     render_input_field(
@@ -407,11 +410,8 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         inner[slot],
     );
     slot += 1;
-
-    // Weight hint (inline, no border)
     if let Some(course) = app.current_course() {
         let current_total = course.total_weight();
-        // Avoid displaying "-0%" when total is negative zero
         let display_total = if current_total == 0.0 {
             0.0
         } else {
@@ -429,10 +429,6 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         frame.render_widget(hint_widget, inner[slot]);
     }
     slot += 1;
-
-    // =====================================================================
-    // Advanced Rules Toggle
-    // =====================================================================
 
     let toggle_text = if show_advanced {
         format!(
@@ -454,15 +450,9 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     frame.render_widget(toggle_widget, inner[slot]);
     slot += 1;
 
-    // =====================================================================
-    // Advanced Fields (only when expanded)
-    // =====================================================================
-
     if show_advanced {
-        // Spacing after separator
-        slot += 1;
+        slot += 1; // Spacing after separator
 
-        // Drop Lowest (toggle: 0..5)
         let drop_label = format!("{}", app.edit_drop_lowest);
         render_toggle_field(
             frame,
@@ -472,8 +462,6 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             inner[slot],
         );
         slot += 1;
-
-        // Averaging Method (toggle)
         let avg_method_label = match app.edit_averaging_method {
             AveragingMethod::Arithmetic => m.averaging_arithmetic,
             AveragingMethod::Geometric => m.averaging_geometric,
@@ -486,8 +474,6 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             inner[slot],
         );
         slot += 1;
-
-        // Minimum Average
         render_input_field(
             frame,
             m.minimum_average,
@@ -496,25 +482,17 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             inner[slot],
         );
         slot += 1;
-
-        // On Minimum Not Met (toggle, conditional)
-        if show_on_min_not_met {
-            let action_label = match app.edit_on_min_not_met {
-                MinimumNotMetAction::FinalEqualsAverage => m.action_final_equals_avg,
-                MinimumNotMetAction::RequiresGlobal => m.action_requires_global,
-                MinimumNotMetAction::FailCourse => m.action_fail_course,
-            };
-            render_toggle_field(
+        if show_on_min_avg_not_met {
+            render_action_toggle(
                 frame,
-                m.on_minimum_not_met,
-                action_label,
-                app.input_field == InputField::OnMinNotMet,
+                m,
+                app.edit_on_min_not_met,
+                InputField::OnMinNotMet,
+                app.input_field,
                 inner[slot],
             );
             slot += 1;
         }
-
-        // Min Per Eval
         render_input_field(
             frame,
             m.minimum_per_evaluation,
@@ -523,8 +501,36 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             inner[slot],
         );
         slot += 1;
-
-        // Round Before Weighting (toggle)
+        if show_on_min_per_eval_not_met {
+            render_action_toggle(
+                frame,
+                m,
+                app.edit_on_min_per_eval_not_met,
+                InputField::OnMinPerEvalNotMet,
+                app.input_field,
+                inner[slot],
+            );
+            slot += 1;
+        }
+        render_input_field(
+            frame,
+            m.minimum_one_eval,
+            &app.edit_min_one_eval,
+            app.input_field == InputField::MinOneEval,
+            inner[slot],
+        );
+        slot += 1;
+        if show_on_min_one_eval_not_met {
+            render_action_toggle(
+                frame,
+                m,
+                app.edit_on_min_one_eval_not_met,
+                InputField::OnMinOneEvalNotMet,
+                app.input_field,
+                inner[slot],
+            );
+            slot += 1;
+        }
         let round_label = if app.edit_round_before_weighting {
             m.yes
         } else {
@@ -540,19 +546,10 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         slot += 1;
     }
 
-    // =====================================================================
-    // Contextual help hint (always at bottom of popup)
-    // =====================================================================
-
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(t.text_muted))
         .wrap(Wrap { trim: true });
     frame.render_widget(help_widget, inner[slot]);
-
-    // =====================================================================
-    // Full help overlay (when ? is pressed)
-    // =====================================================================
-
     if show_help {
         draw_category_help_overlay(frame, m);
     }
@@ -564,21 +561,17 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let t = theme();
     let area = centered_rect(60, 50, frame.size());
     frame.render_widget(Clear, area);
-
     let title = if is_new {
         format!(" {} ", m.new_evaluation)
     } else {
         format!(" {} ", m.edit_evaluation)
     };
-
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(t.popup_border));
-
     frame.render_widget(block, area);
-
     let inner = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
@@ -608,8 +601,6 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
         app.input_field == InputField::Name,
         inner[2],
     );
-
-    // Show what grade is needed in this evaluation to pass
     if let Some(course) = app.current_course() {
         let (info, info_color) = if let (Some(cat_idx), Some(eval_idx)) =
             (app.selected_category, app.selected_evaluation)
@@ -648,15 +639,12 @@ pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
     let t = theme();
     let area = centered_rect(60, 40, frame.size());
     frame.render_widget(Clear, area);
-
     let block = Block::default()
         .title(format!(" {} ", m.save_as_template_title))
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(t.popup_border));
-
     frame.render_widget(block, area);
-
     let inner = Layout::default()
         .direction(Direction::Vertical)
         .margin(2)
@@ -742,7 +730,6 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     let ic = icons(app.use_nerd_fonts);
     let area = centered_rect(40, 30, frame.size());
     frame.render_widget(Clear, area);
-
     let block = Block::default()
         .title(format!(" {}{} ", ic.language, m.select_language))
         .borders(Borders::ALL)
@@ -789,10 +776,6 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
 
     frame.render_stateful_widget(list, inner, &mut state);
 }
-
-// =============================================================================
-// Global Grade Entry Popup
-// =============================================================================
 
 pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();

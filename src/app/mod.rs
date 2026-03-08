@@ -74,10 +74,13 @@ pub enum InputField {
     // Category rule fields (text input)
     MinimumAverage,
     MinPerEval,
+    MinOneEval,
     // Category rule toggle fields (cycled with Space/Enter, not typed)
     DropLowest,
     AvgMethod,
     OnMinNotMet,
+    OnMinPerEvalNotMet,
+    OnMinOneEvalNotMet,
     RoundBeforeWeight,
     // Global exam fields (course form)
     GlobalPolicy,
@@ -95,6 +98,8 @@ impl InputField {
             InputField::DropLowest
                 | InputField::AvgMethod
                 | InputField::OnMinNotMet
+                | InputField::OnMinPerEvalNotMet
+                | InputField::OnMinOneEvalNotMet
                 | InputField::RoundBeforeWeight
                 | InputField::GlobalPolicy
         )
@@ -109,6 +114,7 @@ impl InputField {
                 | InputField::Grade
                 | InputField::MinimumAverage
                 | InputField::MinPerEval
+                | InputField::MinOneEval
                 | InputField::GlobalSemesterWeight
                 | InputField::GlobalExamWeight
                 | InputField::GlobalMinGrade
@@ -159,8 +165,11 @@ pub struct App {
     pub edit_drop_lowest: usize,
     pub edit_min_average: String,
     pub edit_min_per_eval: String,
+    pub edit_min_one_eval: String,
     pub edit_averaging_method: AveragingMethod,
     pub edit_on_min_not_met: MinimumNotMetAction,
+    pub edit_on_min_per_eval_not_met: MinimumNotMetAction,
+    pub edit_on_min_one_eval_not_met: MinimumNotMetAction,
     pub edit_round_before_weighting: bool,
 
     /// Whether advanced rules section is expanded in the category popup.
@@ -211,8 +220,11 @@ impl Default for App {
             edit_drop_lowest: 0,
             edit_min_average: String::new(),
             edit_min_per_eval: String::new(),
+            edit_min_one_eval: String::new(),
             edit_averaging_method: AveragingMethod::default(),
             edit_on_min_not_met: MinimumNotMetAction::default(),
+            edit_on_min_per_eval_not_met: MinimumNotMetAction::default(),
+            edit_on_min_one_eval_not_met: MinimumNotMetAction::default(),
             edit_round_before_weighting: false,
             edit_global_policy: GlobalExamPolicy::default(),
             edit_global_semester_weight: String::new(),
@@ -614,7 +626,7 @@ impl App {
             (Screen::EditingCategory { .. }, InputField::DropLowest) => InputField::AvgMethod,
             (Screen::EditingCategory { .. }, InputField::AvgMethod) => InputField::MinimumAverage,
             (Screen::EditingCategory { .. }, InputField::MinimumAverage) => {
-                // Only show OnMinNotMet if a minimum average is set
+                // Show OnMinNotMet only if a minimum average is set
                 if !self.edit_min_average.trim().is_empty() {
                     InputField::OnMinNotMet
                 } else {
@@ -623,6 +635,25 @@ impl App {
             }
             (Screen::EditingCategory { .. }, InputField::OnMinNotMet) => InputField::MinPerEval,
             (Screen::EditingCategory { .. }, InputField::MinPerEval) => {
+                // Show OnMinPerEvalNotMet only if min per eval is set
+                if !self.edit_min_per_eval.trim().is_empty() {
+                    InputField::OnMinPerEvalNotMet
+                } else {
+                    InputField::MinOneEval
+                }
+            }
+            (Screen::EditingCategory { .. }, InputField::OnMinPerEvalNotMet) => {
+                InputField::MinOneEval
+            }
+            (Screen::EditingCategory { .. }, InputField::MinOneEval) => {
+                // Show OnMinOneEvalNotMet only if min one eval is set
+                if !self.edit_min_one_eval.trim().is_empty() {
+                    InputField::OnMinOneEvalNotMet
+                } else {
+                    InputField::RoundBeforeWeight
+                }
+            }
+            (Screen::EditingCategory { .. }, InputField::OnMinOneEvalNotMet) => {
                 InputField::RoundBeforeWeight
             }
             (Screen::EditingCategory { .. }, InputField::RoundBeforeWeight) => InputField::Name,
@@ -643,6 +674,7 @@ impl App {
             InputField::Description => &mut self.edit_description,
             InputField::MinimumAverage => &mut self.edit_min_average,
             InputField::MinPerEval => &mut self.edit_min_per_eval,
+            InputField::MinOneEval => &mut self.edit_min_one_eval,
             InputField::GlobalSemesterWeight => &mut self.edit_global_semester_weight,
             InputField::GlobalExamWeight => &mut self.edit_global_exam_weight,
             InputField::GlobalMinGrade => &mut self.edit_global_min_grade,
@@ -652,6 +684,8 @@ impl App {
             InputField::DropLowest
             | InputField::AvgMethod
             | InputField::OnMinNotMet
+            | InputField::OnMinPerEvalNotMet
+            | InputField::OnMinOneEvalNotMet
             | InputField::RoundBeforeWeight
             | InputField::GlobalPolicy => {
                 debug_assert!(
@@ -678,6 +712,20 @@ impl App {
             }
             InputField::OnMinNotMet => {
                 self.edit_on_min_not_met = match self.edit_on_min_not_met {
+                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
+                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
+                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
+                };
+            }
+            InputField::OnMinPerEvalNotMet => {
+                self.edit_on_min_per_eval_not_met = match self.edit_on_min_per_eval_not_met {
+                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
+                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
+                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
+                };
+            }
+            InputField::OnMinOneEvalNotMet => {
+                self.edit_on_min_one_eval_not_met = match self.edit_on_min_one_eval_not_met {
                     MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
                     MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
                     MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
@@ -715,6 +763,20 @@ impl App {
             // Three-state toggle: reverse cycle
             InputField::OnMinNotMet => {
                 self.edit_on_min_not_met = match self.edit_on_min_not_met {
+                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
+                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
+                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
+                };
+            }
+            InputField::OnMinPerEvalNotMet => {
+                self.edit_on_min_per_eval_not_met = match self.edit_on_min_per_eval_not_met {
+                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
+                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
+                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
+                };
+            }
+            InputField::OnMinOneEvalNotMet => {
+                self.edit_on_min_one_eval_not_met = match self.edit_on_min_one_eval_not_met {
                     MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
                     MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
                     MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,

@@ -1111,7 +1111,7 @@ fn test_compute_grade_fail_course_from_per_eval_minimum() {
     // One eval is below 40 → should trigger FailCourse via per-eval violation
     let mut cat = Category::new("Certs".to_string(), 100.0);
     cat.rules.minimum_per_evaluation = Some(40.0);
-    cat.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat.rules.on_min_per_eval_not_met = MinimumNotMetAction::FailCourse;
     cat.evaluations
         .push(Evaluation::with_grade("C1".to_string(), 80.0));
     cat.evaluations
@@ -1140,7 +1140,7 @@ fn test_compute_grade_per_eval_minimum_requires_global() {
     // One eval below 50 → should trigger RequiresGlobal
     let mut cat = Category::new("Certs".to_string(), 100.0);
     cat.rules.minimum_per_evaluation = Some(50.0);
-    cat.rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+    cat.rules.on_min_per_eval_not_met = MinimumNotMetAction::RequiresGlobal;
     cat.evaluations
         .push(Evaluation::with_grade("C1".to_string(), 70.0));
     cat.evaluations
@@ -1165,7 +1165,7 @@ fn test_compute_grade_per_eval_minimum_all_passing_no_trigger() {
     // All evals above 30 → no violation, FailCourse should NOT trigger
     let mut cat = Category::new("Certs".to_string(), 100.0);
     cat.rules.minimum_per_evaluation = Some(30.0);
-    cat.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    cat.rules.on_min_per_eval_not_met = MinimumNotMetAction::FailCourse;
     cat.evaluations
         .push(Evaluation::with_grade("C1".to_string(), 50.0));
     cat.evaluations
@@ -2269,4 +2269,203 @@ fn test_needs_global_np_below_passing_with_global_grade_entered() {
         course.is_passing_grade(after),
         "58.3 rounds to 58, which should pass"
     );
+}
+
+// =============================================================================
+// minimum_one_eval (at least one eval >= X)
+// =============================================================================
+
+#[test]
+fn test_any_eval_meets_minimum_no_requirement() {
+    let mut cat = Category::new("Certs".to_string(), 80.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+    assert_eq!(cat.any_eval_meets_minimum(), None);
+}
+
+#[test]
+fn test_any_eval_meets_minimum_passing() {
+    let mut cat = Category::new("Certs".to_string(), 80.0);
+    cat.rules.minimum_one_eval = Some(50.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 60.0));
+    // At least one eval (60) >= 50 → passes
+    assert_eq!(cat.any_eval_meets_minimum(), Some(true));
+}
+
+#[test]
+fn test_any_eval_meets_minimum_failing() {
+    let mut cat = Category::new("Certs".to_string(), 80.0);
+    cat.rules.minimum_one_eval = Some(50.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 40.0));
+    // No eval >= 50 → fails
+    assert_eq!(cat.any_eval_meets_minimum(), Some(false));
+}
+
+#[test]
+fn test_any_eval_meets_minimum_ungraded_ignored() {
+    let mut cat = Category::new("Certs".to_string(), 80.0);
+    cat.rules.minimum_one_eval = Some(50.0);
+    cat.evaluations.push(Evaluation::new("C1".to_string())); // ungraded
+    cat.evaluations.push(Evaluation::new("C2".to_string())); // ungraded
+    // No graded evals at all → none meets threshold → false
+    assert_eq!(cat.any_eval_meets_minimum(), Some(false));
+}
+
+#[test]
+fn test_any_eval_meets_minimum_exact_boundary() {
+    let mut cat = Category::new("Certs".to_string(), 80.0);
+    cat.rules.minimum_one_eval = Some(50.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 50.0));
+    // Exactly 50 >= 50 → passes
+    assert_eq!(cat.any_eval_meets_minimum(), Some(true));
+}
+
+#[test]
+fn test_compute_grade_min_one_eval_triggers_requires_global() {
+    let mut course = Course::new("Physics".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let mut certs = Category::new("Certamenes".to_string(), 80.0);
+    certs.rules.minimum_one_eval = Some(50.0);
+    certs.rules.on_min_one_eval_not_met = MinimumNotMetAction::RequiresGlobal;
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 40.0));
+
+    let mut quizzes = Category::new("Quizzes".to_string(), 20.0);
+    quizzes
+        .evaluations
+        .push(Evaluation::with_grade("Q1".to_string(), 80.0));
+
+    course.categories.push(certs);
+    course.categories.push(quizzes);
+
+    let result = course.compute_grade();
+    // No cert >= 50 → RequiresGlobal triggered
+    assert!(result.needs_global);
+    assert!(!result.failed_minimums.is_empty());
+}
+
+#[test]
+fn test_compute_grade_min_one_eval_no_trigger_when_one_passes() {
+    let mut course = Course::new("Physics".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let mut certs = Category::new("Certamenes".to_string(), 80.0);
+    certs.rules.minimum_one_eval = Some(50.0);
+    certs.rules.on_min_one_eval_not_met = MinimumNotMetAction::RequiresGlobal;
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 55.0));
+
+    let mut quizzes = Category::new("Quizzes".to_string(), 20.0);
+    quizzes
+        .evaluations
+        .push(Evaluation::with_grade("Q1".to_string(), 80.0));
+
+    course.categories.push(certs);
+    course.categories.push(quizzes);
+
+    let result = course.compute_grade();
+    // C2 = 55 >= 50 → rule satisfied, no trigger from min_one_eval
+    let min_one_triggered = result
+        .failed_minimums
+        .iter()
+        .any(|fm| fm.category_name == "Certamenes" && !fm.from_per_eval);
+    assert!(!min_one_triggered);
+}
+
+#[test]
+fn test_compute_grade_min_one_eval_fail_course() {
+    let mut course = Course::new("Physics".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut certs = Category::new("Certamenes".to_string(), 80.0);
+    certs.rules.minimum_one_eval = Some(50.0);
+    certs.rules.on_min_one_eval_not_met = MinimumNotMetAction::FailCourse;
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 40.0));
+
+    let mut quizzes = Category::new("Quizzes".to_string(), 20.0);
+    quizzes
+        .evaluations
+        .push(Evaluation::with_grade("Q1".to_string(), 80.0));
+
+    course.categories.push(certs);
+    course.categories.push(quizzes);
+
+    let result = course.compute_grade();
+    // No cert >= 50 and action is FailCourse → grade forced to 0
+    assert!((result.grade - 0.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("Certamenes".to_string()));
+}
+
+#[test]
+fn test_min_one_eval_independent_from_min_avg() {
+    // When both minimum_average and minimum_one_eval fail for the same
+    // category, each rule independently produces its own FailedMinimum
+    // entry because they have independent action fields.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut certs = Category::new("Certamenes".to_string(), 80.0);
+    certs.rules.minimum_average = Some(55.0);
+    certs.rules.on_minimum_not_met = MinimumNotMetAction::RequiresGlobal;
+    certs.rules.minimum_one_eval = Some(50.0);
+    certs.rules.on_min_one_eval_not_met = MinimumNotMetAction::FailCourse;
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 30.0));
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C2".to_string(), 40.0));
+
+    let mut quizzes = Category::new("Quizzes".to_string(), 20.0);
+    quizzes
+        .evaluations
+        .push(Evaluation::with_grade("Q1".to_string(), 80.0));
+
+    course.categories.push(certs);
+    course.categories.push(quizzes);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let result = course.compute_grade();
+    // Both rules fail independently — two FailedMinimum entries for "Certamenes"
+    let cert_failures: Vec<_> = result
+        .failed_minimums
+        .iter()
+        .filter(|fm| fm.category_name == "Certamenes")
+        .collect();
+    assert_eq!(
+        cert_failures.len(),
+        2,
+        "each rule produces its own FailedMinimum"
+    );
+    // FailCourse (from min_one_eval) takes priority → grade forced to 0
+    assert!((result.grade - 0.0).abs() < 0.01);
+    assert_eq!(result.overridden_by, Some("Certamenes".to_string()));
 }

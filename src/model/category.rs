@@ -91,6 +91,19 @@ pub struct CategoryRules {
     #[serde(default)]
     pub minimum_per_evaluation: Option<f64>,
 
+    /// What happens when the per-evaluation minimum is not met.
+    #[serde(default)]
+    pub on_min_per_eval_not_met: MinimumNotMetAction,
+
+    /// At least one graded evaluation must be >= this value (None = no requirement).
+    /// If no graded evaluation meets this threshold, `on_min_one_eval_not_met` is triggered.
+    #[serde(default)]
+    pub minimum_one_eval: Option<f64>,
+
+    /// What happens when no evaluation meets the minimum-one-eval threshold.
+    #[serde(default)]
+    pub on_min_one_eval_not_met: MinimumNotMetAction,
+
     /// Whether to round the category average to nearest integer before
     /// using it in the weighted course grade calculation.
     #[serde(default)]
@@ -105,6 +118,9 @@ impl CategoryRules {
             && self.drop_lowest == 0
             && self.averaging_method == AveragingMethod::Arithmetic
             && self.minimum_per_evaluation.is_none()
+            && self.on_min_per_eval_not_met == MinimumNotMetAction::FinalEqualsAverage
+            && self.minimum_one_eval.is_none()
+            && self.on_min_one_eval_not_met == MinimumNotMetAction::FinalEqualsAverage
             && !self.round_before_weighting
     }
 }
@@ -291,6 +307,19 @@ impl Category {
     pub fn meets_minimum(&self) -> Option<bool> {
         let min = self.rules.minimum_average?;
         self.average_grade().map(|avg| avg >= min)
+    }
+
+    /// Check whether at least one graded evaluation meets the `minimum_one_eval`
+    /// threshold.  Returns `None` if there is no such requirement.
+    /// Returns `Some(true)` if at least one graded eval >= threshold,
+    /// `Some(false)` if all graded evals are below (or none are graded).
+    pub fn any_eval_meets_minimum(&self) -> Option<bool> {
+        let min = self.rules.minimum_one_eval?;
+        let any_passes = self
+            .evaluations
+            .iter()
+            .any(|e| matches!(e.grade, Some(g) if g >= min));
+        Some(any_passes)
     }
 
     /// Check if all individual evaluations meet the per-evaluation minimum.

@@ -286,6 +286,9 @@ pub fn contextual_field_help(app: &App, m: &Messages) -> String {
         InputField::MinimumAverage => m.help_minimum_average.to_string(),
         InputField::OnMinNotMet => m.help_on_min_not_met.to_string(),
         InputField::MinPerEval => m.help_min_per_eval.to_string(),
+        InputField::OnMinPerEvalNotMet => m.help_on_min_not_met.to_string(),
+        InputField::MinOneEval => m.help_min_one_eval.to_string(),
+        InputField::OnMinOneEvalNotMet => m.help_on_min_not_met.to_string(),
         InputField::RoundBeforeWeight => m.help_round_before_weighting.to_string(),
         InputField::PassingGrade => m.help_passing_grade.to_string(),
         InputField::GlobalPolicy => match &app.edit_global_policy {
@@ -360,6 +363,11 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
         Line::from(vec![
             Span::styled(format!("{}: ", m.minimum_per_evaluation), label_style),
             Span::styled(m.help_min_per_eval, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{}: ", m.minimum_one_eval), label_style),
+            Span::styled(m.help_min_one_eval, desc_style),
         ]),
         Line::from(""),
         Line::from(vec![
