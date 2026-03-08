@@ -449,6 +449,17 @@ impl Course {
             }
         }
 
+        // If the semester grade is below passing and a global policy is
+        // configured, the student needs the global exam even when no
+        // individual category triggered RequiresGlobal.  This covers the
+        // common rule "NP < passing_grade => must take global".
+        if !needs_global
+            && self.global_policy != GlobalExamPolicy::None
+            && !self.is_passing_grade(normal_grade)
+        {
+            needs_global = true;
+        }
+
         // Compute post-global grade if a global exam grade has been entered
         let grade_after_global = self.compute_grade_after_global(normal_grade);
 

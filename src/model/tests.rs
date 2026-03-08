@@ -2146,3 +2146,127 @@ fn test_global_weighted_100_0_edge() {
     // 53 * 1.0 + 100 * 0.0 = 53 (semester grade unchanged)
     assert!((after - result.grade).abs() < 0.01);
 }
+
+#[test]
+fn test_needs_global_when_np_below_passing_with_global_policy() {
+    // When NP < passing_grade and a global policy is configured,
+    // needs_global should be true even without any category triggering
+    // RequiresGlobal.  This covers the common rule:
+    //   "NP < 54.5 => must take certamen global"
+    // Certamenes: 55 * 0.60 = 33, Laboratorio: 40 * 0.40 = 16 => NP = 49
+    let mut course = Course::new("MAT270".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let mut certs = Category::new("Certamenes".to_string(), 60.0);
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 55.0));
+    course.categories.push(certs);
+
+    let mut labs = Category::new("Laboratorio".to_string(), 40.0);
+    labs.evaluations
+        .push(Evaluation::with_grade("Lab".to_string(), 40.0));
+    course.categories.push(labs);
+
+    let result = course.compute_grade();
+    // NP = 55*0.6 + 40*0.4 = 33 + 16 = 49, which is < 55
+    assert!((result.grade - 49.0).abs() < 0.01);
+    assert!(
+        result.needs_global,
+        "needs_global should be true when NP < passing and global policy exists"
+    );
+    assert!(result.overridden_by.is_none());
+}
+
+#[test]
+fn test_no_needs_global_when_np_above_passing_with_global_policy() {
+    // When NP >= passing_grade, needs_global should NOT be set even if a
+    // global policy is configured — the student already passes.
+    let mut course = Course::new("MAT270".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let mut certs = Category::new("Certamenes".to_string(), 60.0);
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 70.0));
+    course.categories.push(certs);
+
+    let mut labs = Category::new("Laboratorio".to_string(), 40.0);
+    labs.evaluations
+        .push(Evaluation::with_grade("Lab".to_string(), 60.0));
+    course.categories.push(labs);
+
+    let result = course.compute_grade();
+    // NP = 70*0.6 + 60*0.4 = 42 + 24 = 66, which is >= 55
+    assert!((result.grade - 66.0).abs() < 0.01);
+    assert!(
+        !result.needs_global,
+        "needs_global should be false when NP >= passing"
+    );
+}
+
+#[test]
+fn test_no_needs_global_when_no_global_policy() {
+    // When there is no global policy, needs_global should never be set,
+    // even if NP < passing_grade.
+    let mut course = Course::new("MAT270".to_string(), DEFAULT_PASSING_GRADE);
+    // global_policy is None by default
+
+    let mut certs = Category::new("Certamenes".to_string(), 60.0);
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 55.0));
+    course.categories.push(certs);
+
+    let mut labs = Category::new("Laboratorio".to_string(), 40.0);
+    labs.evaluations
+        .push(Evaluation::with_grade("Lab".to_string(), 40.0));
+    course.categories.push(labs);
+
+    let result = course.compute_grade();
+    // NP = 49, below passing, but no global policy
+    assert!(
+        !result.needs_global,
+        "needs_global should be false when no global policy is configured"
+    );
+}
+
+#[test]
+fn test_needs_global_np_below_passing_with_global_grade_entered() {
+    // When NP < passing and global grade has been entered, needs_global
+    // should still be true, but grade_after_global should be computed.
+    // NF = NP * 0.7 + CG * 0.3
+    let mut course = Course::new("MAT270".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_exam_grade = Some(80.0);
+
+    let mut certs = Category::new("Certamenes".to_string(), 60.0);
+    certs
+        .evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 55.0));
+    course.categories.push(certs);
+
+    let mut labs = Category::new("Laboratorio".to_string(), 40.0);
+    labs.evaluations
+        .push(Evaluation::with_grade("Lab".to_string(), 40.0));
+    course.categories.push(labs);
+
+    let result = course.compute_grade();
+    // NP = 49, NF = 49 * 0.7 + 80 * 0.3 = 34.3 + 24 = 58.3
+    assert!(result.needs_global);
+    let after = result.grade_after_global.unwrap();
+    assert!((after - 58.3).abs() < 0.01);
+    assert!(
+        course.is_passing_grade(after),
+        "58.3 rounds to 58, which should pass"
+    );
+}

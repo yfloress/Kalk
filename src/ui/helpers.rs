@@ -491,38 +491,33 @@ pub fn format_course_average(
         } else {
             // Needs global but hasn't taken it yet — show needed grade
             let needed = course.needed_global_grade();
-            let needed_hint = match needed.status {
-                NeededGradeStatus::Success => String::new(),
-                NeededGradeStatus::Warning => {
-                    if let Some(v) = needed.value {
-                        format!(" | {}: {:.0}", m.global_needed, v.ceil())
-                    } else {
-                        String::new()
-                    }
-                }
-                NeededGradeStatus::Failure => {
-                    if let Some(v) = needed.value {
-                        if v > MAX_GRADE {
-                            format!(
-                                " | {}: {} ({})",
-                                m.global_needed,
-                                v.ceil() as i32,
-                                m.need_grade_impossible
-                            )
+            let impossible = matches!(needed.status, NeededGradeStatus::Failure);
+
+            if impossible {
+                // Cannot pass even with a perfect global — show as failed
+                let rounded = Course::round_grade(grade_result.grade);
+                let text = format!(
+                    "{}: {:.1} -> {:.0} ({})",
+                    m.current, grade_result.grade, rounded, m.failed
+                );
+                (text, t.status_fail)
+            } else {
+                let needed_hint = match needed.status {
+                    NeededGradeStatus::Warning => {
+                        if let Some(v) = needed.value {
+                            format!(" | {}: {:.0}", m.global_needed, v.ceil())
                         } else {
                             String::new()
                         }
-                    } else {
-                        format!(" | {}: {}", m.global_needed, m.cannot_pass)
                     }
-                }
-                NeededGradeStatus::Info => String::new(),
-            };
-            let text = format!(
-                "{}: {:.1} | {}{}",
-                m.current, grade_result.grade, m.needs_global, needed_hint
-            );
-            (text, t.status_override)
+                    _ => String::new(),
+                };
+                let text = format!(
+                    "{}: {:.1} | {}{}",
+                    m.current, grade_result.grade, m.needs_global, needed_hint
+                );
+                (text, t.status_override)
+            }
         }
     } else {
         match course.current_grade() {

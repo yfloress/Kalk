@@ -31,7 +31,7 @@ mod settings_popup;
 pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
-use crate::model::{Course, WeightValidation};
+use crate::model::{Course, GlobalExamPolicy, NeededGradeStatus, WeightValidation};
 use helpers::{focused_border_style, format_course_average, format_weight_validation};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
@@ -236,9 +236,15 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 || grade_result.needs_global
                 || !grade_result.failed_minimums.is_empty();
 
+            // When needs_global is set, check whether it's actually possible
+            // to pass via the global exam.  If impossible, treat as failed.
+            let global_impossible = grade_result.needs_global
+                && c.global_policy != GlobalExamPolicy::None
+                && matches!(c.needed_global_grade().status, NeededGradeStatus::Failure);
+
             let true_color = if !has_evals {
                 t.text_muted
-            } else if grade_result.needs_global {
+            } else if grade_result.needs_global && !global_impossible {
                 t.status_override
             } else if has_rule_issues || !c.is_passing_grade(grade_result.grade) {
                 t.status_fail
@@ -263,15 +269,18 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 // When weights are valid but the course has academic issues
                 // (needs_global, rule overrides, failed minimums), show the
                 // academic status icon instead so the user is not misled.
-                let weight_status = if grade_result.needs_global
+                let recoverable_global = grade_result.needs_global && !global_impossible;
+                let effectively_failed =
+                    global_impossible || (has_rule_issues && !recoverable_global);
+
+                let weight_status = if recoverable_global
                     && matches!(c.validate_weights(), WeightValidation::Valid)
                 {
                     Span::styled(
                         format!(" [{}]", ic.warning),
                         Style::default().fg(t.status_override),
                     )
-                } else if has_rule_issues
-                    && !grade_result.needs_global
+                } else if effectively_failed
                     && matches!(c.validate_weights(), WeightValidation::Valid)
                 {
                     Span::styled(
