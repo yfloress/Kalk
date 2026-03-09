@@ -34,7 +34,9 @@ use crate::model::{
 /// `round_grade(54.48) == 54`.  Without this, `format!("{:.1}", 54.48)` would
 /// print "54.5", making "54.5 -> 54" look like a bug.
 fn trunc_1dp(v: f64) -> f64 {
-    (v * 10.0).floor() / 10.0
+    let t = (v * 10.0).floor() / 10.0;
+    // Avoid IEEE 754 negative zero in display
+    if t == 0.0 { 0.0 } else { t }
 }
 
 /// Format a grade truncated to 1 decimal place for display.
@@ -467,6 +469,12 @@ pub fn format_course_average(
     m: &Messages,
 ) -> (String, Color) {
     let t = theme();
+
+    // No evaluations at all → show "no grades yet" regardless of rules/global
+    if !course.has_evaluations() {
+        return (m.no_grades_yet.to_string(), t.text_muted);
+    }
+
     if let Some(ref cat_name) = grade_result.overridden_by {
         // FailCourse overrides produce grade 0 which is never passing —
         // show as FAILED in red instead of "capped by" in magenta.

@@ -312,9 +312,13 @@ impl Category {
     /// Check whether at least one graded evaluation meets the `minimum_one_eval`
     /// threshold.  Returns `None` if there is no such requirement.
     /// Returns `Some(true)` if at least one graded eval >= threshold,
-    /// `Some(false)` if all graded evals are below (or none are graded).
+    /// `Some(false)` if all graded evals are below.
+    /// Returns `None` if there is no requirement or no evaluations.
     pub fn any_eval_meets_minimum(&self) -> Option<bool> {
         let min = self.rules.minimum_one_eval?;
+        if self.evaluations.is_empty() {
+            return None;
+        }
         let any_passes = self
             .evaluations
             .iter()

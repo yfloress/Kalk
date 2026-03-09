@@ -321,8 +321,14 @@ impl Course {
         let mut eval_violations = Vec::new();
         let mut needs_global = false;
 
-        // Check all category rules
+        // No evaluations at all → nothing to check, grade is 0 with no flags.
+        let has_evals = self.has_evaluations();
+
+        // Check all category rules (only when there are evaluations)
         for (idx, cat) in self.categories.iter().enumerate() {
+            if !has_evals {
+                break;
+            }
             // Check minimum average requirement
             if let Some(min_avg) = cat.rules.minimum_average
                 && let Some(avg) = cat.average_grade()
@@ -460,6 +466,7 @@ impl Course {
         // common rule "NP < passing_grade => must take global".
         if !needs_global
             && self.global_policy != GlobalExamPolicy::None
+            && has_evals
             && !self.is_passing_grade(normal_grade)
         {
             needs_global = true;

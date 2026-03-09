@@ -2446,3 +2446,22 @@ fn test_min_one_eval_independent_from_min_avg() {
     assert!((result.grade - 0.0).abs() < 0.01);
     assert_eq!(result.overridden_by, Some("Certamenes".to_string()));
 }
+
+#[test]
+fn test_no_needs_global_when_no_evaluations() {
+    // A course with a global policy but no categories/evaluations
+    // should NOT mark needs_global — there are no grades yet.
+    let mut course = Course::new("Empty".to_string(), DEFAULT_PASSING_GRADE);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+
+    let result = course.compute_grade();
+    assert!(
+        !result.needs_global,
+        "no evaluations → needs_global must be false"
+    );
+    assert!((result.grade - 0.0).abs() < f64::EPSILON);
+    assert!(result.overridden_by.is_none());
+}
