@@ -182,11 +182,6 @@ impl Course {
         {
             return false;
         }
-        if let Some(max) = elig.max_grade
-            && semester_grade > max
-        {
-            return false;
-        }
 
         true
     }

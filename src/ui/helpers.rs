@@ -299,9 +299,7 @@ pub fn contextual_field_help(app: &App, m: &Messages) -> String {
         InputField::GlobalSemesterWeight | InputField::GlobalExamWeight => {
             m.help_global_weights.to_string()
         }
-        InputField::GlobalMinGrade | InputField::GlobalMaxGrade => {
-            m.help_global_eligibility.to_string()
-        }
+        InputField::GlobalMinGrade => m.help_global_eligibility.to_string(),
         _ => String::new(),
     }
 }
@@ -437,10 +435,7 @@ pub fn draw_course_help_overlay(frame: &mut Frame, m: &Messages) {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled(
-                format!("{} / {}: ", m.global_min_grade, m.global_max_grade),
-                label_style,
-            ),
+            Span::styled(format!("{}: ", m.global_min_grade), label_style),
             Span::styled(m.help_global_eligibility, desc_style),
         ]),
     ];

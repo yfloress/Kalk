@@ -114,12 +114,12 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Dynamic height based on selected global policy:
     // Content: top_sp(1) + Name(3) + sp(1) + PassingGrade(3) + sp(1) + GlobalPolicy(3) = 12
     // Weighted adds: sp(1) + SemWeight(3) + sp(1) + GlobWeight(3) = 8
-    // Both non-None add eligibility: sp(1) + MinGrade(3) + sp(1) + MaxGrade(3) = 8
+    // Both non-None add eligibility: sp(1) + MinGrade(3) = 4
     // Overhead: border(2)
     let extra = match &app.edit_global_policy {
         GlobalExamPolicy::None => 0u16,
-        GlobalExamPolicy::Weighted { .. } => 8 + 8, // weights + eligibility
-        GlobalExamPolicy::ReplacesWorstGrade => 8,  // eligibility only
+        GlobalExamPolicy::Weighted { .. } => 8 + 4, // weights + eligibility
+        GlobalExamPolicy::ReplacesWorstGrade => 4,  // eligibility only
     };
     let popup_h = (12 + extra + help_lines_needed + 2).min(frame.size().height);
     let term = frame.size();
@@ -157,7 +157,6 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let mut weight_sem_idx: Option<usize> = None;
     let mut weight_glob_idx: Option<usize> = None;
     let mut min_grade_idx: Option<usize> = None;
-    let mut max_grade_idx: Option<usize> = None;
 
     if matches!(app.edit_global_policy, GlobalExamPolicy::Weighted { .. }) {
         constraints.push(Constraint::Length(1)); // spacing
@@ -172,9 +171,6 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         constraints.push(Constraint::Length(1)); // spacing
         min_grade_idx = Some(constraints.len());
         constraints.push(Constraint::Length(3)); // Min Grade
-        constraints.push(Constraint::Length(1)); // spacing
-        max_grade_idx = Some(constraints.len());
-        constraints.push(Constraint::Length(3)); // Max Grade
     }
 
     // Contextual help hint at the bottom (dynamically sized)
@@ -244,15 +240,6 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
             m.global_min_grade,
             &app.edit_global_min_grade,
             app.input_field == InputField::GlobalMinGrade,
-            layout[idx],
-        );
-    }
-    if let Some(idx) = max_grade_idx {
-        render_input_field(
-            frame,
-            m.global_max_grade,
-            &app.edit_global_max_grade,
-            app.input_field == InputField::GlobalMaxGrade,
             layout[idx],
         );
     }

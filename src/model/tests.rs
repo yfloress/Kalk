@@ -1866,9 +1866,8 @@ fn test_global_eligibility_within_range() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
-        max_grade: Some(54.0),
     };
-    // 46 is within [45, 54]
+    // 46 >= 45 → eligible
     assert!(course.is_eligible_for_global());
 }
 
@@ -1882,25 +1881,8 @@ fn test_global_eligibility_below_minimum() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
-        max_grade: Some(54.0),
     };
     // 33 < 45 → not eligible
-    assert!(!course.is_eligible_for_global());
-}
-
-#[test]
-fn test_global_eligibility_above_maximum() {
-    // Semester = 70*0.7 + 80*0.3 = 73
-    let mut course = make_global_test_course(&[70.0], &[80.0]);
-    course.global_policy = GlobalExamPolicy::Weighted {
-        semester_weight: 0.7,
-        global_weight: 0.3,
-    };
-    course.global_eligibility = GlobalEligibility {
-        min_grade: Some(45.0),
-        max_grade: Some(54.0),
-    };
-    // 73 > 54 → not eligible
     assert!(!course.is_eligible_for_global());
 }
 
@@ -1911,9 +1893,8 @@ fn test_global_eligibility_only_min() {
     course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(40.0),
-        max_grade: None,
     };
-    // 53 >= 40, no max → eligible
+    // 53 >= 40 → eligible
     assert!(course.is_eligible_for_global());
 }
 
@@ -2031,7 +2012,6 @@ fn test_needed_global_not_eligible() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
-        max_grade: Some(54.0),
     };
 
     let needed = course.needed_global_grade();
@@ -2082,7 +2062,6 @@ fn test_global_fields_serde_default() {
     let course: Course = serde_json::from_str(json).unwrap();
     assert_eq!(course.global_policy, GlobalExamPolicy::None);
     assert!(course.global_eligibility.min_grade.is_none());
-    assert!(course.global_eligibility.max_grade.is_none());
     assert!(course.global_exam_grade.is_none());
     assert!(course.global_target_category.is_none());
 }
@@ -2096,7 +2075,6 @@ fn test_global_weighted_serde_roundtrip() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
-        max_grade: Some(54.0),
     };
     course.global_exam_grade = Some(75.0);
 
@@ -2105,7 +2083,6 @@ fn test_global_weighted_serde_roundtrip() {
 
     assert_eq!(deserialized.global_policy, course.global_policy);
     assert_eq!(deserialized.global_eligibility.min_grade, Some(45.0));
-    assert_eq!(deserialized.global_eligibility.max_grade, Some(54.0));
     assert_eq!(deserialized.global_exam_grade, Some(75.0));
 }
 

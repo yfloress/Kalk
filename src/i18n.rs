@@ -217,7 +217,6 @@ pub struct Messages {
     pub global_semester_weight: &'static str,
     pub global_exam_weight: &'static str,
     pub global_min_grade: &'static str,
-    pub global_max_grade: &'static str,
     pub global_grade: &'static str,
     pub global_needed: &'static str,
     pub global_result: &'static str,
@@ -389,7 +388,7 @@ pub const EN: Messages = Messages {
     help_passing_grade: "Minimum grade to pass the course (0-100). Default is 55. Grades are rounded: 54.5 rounds up to 55 (pass).",
     help_global_policy: "The global exam replaces the worst grade in the failing category. Everything is recalculated. The grade can go up or down.",
     help_global_weights: "Final = semester grade * W1 + global grade * W2. They should add up to 100 (e.g. 70 + 30).",
-    help_global_eligibility: "Grade range required to be eligible for the global exam. Leave empty for no restriction (anyone can take it).",
+    help_global_eligibility: "Minimum grade required to be eligible for the global exam. Leave empty for no restriction (anyone can take it).",
 
     // Status indicators for rules
     rules_active: "Rules",
@@ -408,7 +407,6 @@ pub const EN: Messages = Messages {
     global_semester_weight: "Semester Weight % (e.g. 70)",
     global_exam_weight: "Global Weight % (e.g. 30)",
     global_min_grade: "Min Grade for Global",
-    global_max_grade: "Max Grade for Global",
     global_grade: "Global Grade",
     global_needed: "Need in global",
     global_result: "After global",
@@ -580,7 +578,7 @@ pub const ES: Messages = Messages {
     help_passing_grade: "Nota mínima para aprobar el ramo (0-100). Por defecto es 55. Las notas se redondean: 54.5 sube a 55 (aprueba).",
     help_global_policy: "El global reemplaza la peor nota de la categoría que reprueba. Todo se recalcula. La nota puede subir o bajar.",
     help_global_weights: "Final = nota semestral * P1 + nota global * P2. Deben sumar 100 (ej: 70 + 30).",
-    help_global_eligibility: "Rango de notas requerido para poder dar el global. Dejar vacío si no hay restricción (cualquiera puede darlo).",
+    help_global_eligibility: "Nota mínima requerida para poder dar el global. Dejar vacío si no hay restricción (cualquiera puede darlo).",
 
     // Status indicators for rules
     rules_active: "Reglas",
@@ -599,7 +597,6 @@ pub const ES: Messages = Messages {
     global_semester_weight: "Peso Semestral % (ej: 70)",
     global_exam_weight: "Peso Global % (ej: 30)",
     global_min_grade: "Nota Min. para Global",
-    global_max_grade: "Nota Max. para Global",
     global_grade: "Nota Global",
     global_needed: "Necesitas en global",
     global_result: "Despues del global",

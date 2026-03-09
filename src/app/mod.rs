@@ -87,7 +87,6 @@ pub enum InputField {
     GlobalSemesterWeight,
     GlobalExamWeight,
     GlobalMinGrade,
-    GlobalMaxGrade,
 }
 
 impl InputField {
@@ -118,7 +117,6 @@ impl InputField {
                 | InputField::GlobalSemesterWeight
                 | InputField::GlobalExamWeight
                 | InputField::GlobalMinGrade
-                | InputField::GlobalMaxGrade
         )
     }
 }
@@ -182,7 +180,6 @@ pub struct App {
     pub edit_global_semester_weight: String,
     pub edit_global_exam_weight: String,
     pub edit_global_min_grade: String,
-    pub edit_global_max_grade: String,
     /// Temporary buffer for the global grade entry popup.
     pub edit_global_grade: String,
 
@@ -230,7 +227,6 @@ impl Default for App {
             edit_global_semester_weight: String::new(),
             edit_global_exam_weight: String::new(),
             edit_global_min_grade: String::new(),
-            edit_global_max_grade: String::new(),
             edit_global_grade: String::new(),
             show_advanced_rules: false,
             show_field_help: false,
@@ -610,10 +606,7 @@ impl App {
             (Screen::EditingCourse { .. }, InputField::GlobalExamWeight) => {
                 InputField::GlobalMinGrade
             }
-            (Screen::EditingCourse { .. }, InputField::GlobalMinGrade) => {
-                InputField::GlobalMaxGrade
-            }
-            (Screen::EditingCourse { .. }, InputField::GlobalMaxGrade) => InputField::Name,
+            (Screen::EditingCourse { .. }, InputField::GlobalMinGrade) => InputField::Name,
             // Category: Name → Weight → (advanced fields if expanded) → Name
             (Screen::EditingCategory { .. }, InputField::Name) => InputField::Weight,
             (Screen::EditingCategory { .. }, InputField::Weight) => {
@@ -678,7 +671,6 @@ impl App {
             InputField::GlobalSemesterWeight => &mut self.edit_global_semester_weight,
             InputField::GlobalExamWeight => &mut self.edit_global_exam_weight,
             InputField::GlobalMinGrade => &mut self.edit_global_min_grade,
-            InputField::GlobalMaxGrade => &mut self.edit_global_max_grade,
             // Toggle fields don't have text buffers — they are cycled, not typed into.
             // This branch should never be reached in practice.
             InputField::DropLowest

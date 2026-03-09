@@ -104,11 +104,6 @@ impl App {
             .min_grade
             .map(format_grade)
             .unwrap_or_default();
-        self.edit_global_max_grade = course
-            .global_eligibility
-            .max_grade
-            .map(format_grade)
-            .unwrap_or_default();
     }
 
     pub fn confirm_course(&mut self) {
@@ -163,7 +158,6 @@ impl App {
         self.edit_global_semester_weight = "70".to_string();
         self.edit_global_exam_weight = "30".to_string();
         self.edit_global_min_grade.clear();
-        self.edit_global_max_grade.clear();
     }
 
     /// Build a `GlobalExamPolicy` from the current form fields.
@@ -192,9 +186,6 @@ impl App {
     fn build_global_eligibility(&self) -> GlobalEligibility {
         GlobalEligibility {
             min_grade: parse_decimal(&self.edit_global_min_grade)
-                .ok()
-                .map(|g| g.clamp(MIN_GRADE, MAX_GRADE)),
-            max_grade: parse_decimal(&self.edit_global_max_grade)
                 .ok()
                 .map(|g| g.clamp(MIN_GRADE, MAX_GRADE)),
         }

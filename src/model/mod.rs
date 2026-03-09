@@ -179,15 +179,12 @@ pub enum GlobalExamPolicy {
 
 /// Eligibility requirements to take the global exam.
 ///
-/// Both fields default to `None` (no restriction — anyone can take it).
+/// The field defaults to `None` (no restriction — anyone can take it).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GlobalEligibility {
     /// Minimum semester grade required to be eligible. `None` = no minimum.
     #[serde(default)]
     pub min_grade: Option<f64>,
-    /// Maximum semester grade allowed to be eligible. `None` = no maximum.
-    #[serde(default)]
-    pub max_grade: Option<f64>,
 }
 
 // =============================================================================
