@@ -53,9 +53,9 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(app.should_quit);
         }
 
-        // Shift+A toggles advanced rules in category edit popup
-        if key.code == KeyCode::Char('A')
-            && key.modifiers.contains(KeyModifiers::SHIFT)
+        // Ctrl+R toggles advanced rules in category edit popup
+        if key.code == KeyCode::Char('r')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
             && matches!(app.screen, Screen::EditingCategory { .. })
         {
             app.toggle_advanced_rules();
@@ -74,7 +74,7 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
         }
 
         match &app.screen {
-            Screen::Main => handle_main_keys(app, key.code),
+            Screen::Main => handle_main_keys(app, key.code, key.modifiers),
             Screen::SelectingTemplate => handle_template_keys(app, key.code),
             Screen::EditingCourse { .. } => handle_edit_course_keys(app, key.code),
             Screen::EditingCategory { .. } => handle_edit_category_keys(app, key.code),
@@ -84,6 +84,7 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             Screen::SavingTemplate => handle_save_template_keys(app, key.code),
             Screen::SelectingLanguage => handle_language_keys(app, key.code),
             Screen::Settings => handle_settings_keys(app, key.code),
+            Screen::BulkAddEvaluations => handle_bulk_add_keys(app, key.code),
             Screen::EnteringGlobalGrade => handle_global_grade_keys(app, key.code),
         }
     }
@@ -113,9 +114,19 @@ fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: 
 }
 
 /// Handle keys in the main screen.
-fn handle_main_keys(app: &mut App, key: KeyCode) {
+fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
     // Clear any status message on the next user action
     app.clear_status();
+
+    // Ctrl+N: bulk-add evaluations (only when focused on evaluations or categories)
+    if key == KeyCode::Char('n') && modifiers.contains(KeyModifiers::CONTROL) {
+        if matches!(app.focus, Focus::Evaluations | Focus::Categories)
+            && !app.is_on_virtual_global()
+        {
+            app.start_bulk_add_evaluations();
+        }
+        return;
+    }
 
     match key {
         // Quit
@@ -208,6 +219,20 @@ fn handle_main_keys(app: &mut App, key: KeyCode) {
         KeyCode::Char('g') => {
             if app.focus == Focus::Courses && app.current_course().is_some() {
                 app.start_global_grade_entry();
+            }
+        }
+
+        // Yank (copy) the current evaluation
+        KeyCode::Char('y') => {
+            if app.focus == Focus::Evaluations && !app.is_on_virtual_global() {
+                app.yank_evaluation();
+            }
+        }
+
+        // Paste the yanked evaluation into the current category
+        KeyCode::Char('p') => {
+            if app.focus == Focus::Evaluations && !app.is_on_virtual_global() {
+                app.paste_evaluation();
             }
         }
 
@@ -312,6 +337,40 @@ fn handle_settings_keys(app: &mut App, key: KeyCode) {
         KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => app.next_setting(),
         KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.toggle_current_setting(),
         KeyCode::Left | KeyCode::Char('h') => app.toggle_current_setting_reverse(),
+        _ => {}
+    }
+}
+
+/// Handle keys in the bulk-add evaluations popup.
+/// Two fields: Name (base name) and Count (number of evaluations).
+fn handle_bulk_add_keys(app: &mut App, key: KeyCode) {
+    use crate::app::InputField;
+    let on_name = app.input_field == InputField::Name;
+
+    match key {
+        KeyCode::Esc => app.cancel_bulk_add(),
+        KeyCode::Enter => app.confirm_bulk_add(),
+        KeyCode::Tab => {
+            app.input_field = if on_name {
+                InputField::Grade // reuse Grade as the "count" field
+            } else {
+                InputField::Name
+            };
+        }
+        KeyCode::Backspace => {
+            if on_name {
+                app.edit_name.pop();
+            } else {
+                app.edit_bulk_count.pop();
+            }
+        }
+        KeyCode::Char(c) => {
+            if on_name {
+                app.edit_name.push(c);
+            } else if c.is_ascii_digit() {
+                app.edit_bulk_count.push(c);
+            }
+        }
         _ => {}
     }
 }

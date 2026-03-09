@@ -81,6 +81,9 @@ pub struct Messages {
     pub delete: &'static str,
     pub save_as_template: &'static str,
     pub balance: &'static str,
+    pub yank: &'static str,
+    pub paste: &'static str,
+    pub bulk_add: &'static str,
     pub select: &'static str,
     pub confirm: &'static str,
     pub cancel: &'static str,
@@ -107,6 +110,9 @@ pub struct Messages {
     pub delete_template_question: &'static str,
     pub action_cannot_be_undone: &'static str,
     pub select_language: &'static str,
+    pub bulk_add_title: &'static str,
+    pub bulk_add_hint: &'static str,
+    pub bulk_add_count: &'static str,
 
     // Form labels
     pub name: &'static str,
@@ -234,6 +240,11 @@ pub struct Messages {
     pub enabled: &'static str,
     pub disabled: &'static str,
     pub toggle: &'static str,
+    pub yanked_eval: &'static str,
+    pub pasted_eval: &'static str,
+    pub no_eval_to_yank: &'static str,
+    pub no_eval_in_clipboard: &'static str,
+    pub bulk_added_evals: &'static str,
 }
 
 /// English messages.
@@ -271,6 +282,9 @@ pub const EN: Messages = Messages {
     delete: "Delete",
     save_as_template: "Save as Template",
     balance: "Balance",
+    yank: "Yank",
+    paste: "Paste",
+    bulk_add: "Bulk Add",
     select: "Select",
     confirm: "Confirm",
     cancel: "Cancel",
@@ -297,6 +311,9 @@ pub const EN: Messages = Messages {
     delete_template_question: "Delete",
     action_cannot_be_undone: "This action cannot be undone.",
     select_language: "Select Language",
+    bulk_add_title: "Bulk Add Evaluations",
+    bulk_add_hint: "Creates Name 1, Name 2, ... Name N",
+    bulk_add_count: "Count",
 
     // Form labels
     name: "Name",
@@ -424,6 +441,11 @@ pub const EN: Messages = Messages {
     enabled: "Enabled",
     disabled: "Disabled",
     toggle: "Toggle",
+    yanked_eval: "Evaluation copied",
+    pasted_eval: "Evaluation pasted",
+    no_eval_to_yank: "No evaluation to copy",
+    no_eval_in_clipboard: "Nothing to paste (copy first with y)",
+    bulk_added_evals: "evaluations added",
 };
 
 /// Spanish messages.
@@ -461,6 +483,9 @@ pub const ES: Messages = Messages {
     delete: "Eliminar",
     save_as_template: "Guardar como Plantilla",
     balance: "Balancear",
+    yank: "Copiar",
+    paste: "Pegar",
+    bulk_add: "Agregar Lote",
     select: "Seleccionar",
     confirm: "Confirmar",
     cancel: "Cancelar",
@@ -487,6 +512,9 @@ pub const ES: Messages = Messages {
     delete_template_question: "¿Eliminar",
     action_cannot_be_undone: "Esta acción no se puede deshacer.",
     select_language: "Seleccionar Idioma",
+    bulk_add_title: "Agregar Evaluaciones en Lote",
+    bulk_add_hint: "Crea Nombre 1, Nombre 2, ... Nombre N",
+    bulk_add_count: "Cantidad",
 
     // Form labels
     name: "Nombre",
@@ -614,6 +642,11 @@ pub const ES: Messages = Messages {
     enabled: "Activado",
     disabled: "Desactivado",
     toggle: "Alternar",
+    yanked_eval: "Evaluación copiada",
+    pasted_eval: "Evaluación pegada",
+    no_eval_to_yank: "No hay evaluación para copiar",
+    no_eval_in_clipboard: "Nada para pegar (copia primero con y)",
+    bulk_added_evals: "evaluaciones agregadas",
 };
 
 impl Language {

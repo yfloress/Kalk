@@ -19,9 +19,11 @@
 //!
 //! This module contains the main `App` struct that holds all application state,
 //! as well as methods for navigation, getters, and state management.
-//! Form handling (course/category/evaluation editing, templates, language)
-//! lives in the `forms` submodule.
+//! Form handling (course/category/evaluation editing) lives in `forms`.
+//! Secondary actions (templates, language, settings, global grade, yank/paste,
+//! bulk-add) live in `actions`.
 
+mod actions;
 mod forms;
 
 use crate::i18n::{Language, Messages};
@@ -60,6 +62,7 @@ pub enum Screen {
     SavingTemplate,
     SelectingLanguage,
     Settings,
+    BulkAddEvaluations,
     EnteringGlobalGrade,
 }
 
@@ -144,6 +147,9 @@ pub struct App {
     pub screen: Screen,
     pub should_quit: bool,
 
+    /// Clipboard for yanked evaluation (name, grade).
+    pub clipboard_evaluation: Option<(String, Option<f64>)>,
+
     /// Temporary status message shown to the user (errors, confirmations, etc.)
     /// Cleared on the next action.
     pub status_message: Option<String>,
@@ -183,6 +189,9 @@ pub struct App {
     /// Temporary buffer for the global grade entry popup.
     pub edit_global_grade: String,
 
+    /// Temporary buffer for the bulk-add evaluation count popup.
+    pub edit_bulk_count: String,
+
     /// Whether to use Nerd Font icons (persisted in config).
     pub use_nerd_fonts: bool,
     /// Whether to show courses in compact mode (single line per course).
@@ -206,6 +215,7 @@ impl Default for App {
             focus: Focus::Courses,
             screen: Screen::Main,
             should_quit: false,
+            clipboard_evaluation: None,
             status_message: None,
             language,
             input_field: InputField::Name,
@@ -228,6 +238,7 @@ impl Default for App {
             edit_global_exam_weight: String::new(),
             edit_global_min_grade: String::new(),
             edit_global_grade: String::new(),
+            edit_bulk_count: String::new(),
             show_advanced_rules: false,
             show_field_help: false,
             use_nerd_fonts: true,

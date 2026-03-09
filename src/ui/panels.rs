@@ -555,8 +555,11 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 &[
                     ("q", m.quit),
                     ("n", m.new_eval),
+                    ("Ctrl+N", m.bulk_add),
                     ("Enter", m.edit),
                     ("d", m.delete),
+                    ("y", m.yank),
+                    ("p", m.paste),
                     ("S", m.settings),
                     ("L", m.change_language),
                 ],
@@ -612,7 +615,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("Tab", m.next_field),
                     ("Enter", m.confirm),
                     ("Esc", m.cancel),
-                    ("Shift+A", rules_hint),
+                    ("Ctrl+R", rules_hint),
                     ("?", m.help_toggle),
                 ],
                 t,
@@ -649,6 +652,12 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ),
         Screen::Settings => styled_keybindings(
             &[("Space", m.toggle), ("Enter", m.confirm), ("Esc", m.cancel)],
+            t,
+            ic,
+            available_width,
+        ),
+        Screen::BulkAddEvaluations => styled_keybindings(
+            &[("Enter", m.confirm), ("Esc", m.cancel)],
             t,
             ic,
             available_width,

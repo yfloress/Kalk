@@ -419,12 +419,12 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     let toggle_text = if show_advanced {
         format!(
-            "{}{} (Shift+A) ────────",
+            "{}{} (Ctrl+R) ────────",
             ic.advanced_collapse, m.advanced_rules
         )
     } else {
         format!(
-            "{}{} (Shift+A) ───────",
+            "{}{} (Ctrl+R) ───────",
             ic.advanced_expand, m.advanced_rules
         )
     };
@@ -768,23 +768,14 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
-
-    let popup_h = 11u16;
-    let popup_w = 50u16;
-    let term = frame.size();
-    let x = term.x + term.width.saturating_sub(popup_w) / 2;
-    let y = term.y + term.height.saturating_sub(popup_h) / 2;
-    let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
+    let area = centered_rect(50, 11, frame.size());
     frame.render_widget(Clear, area);
 
-    let title = format!(" {}{} ", ic.grade, m.global_exam);
-
     let block = Block::default()
-        .title(title)
+        .title(format!(" {}{} ", ic.grade, m.global_exam))
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(t.popup_border));
-
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -857,4 +848,47 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
         true,
         field_area,
     );
+}
+
+/// Draw the bulk-add evaluations popup (name base + count).
+pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
+    let m = app.messages();
+    let t = theme();
+    // Fixed size: 3+1+3+1+1 = 9 content + 2 v-margin + 2 borders = 13
+    let popup_w = 50u16;
+    let popup_h = 13u16;
+    let term = frame.size();
+    let x = term.x + term.width.saturating_sub(popup_w) / 2;
+    let y = term.y + term.height.saturating_sub(popup_h) / 2;
+    let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title(format!(" {} ", m.bulk_add_title))
+        .borders(Borders::ALL)
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
+    frame.render_widget(block, area);
+    let inner = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .horizontal_margin(2)
+        .constraints([
+            Constraint::Length(3), // Name field
+            Constraint::Length(1), // Spacing
+            Constraint::Length(3), // Count field
+            Constraint::Length(1), // Spacing
+            Constraint::Length(1), // Hint
+        ])
+        .split(area);
+    let on_name = app.input_field == InputField::Name;
+    render_input_field(frame, m.name, &app.edit_name, on_name, inner[0]);
+    render_input_field(
+        frame,
+        m.bulk_add_count,
+        &app.edit_bulk_count,
+        !on_name,
+        inner[2],
+    );
+    let hint = Paragraph::new(m.bulk_add_hint).style(Style::default().fg(t.text_muted));
+    frame.render_widget(hint, inner[4]);
 }

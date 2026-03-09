@@ -22,7 +22,8 @@ src/
 ├── main.rs          # Entry point, terminal setup, panic hooks (bootstrap only)
 ├── app/
 │   ├── mod.rs       # App struct, enums, Default, load(), getters, navigation
-│   └── forms.rs     # Form handling: course/category/eval editing, templates, language
+│   ├── forms.rs     # Form handling: course/category/eval editing, deletion, weight mgmt
+│   └── actions.rs   # Secondary actions: templates, language, settings, global grade, yank/paste, bulk-add
 ├── model/
 │   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, templates
 │   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
@@ -54,7 +55,8 @@ src/
 - **`ui/popups.rs`** handles all popup overlays (template selection, course/category/evaluation editing, deletions, language).
 - **`ui/helpers.rs`** contains shared rendering helpers (`centered_rect`, `render_input_field`, `render_toggle_field`, `focused_border_style`) and formatting functions (`format_course_status`, `format_course_average`, `format_weight_validation`, `format_needed_grade`).
 - **`app/mod.rs` coordinates** — holds state, navigation, getters, delegates to `model/` for domain logic and `persistence.rs` for disk I/O.
-- **`app/forms.rs`** handles all form input/confirmation (course, category, evaluation, templates, language selection, deletion).
+- **`app/forms.rs`** handles form input/confirmation for courses, categories, evaluations, deletion, and weight management.
+- **`app/actions.rs`** handles secondary actions: template save/delete, language selection, settings, global grade entry, evaluation yank/paste, and bulk-add evaluations.
 - **`events.rs` dispatches** — maps key presses to `App` methods. No business logic here.
 - **`main.rs` is bootstrap only** — terminal setup, panic hooks, main loop. Nothing else.
 - **Errors must be visible to the user** — use `app.set_status(msg)` instead of `eprintln!`. The user cannot see stderr in alternate screen mode.
