@@ -294,8 +294,13 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                     && !global_impossible
                     && !global_taken_passing
                     && !global_taken_failing;
+                let simply_failing = has_evals
+                    && !c.is_passing_grade(grade_result.grade)
+                    && !grade_result.needs_global;
+                let no_evals_yet = !has_evals;
                 let effectively_failed = global_taken_failing
                     || global_impossible
+                    || simply_failing
                     || (has_rule_issues && !recoverable_global && !global_taken_passing);
 
                 let weight_status = if global_taken_passing
@@ -318,6 +323,11 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                     Span::styled(
                         format!(" [{}]", ic.failed.trim()),
                         Style::default().fg(t.status_fail),
+                    )
+                } else if no_evals_yet && matches!(c.validate_weights(), WeightValidation::Valid) {
+                    Span::styled(
+                        format!(" [{}]", ic.weight_ok),
+                        Style::default().fg(t.text_muted),
                     )
                 } else {
                     match c.validate_weights() {
