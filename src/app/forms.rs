@@ -65,8 +65,34 @@ impl App {
         self.input_field = InputField::Name;
         self.edit_name.clear();
         self.edit_passing_grade = format_grade(DEFAULT_PASSING_GRADE);
-        self.init_global_fields_default();
         self.show_field_help = false;
+
+        // Pre-populate global fields from the selected template.
+        // Clone the fields we need before mutating self (borrow checker).
+        let tpl_global = self
+            .current_template()
+            .map(|t| (t.global_policy.clone(), t.global_eligibility.clone()));
+
+        if let Some((policy, eligibility)) = tpl_global {
+            match &policy {
+                GlobalExamPolicy::Weighted {
+                    semester_weight,
+                    global_weight,
+                } => {
+                    self.edit_global_semester_weight = format_grade(semester_weight * 100.0);
+                    self.edit_global_exam_weight = format_grade(global_weight * 100.0);
+                }
+                _ => {
+                    self.edit_global_semester_weight = "70".to_string();
+                    self.edit_global_exam_weight = "30".to_string();
+                }
+            }
+            self.edit_global_min_grade =
+                eligibility.min_grade.map(format_grade).unwrap_or_default();
+            self.edit_global_policy = policy;
+        } else {
+            self.init_global_fields_default();
+        }
     }
 
     pub fn start_edit_course(&mut self) {

@@ -292,8 +292,8 @@ impl Course {
             name,
             passing_grade: passing_grade.clamp(MIN_GRADE, MAX_GRADE),
             categories,
-            global_policy: GlobalExamPolicy::None,
-            global_eligibility: GlobalEligibility::default(),
+            global_policy: template.global_policy.clone(),
+            global_eligibility: template.global_eligibility.clone(),
             global_exam_grade: None,
             global_target_category: None,
         }
@@ -562,8 +562,8 @@ impl Course {
     // =========================================================================
 
     /// Convert this course's structure to a reusable template.
-    /// Preserves category structure (name, weight, evaluation count, rules),
-    /// not the actual grades.
+    /// Preserves category structure (name, weight, evaluation count, rules)
+    /// and global exam configuration, not the actual grades.
     pub fn to_template(&self, template_name: String, description: String) -> CourseTemplate {
         let categories = self
             .categories
@@ -578,7 +578,13 @@ impl Course {
             })
             .collect();
 
-        CourseTemplate::new(&template_name, &description, categories)
+        CourseTemplate {
+            name: template_name,
+            description,
+            categories,
+            global_policy: self.global_policy.clone(),
+            global_eligibility: self.global_eligibility.clone(),
+        }
     }
 
     /// Generate a description string based on course structure.
@@ -729,6 +735,12 @@ pub struct CourseTemplate {
     pub name: String,
     pub description: String,
     pub categories: Vec<CategoryTemplate>,
+    /// Global exam policy saved with the template.
+    #[serde(default)]
+    pub global_policy: GlobalExamPolicy,
+    /// Global eligibility requirements saved with the template.
+    #[serde(default)]
+    pub global_eligibility: GlobalEligibility,
 }
 
 impl CourseTemplate {
@@ -737,6 +749,8 @@ impl CourseTemplate {
             name: name.to_string(),
             description: description.to_string(),
             categories,
+            global_policy: GlobalExamPolicy::None,
+            global_eligibility: GlobalEligibility::default(),
         }
     }
 }

@@ -1531,6 +1531,13 @@ fn test_weighted_contribution_zero_weight() {
 #[test]
 fn test_to_template_roundtrip() {
     let mut course = Course::new("Fisica".to_string(), 60.0);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_eligibility = GlobalEligibility {
+        min_grade: Some(30.0),
+    };
 
     let rules = CategoryRules {
         drop_lowest: 1,
@@ -1586,6 +1593,16 @@ fn test_to_template_roundtrip() {
     assert_eq!(template.categories[1].default_evaluation_count, 2);
     assert!(template.categories[1].rules.is_default());
 
+    // Verify global config preserved in template
+    assert_eq!(
+        template.global_policy,
+        GlobalExamPolicy::Weighted {
+            semester_weight: 0.7,
+            global_weight: 0.3,
+        }
+    );
+    assert_eq!(template.global_eligibility.min_grade, Some(30.0));
+
     // Roundtrip: create a new course from the template
     let course2 = Course::from_template("Fisica 2".to_string(), 60.0, &template);
     assert_eq!(course2.categories.len(), 2);
@@ -1596,6 +1613,15 @@ fn test_to_template_roundtrip() {
     assert_eq!(course2.categories[0].graded_count(), 0);
     assert_eq!(course2.categories[1].evaluations.len(), 2);
     assert_eq!(course2.categories[1].graded_count(), 0);
+    // Global config should be carried over from template
+    assert_eq!(
+        course2.global_policy,
+        GlobalExamPolicy::Weighted {
+            semester_weight: 0.7,
+            global_weight: 0.3,
+        }
+    );
+    assert_eq!(course2.global_eligibility.min_grade, Some(30.0));
 }
 
 // =========================================================================
