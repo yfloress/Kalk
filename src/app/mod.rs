@@ -74,6 +74,8 @@ pub enum InputField {
     Weight,
     Grade,
     Description,
+    /// Evaluation weight within a weighted-evaluations category (text input).
+    EvalWeight,
     // Category rule fields (text input)
     MinimumAverage,
     MinPerEval,
@@ -85,6 +87,8 @@ pub enum InputField {
     OnMinPerEvalNotMet,
     OnMinOneEvalNotMet,
     RoundBeforeWeight,
+    /// Toggle: whether evaluations in this category have individual weights.
+    WeightedEvals,
     // Global exam fields (course form)
     GlobalPolicy,
     GlobalSemesterWeight,
@@ -103,6 +107,7 @@ impl InputField {
                 | InputField::OnMinPerEvalNotMet
                 | InputField::OnMinOneEvalNotMet
                 | InputField::RoundBeforeWeight
+                | InputField::WeightedEvals
                 | InputField::GlobalPolicy
         )
     }
@@ -114,6 +119,7 @@ impl InputField {
             InputField::PassingGrade
                 | InputField::Weight
                 | InputField::Grade
+                | InputField::EvalWeight
                 | InputField::MinimumAverage
                 | InputField::MinPerEval
                 | InputField::MinOneEval
@@ -147,8 +153,8 @@ pub struct App {
     pub screen: Screen,
     pub should_quit: bool,
 
-    /// Clipboard for yanked evaluation (name, grade).
-    pub clipboard_evaluation: Option<(String, Option<f64>)>,
+    /// Clipboard for yanked evaluation (name, grade, weight).
+    pub clipboard_evaluation: Option<(String, Option<f64>, Option<f64>)>,
 
     /// Temporary status message shown to the user (errors, confirmations, etc.)
     /// Cleared on the next action.
@@ -164,6 +170,8 @@ pub struct App {
     pub edit_weight: String,
     pub edit_grade: String,
     pub edit_description: String,
+    /// Temporary buffer for evaluation weight (%) in weighted-evaluations categories.
+    pub edit_eval_weight: String,
 
     // Category rule editing state
     pub edit_drop_lowest: usize,
@@ -175,6 +183,8 @@ pub struct App {
     pub edit_on_min_per_eval_not_met: MinimumNotMetAction,
     pub edit_on_min_one_eval_not_met: MinimumNotMetAction,
     pub edit_round_before_weighting: bool,
+    /// Whether the category uses individually weighted evaluations.
+    pub edit_weighted_evaluations: bool,
 
     /// Whether advanced rules section is expanded in the category popup.
     pub show_advanced_rules: bool,
@@ -224,6 +234,7 @@ impl Default for App {
             edit_weight: String::new(),
             edit_grade: String::new(),
             edit_description: String::new(),
+            edit_eval_weight: String::new(),
             edit_drop_lowest: 0,
             edit_min_average: String::new(),
             edit_min_per_eval: String::new(),
@@ -233,6 +244,7 @@ impl Default for App {
             edit_on_min_per_eval_not_met: MinimumNotMetAction::default(),
             edit_on_min_one_eval_not_met: MinimumNotMetAction::default(),
             edit_round_before_weighting: false,
+            edit_weighted_evaluations: false,
             edit_global_policy: GlobalExamPolicy::default(),
             edit_global_semester_weight: String::new(),
             edit_global_exam_weight: String::new(),
@@ -660,9 +672,20 @@ impl App {
             (Screen::EditingCategory { .. }, InputField::OnMinOneEvalNotMet) => {
                 InputField::RoundBeforeWeight
             }
-            (Screen::EditingCategory { .. }, InputField::RoundBeforeWeight) => InputField::Name,
+            (Screen::EditingCategory { .. }, InputField::RoundBeforeWeight) => {
+                InputField::WeightedEvals
+            }
+            (Screen::EditingCategory { .. }, InputField::WeightedEvals) => InputField::Name,
             (Screen::EditingEvaluation { .. }, InputField::Grade) => InputField::Name,
-            (Screen::EditingEvaluation { .. }, InputField::Name) => InputField::Grade,
+            (Screen::EditingEvaluation { .. }, InputField::Name) => {
+                // Show weight field only when category has weighted evaluations
+                if self.category_has_weighted_evals() {
+                    InputField::EvalWeight
+                } else {
+                    InputField::Grade
+                }
+            }
+            (Screen::EditingEvaluation { .. }, InputField::EvalWeight) => InputField::Grade,
             (Screen::SavingTemplate, InputField::Name) => InputField::Description,
             (Screen::SavingTemplate, InputField::Description) => InputField::Name,
             _ => self.input_field,
@@ -676,6 +699,7 @@ impl App {
             InputField::Weight => &mut self.edit_weight,
             InputField::Grade => &mut self.edit_grade,
             InputField::Description => &mut self.edit_description,
+            InputField::EvalWeight => &mut self.edit_eval_weight,
             InputField::MinimumAverage => &mut self.edit_min_average,
             InputField::MinPerEval => &mut self.edit_min_per_eval,
             InputField::MinOneEval => &mut self.edit_min_one_eval,
@@ -690,6 +714,7 @@ impl App {
             | InputField::OnMinPerEvalNotMet
             | InputField::OnMinOneEvalNotMet
             | InputField::RoundBeforeWeight
+            | InputField::WeightedEvals
             | InputField::GlobalPolicy => {
                 debug_assert!(
                     false,
@@ -737,6 +762,9 @@ impl App {
             InputField::RoundBeforeWeight => {
                 self.edit_round_before_weighting = !self.edit_round_before_weighting;
             }
+            InputField::WeightedEvals => {
+                self.edit_weighted_evaluations = !self.edit_weighted_evaluations;
+            }
             InputField::GlobalPolicy => {
                 self.edit_global_policy = match self.edit_global_policy {
                     GlobalExamPolicy::None => GlobalExamPolicy::Weighted {
@@ -762,7 +790,9 @@ impl App {
                 };
             }
             // Two-state toggles: reverse == forward
-            InputField::AvgMethod | InputField::RoundBeforeWeight => self.cycle_toggle_field(),
+            InputField::AvgMethod | InputField::RoundBeforeWeight | InputField::WeightedEvals => {
+                self.cycle_toggle_field()
+            }
             // Three-state toggle: reverse cycle
             InputField::OnMinNotMet => {
                 self.edit_on_min_not_met = match self.edit_on_min_not_met {
@@ -802,5 +832,11 @@ impl App {
 
     pub fn cancel_edit(&mut self) {
         self.screen = Screen::Main;
+    }
+
+    /// Returns true if the currently selected category has weighted evaluations enabled.
+    pub fn category_has_weighted_evals(&self) -> bool {
+        self.current_category()
+            .is_some_and(|cat| cat.rules.weighted_evaluations)
     }
 }

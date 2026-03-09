@@ -108,6 +108,11 @@ pub struct CategoryRules {
     /// using it in the weighted course grade calculation.
     #[serde(default)]
     pub round_before_weighting: bool,
+
+    /// Whether evaluations in this category have individual weights
+    /// (must sum to 100%) instead of being averaged equally.
+    #[serde(default)]
+    pub weighted_evaluations: bool,
 }
 
 impl CategoryRules {
@@ -122,6 +127,7 @@ impl CategoryRules {
             && self.minimum_one_eval.is_none()
             && self.on_min_one_eval_not_met == MinimumNotMetAction::FinalEqualsAverage
             && !self.round_before_weighting
+            && !self.weighted_evaluations
     }
 }
 
@@ -198,13 +204,40 @@ impl Category {
             .map(|e| e.grade.unwrap_or(0.0))
             .collect();
 
-        // Drop the N lowest grades (only if we'd have at least 1 left)
-        if self.rules.drop_lowest > 0 && self.rules.drop_lowest < grades.len() {
+        // Drop lowest is incompatible with weighted evaluations
+        if !self.rules.weighted_evaluations
+            && self.rules.drop_lowest > 0
+            && self.rules.drop_lowest < grades.len()
+        {
             grades.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
             grades = grades[self.rules.drop_lowest..].to_vec();
         }
 
         grades
+    }
+
+    /// Get effective grades with their evaluation weights (for weighted mode).
+    /// Returns pairs of (grade, eval_weight_fraction) where weight is 0.0-1.0.
+    /// For equal-weight mode, each weight is 1/N.
+    pub(crate) fn effective_grades_weighted(&self) -> Vec<(f64, f64)> {
+        if self.evaluations.is_empty() {
+            return Vec::new();
+        }
+
+        if self.rules.weighted_evaluations {
+            self.evaluations
+                .iter()
+                .map(|e| {
+                    let grade = e.grade.unwrap_or(0.0);
+                    let w = e.weight.unwrap_or(0.0) / 100.0;
+                    (grade, w)
+                })
+                .collect()
+        } else {
+            let grades = self.effective_grades();
+            let n = grades.len() as f64;
+            grades.into_iter().map(|g| (g, 1.0 / n)).collect()
+        }
     }
 
     /// Get effective grades but with a specific evaluation excluded or set to 0.
@@ -227,9 +260,12 @@ impl Category {
             })
             .collect();
 
-        // Apply drop_lowest
+        // Apply drop_lowest (incompatible with weighted evaluations)
         let effective_count;
-        if self.rules.drop_lowest > 0 && self.rules.drop_lowest < indexed_grades.len() {
+        if !self.rules.weighted_evaluations
+            && self.rules.drop_lowest > 0
+            && self.rules.drop_lowest < indexed_grades.len()
+        {
             indexed_grades
                 .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
             indexed_grades = indexed_grades[self.rules.drop_lowest..].to_vec();
@@ -243,11 +279,44 @@ impl Category {
     }
 
     /// Calculate the average grade of all evaluations in this category,
-    /// respecting rules (drop_lowest, averaging_method, round_before_weighting).
+    /// respecting rules (drop_lowest, averaging_method, round_before_weighting,
+    /// weighted_evaluations).
     /// Ungraded evaluations are treated as 0, reflecting the student's
     /// real current standing (e.g., 90 + 0 + 0 = 30 average).
     /// Returns None only if there are no evaluations at all.
     pub fn average_grade(&self) -> Option<f64> {
+        if self.evaluations.is_empty() {
+            return None;
+        }
+
+        // Weighted evaluations mode: use individual eval weights
+        if self.rules.weighted_evaluations {
+            let pairs = self.effective_grades_weighted();
+            if pairs.is_empty() {
+                return None;
+            }
+
+            let avg = match self.rules.averaging_method {
+                AveragingMethod::Arithmetic => pairs.iter().map(|(g, w)| g * w).sum::<f64>(),
+                AveragingMethod::Geometric => {
+                    // Weighted geometric mean: exp(sum(w_i * ln(g_i)))
+                    if pairs.iter().any(|(g, _)| *g <= 0.0) {
+                        0.0
+                    } else {
+                        let log_sum: f64 = pairs.iter().map(|(g, w)| w * g.ln()).sum();
+                        log_sum.exp()
+                    }
+                }
+            };
+
+            return if self.rules.round_before_weighting {
+                Some(avg.round())
+            } else {
+                Some(avg)
+            };
+        }
+
+        // Equal-weight mode (original behavior)
         let grades = self.effective_grades();
         if grades.is_empty() {
             return None;
@@ -294,6 +363,34 @@ impl Category {
             .iter()
             .filter(|e| e.grade.is_some())
             .count()
+    }
+
+    /// Get total weight of all evaluation weights in this category.
+    /// Only meaningful when `rules.weighted_evaluations` is true.
+    pub fn total_eval_weight(&self) -> f64 {
+        self.evaluations
+            .iter()
+            .map(|e| e.weight.unwrap_or(0.0))
+            .sum()
+    }
+
+    /// Validate that evaluation weights sum to 100%.
+    /// Only meaningful when `rules.weighted_evaluations` is true.
+    pub fn validate_eval_weights(&self) -> super::WeightValidation {
+        if self.evaluations.is_empty() {
+            return super::WeightValidation::Empty;
+        }
+
+        let total = self.total_eval_weight();
+        let tolerance = 0.01;
+
+        if (total - 100.0).abs() < tolerance {
+            super::WeightValidation::Valid
+        } else if total < 100.0 {
+            super::WeightValidation::Under(total)
+        } else {
+            super::WeightValidation::Over(total)
+        }
     }
 
     /// Check if category average is passing, using the course's passing grade.
@@ -351,8 +448,10 @@ impl Category {
     }
 
     /// Returns the indices of evaluations that would be dropped.
+    /// Drop-lowest is incompatible with weighted evaluations.
     pub fn dropped_indices(&self) -> Vec<usize> {
-        if self.rules.drop_lowest == 0
+        if self.rules.weighted_evaluations
+            || self.rules.drop_lowest == 0
             || self.evaluations.is_empty()
             || self.rules.drop_lowest >= self.evaluations.len()
         {

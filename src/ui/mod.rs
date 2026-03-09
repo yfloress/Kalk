@@ -23,6 +23,7 @@
 //! Icon sets live in `icons`, colour themes in `theme`.
 //! All calculation logic lives in `model/` — this module only formats and renders.
 
+mod eval_popups;
 pub(crate) mod helpers;
 pub(crate) mod icons;
 mod panels;
@@ -32,12 +33,12 @@ pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
 use crate::model::{Course, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation};
+use eval_popups::{draw_bulk_add_popup, draw_evaluation_popup, draw_global_grade_popup};
 use helpers::{focused_border_style, format_course_average, format_weight_validation};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
-    draw_bulk_add_popup, draw_category_popup, draw_course_popup, draw_delete_popup,
-    draw_delete_template_popup, draw_evaluation_popup, draw_global_grade_popup,
+    draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
     draw_language_popup, draw_save_template_popup, draw_template_popup,
 };
 use ratatui::{

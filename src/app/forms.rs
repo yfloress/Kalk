@@ -263,6 +263,7 @@ impl App {
         self.edit_min_one_eval = rules.minimum_one_eval.map(format_grade).unwrap_or_default();
         self.edit_on_min_one_eval_not_met = rules.on_min_one_eval_not_met;
         self.edit_round_before_weighting = rules.round_before_weighting;
+        self.edit_weighted_evaluations = rules.weighted_evaluations;
 
         // Auto-expand advanced rules if any non-default rules are configured
         self.show_advanced_rules = has_custom_rules;
@@ -280,6 +281,7 @@ impl App {
         self.edit_min_one_eval.clear();
         self.edit_on_min_one_eval_not_met = Default::default();
         self.edit_round_before_weighting = false;
+        self.edit_weighted_evaluations = false;
     }
 
     /// Build a `CategoryRules` from the current editing state.
@@ -320,6 +322,7 @@ impl App {
             minimum_one_eval,
             on_min_one_eval_not_met: self.edit_on_min_one_eval_not_met,
             round_before_weighting: self.edit_round_before_weighting,
+            weighted_evaluations: self.edit_weighted_evaluations,
         }
     }
 
@@ -376,13 +379,14 @@ impl App {
             self.input_field = InputField::Grade; // Start with grade field
             self.edit_name.clear();
             self.edit_grade.clear();
+            self.edit_eval_weight.clear();
         }
     }
 
     pub fn start_edit_evaluation(&mut self) {
-        let Some((name, grade)) = self
+        let Some((name, grade, weight)) = self
             .current_evaluation()
-            .map(|eval| (eval.name.clone(), eval.grade))
+            .map(|eval| (eval.name.clone(), eval.grade, eval.weight))
         else {
             return;
         };
@@ -392,6 +396,7 @@ impl App {
         self.edit_name = name;
         // Pre-fill with current grade so user doesn't lose it accidentally
         self.edit_grade = grade.map(format_grade).unwrap_or_default();
+        self.edit_eval_weight = weight.map(format_grade).unwrap_or_default();
     }
 
     pub fn confirm_evaluation(&mut self) {
@@ -402,6 +407,19 @@ impl App {
             parse_decimal(&self.edit_grade)
                 .ok()
                 .map(|g: f64| g.clamp(MIN_GRADE, MAX_GRADE))
+        };
+
+        // Parse evaluation weight (only relevant for weighted-evaluations categories)
+        let eval_weight: Option<f64> = if self.category_has_weighted_evals() {
+            if self.edit_eval_weight.trim().is_empty() {
+                Some(0.0)
+            } else {
+                parse_decimal(&self.edit_eval_weight)
+                    .ok()
+                    .map(|w: f64| w.clamp(MIN_GRADE, MAX_GRADE))
+            }
+        } else {
+            None
         };
 
         if name.is_empty() {
@@ -421,6 +439,7 @@ impl App {
                 {
                     let mut eval = Evaluation::new(name);
                     eval.grade = grade;
+                    eval.weight = eval_weight;
                     category.evaluations.push(eval);
                     self.selected_evaluation = Some(category.evaluations.len() - 1);
                 }
@@ -435,6 +454,7 @@ impl App {
                 {
                     eval.name = name;
                     eval.grade = grade;
+                    eval.weight = eval_weight;
                 }
             }
             _ => {}

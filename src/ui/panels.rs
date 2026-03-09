@@ -114,7 +114,24 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         String::new()
     };
 
-    let header_spans = vec![
+    // Eval weight validation hint (only for weighted-evaluations categories)
+    let eval_weight_hint = if category.rules.weighted_evaluations {
+        let total = category.total_eval_weight();
+        if (total - 100.0).abs() < 0.01 {
+            Some((" | W:100%".to_string(), t.status_pass))
+        } else {
+            let color = if total < 100.0 {
+                t.status_warn
+            } else {
+                t.status_fail
+            };
+            Some((format!(" | W:{:.0}%", total), color))
+        }
+    } else {
+        None
+    };
+
+    let mut header_spans = vec![
         Span::styled(format!("{}: ", m.avg), Style::default().fg(t.text_muted)),
         Span::styled(avg, Style::default().fg(avg_color)),
         Span::styled(
@@ -131,6 +148,9 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(t.text_muted),
         ),
     ];
+    if let Some((hint_text, hint_color)) = eval_weight_hint {
+        header_spans.push(Span::styled(hint_text, Style::default().fg(hint_color)));
+    }
 
     let header_title = if let Some(ev) = &eval_violation {
         format!(
@@ -158,19 +178,25 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     // Check if any evaluation has a status indicator (dropped or below min)
     let has_status = !dropped_indices.is_empty() || !below_min_indices.is_empty();
 
+    // Check if this category uses individually weighted evaluations
+    let has_eval_weights = category.rules.weighted_evaluations;
+
     // Auto-compact status text when the panel is narrow
     let panel_inner_w = area.width.saturating_sub(2) as usize;
     let narrow_evals = panel_inner_w < 40;
 
-    // Evaluations table — add a Status column only when needed
-    let header_cells: Vec<Cell> = if has_status {
-        vec!["#", m.name, m.grade, ""]
-    } else {
-        vec!["#", m.name, m.grade]
+    // Evaluations table — add Weight and/or Status columns when needed
+    let mut header_names: Vec<&str> = vec!["#", m.name, m.grade];
+    if has_eval_weights {
+        header_names.push("%");
     }
-    .into_iter()
-    .map(|h| Cell::from(h).style(Style::default().add_modifier(Modifier::BOLD)))
-    .collect();
+    if has_status {
+        header_names.push("");
+    }
+    let header_cells: Vec<Cell> = header_names
+        .into_iter()
+        .map(|h| Cell::from(h).style(Style::default().add_modifier(Modifier::BOLD)))
+        .collect();
     let header_row = Row::new(header_cells).height(1);
 
     let rows: Vec<Row> = category
@@ -234,6 +260,13 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Cell::from(e.name.as_str()),
                 Cell::from(grade_str).style(grade_style),
             ];
+            if has_eval_weights {
+                let weight_str = e
+                    .weight
+                    .map(|w| format!("{:.0}%", w))
+                    .unwrap_or_else(|| "-".to_string());
+                cells.push(Cell::from(weight_str).style(Style::default().fg(t.text_muted)));
+            }
             if has_status {
                 cells.push(Cell::from(status).style(status_style));
             }
@@ -247,21 +280,18 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         m.evaluations,
         category.evaluations.len()
     );
-    let col_widths: Vec<Constraint> = if has_status {
+    let mut col_widths: Vec<Constraint> = vec![
+        Constraint::Length(3),
+        Constraint::Min(6),
+        Constraint::Length(5),
+    ];
+    if has_eval_weights {
+        col_widths.push(Constraint::Length(5));
+    }
+    if has_status {
         let status_w = if narrow_evals { 3 } else { 10 };
-        vec![
-            Constraint::Length(3),
-            Constraint::Min(6),
-            Constraint::Length(5),
-            Constraint::Min(status_w),
-        ]
-    } else {
-        vec![
-            Constraint::Length(3),
-            Constraint::Min(6),
-            Constraint::Length(5),
-        ]
-    };
+        col_widths.push(Constraint::Min(status_w));
+    }
     let table = Table::new(rows, col_widths).header(header_row).block(
         Block::default()
             .title(title)

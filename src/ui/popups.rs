@@ -19,14 +19,13 @@
 
 use super::helpers::{
     centered_rect, contextual_field_help, draw_category_help_overlay, draw_course_help_overlay,
-    format_course_status, format_needed_grade, render_delete_confirmation, render_input_field,
-    render_toggle_field,
+    render_delete_confirmation, render_input_field, render_toggle_field,
 };
 use super::icons::icons;
 use super::theme::theme;
 use crate::app::{App, Focus, InputField};
 use crate::i18n::{Language, Messages};
-use crate::model::{AveragingMethod, GlobalExamPolicy, MinimumNotMetAction, NeededGradeStatus};
+use crate::model::{AveragingMethod, GlobalExamPolicy, MinimumNotMetAction};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -303,8 +302,8 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     let base_height: u16 = 8 + 2 + help_lines_needed + 4;
     let advanced_height: u16 = if show_advanced {
-        // Base: DropLowest + AvgMethod + MinAvg + MinPerEval + MinOneEval + RoundBeforeWeight = 6
-        let mut fields: u16 = 6;
+        // Base: DropLowest + AvgMethod + MinAvg + MinPerEval + MinOneEval + RoundBeforeWeight + WeightedEvals = 7
+        let mut fields: u16 = 7;
         if show_on_min_avg_not_met {
             fields += 1;
         }
@@ -366,6 +365,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             constraints.push(Constraint::Length(3));
         }
         constraints.push(Constraint::Length(3)); // Round Before Weighting
+        constraints.push(Constraint::Length(3)); // Weighted Evaluations
     }
     constraints.push(Constraint::Length(help_lines_needed));
 
@@ -531,6 +531,21 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             inner[slot],
         );
         slot += 1;
+
+        // Weighted Evaluations toggle
+        let weighted_label = if app.edit_weighted_evaluations {
+            m.yes
+        } else {
+            m.no
+        };
+        render_toggle_field(
+            frame,
+            m.weighted_evaluations,
+            weighted_label,
+            app.input_field == InputField::WeightedEvals,
+            inner[slot],
+        );
+        slot += 1;
     }
 
     let help_widget = Paragraph::new(help_text)
@@ -539,85 +554,6 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     frame.render_widget(help_widget, inner[slot]);
     if show_help {
         draw_category_help_overlay(frame, m);
-    }
-}
-
-pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
-    let is_editing = !is_new;
-    let m = app.messages();
-    let t = theme();
-    let area = centered_rect(60, 50, frame.size());
-    frame.render_widget(Clear, area);
-    let title = if is_new {
-        format!(" {} ", m.new_evaluation)
-    } else {
-        format!(" {} ", m.edit_evaluation)
-    };
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
-    frame.render_widget(block, area);
-    let inner = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(2)
-        .constraints([
-            Constraint::Length(3), // Grade field
-            Constraint::Length(1), // Spacing
-            Constraint::Length(3), // Name field
-            Constraint::Length(1), // Spacing
-            Constraint::Length(3), // Required grade info
-        ])
-        .split(area);
-
-    // Grade field FIRST
-    render_input_field(
-        frame,
-        m.grade,
-        &app.edit_grade,
-        app.input_field == InputField::Grade,
-        inner[0],
-    );
-
-    // Name field second
-    render_input_field(
-        frame,
-        m.name,
-        &app.edit_name,
-        app.input_field == InputField::Name,
-        inner[2],
-    );
-    if let Some(course) = app.current_course() {
-        let (info, info_color) = if let (Some(cat_idx), Some(eval_idx)) =
-            (app.selected_category, app.selected_evaluation)
-        {
-            let needed = course.needed_grade_for_evaluation(cat_idx, eval_idx, is_editing);
-            let color = match needed.status {
-                NeededGradeStatus::Success => t.status_pass,
-                NeededGradeStatus::Failure => t.status_fail,
-                NeededGradeStatus::Warning => t.status_warn,
-                NeededGradeStatus::Info => t.text_muted,
-            };
-            (format_needed_grade(&needed, m), color)
-        } else {
-            let text = format_course_status(course, m);
-            let color = match course.current_grade() {
-                Some(g) if course.is_passing_grade(g) => t.status_pass,
-                Some(_) => t.status_fail,
-                None => t.text_muted,
-            };
-            (text, color)
-        };
-
-        let info_block = Block::default()
-            .title(format!(" {} ", m.need_to_pass))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(info_color));
-        let info_widget = Paragraph::new(info)
-            .style(Style::default().fg(info_color))
-            .block(info_block);
-        frame.render_widget(info_widget, inner[4]);
     }
 }
 
@@ -762,133 +698,4 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     state.select(Some(app.selected_language));
 
     frame.render_stateful_widget(list, inner, &mut state);
-}
-
-pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
-    let m = app.messages();
-    let t = theme();
-    let ic = icons(app.use_nerd_fonts);
-    let area = centered_rect(50, 11, frame.size());
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title(format!(" {}{} ", ic.grade, m.global_exam))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    // Show current course info and policy
-    let course = app.current_course();
-    let policy_label = course
-        .map(|c| match &c.global_policy {
-            GlobalExamPolicy::None => m.global_policy_none,
-            GlobalExamPolicy::Weighted { .. } => m.global_policy_weighted,
-            GlobalExamPolicy::ReplacesWorstGrade => m.global_policy_replaces,
-        })
-        .unwrap_or(m.global_policy_none);
-
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // policy info
-            Constraint::Length(1), // needed grade info
-            Constraint::Length(1), // spacing
-            Constraint::Length(3), // grade input
-            Constraint::Min(0),    // spacer
-        ])
-        .split(inner);
-
-    // Policy info line
-    let policy_info = Paragraph::new(Line::from(vec![
-        Span::styled(
-            format!("  {}: ", m.global_policy),
-            Style::default().fg(t.text_muted),
-        ),
-        Span::styled(policy_label, Style::default().fg(t.text_primary)),
-    ]));
-    frame.render_widget(policy_info, layout[0]);
-
-    // Needed grade info line
-    if let Some(course) = course {
-        let needed = course.needed_global_grade();
-        let needed_text = format_needed_grade(&needed, m);
-        let needed_color = match needed.status {
-            NeededGradeStatus::Success => t.status_pass,
-            NeededGradeStatus::Failure => t.status_fail,
-            NeededGradeStatus::Warning => t.status_warn,
-            NeededGradeStatus::Info => t.text_muted,
-        };
-        let needed_line = Paragraph::new(Line::from(vec![
-            Span::styled(
-                format!("  {}: ", m.global_needed),
-                Style::default().fg(t.text_muted),
-            ),
-            Span::styled(needed_text, Style::default().fg(needed_color)),
-        ]));
-        frame.render_widget(needed_line, layout[1]);
-    }
-
-    // Grade input field
-    let field_area = {
-        let pad = 2u16.min(layout[3].width / 2);
-        Rect::new(
-            layout[3].x + pad,
-            layout[3].y,
-            layout[3].width.saturating_sub(pad * 2),
-            layout[3].height,
-        )
-    };
-
-    render_input_field(
-        frame,
-        m.global_grade,
-        &app.edit_global_grade,
-        true,
-        field_area,
-    );
-}
-
-/// Draw the bulk-add evaluations popup (name base + count).
-pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
-    let m = app.messages();
-    let t = theme();
-    // Fixed size: 3+1+3+1+1 = 9 content + 2 v-margin + 2 borders = 13
-    let popup_w = 50u16;
-    let popup_h = 13u16;
-    let term = frame.size();
-    let x = term.x + term.width.saturating_sub(popup_w) / 2;
-    let y = term.y + term.height.saturating_sub(popup_h) / 2;
-    let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
-    frame.render_widget(Clear, area);
-    let block = Block::default()
-        .title(format!(" {} ", m.bulk_add_title))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
-    frame.render_widget(block, area);
-    let inner = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .horizontal_margin(2)
-        .constraints([
-            Constraint::Length(3), // Name field
-            Constraint::Length(1), // Spacing
-            Constraint::Length(3), // Count field
-            Constraint::Length(1), // Spacing
-            Constraint::Length(1), // Hint
-        ])
-        .split(area);
-    let on_name = app.input_field == InputField::Name;
-    render_input_field(frame, m.name, &app.edit_name, on_name, inner[0]);
-    render_input_field(
-        frame,
-        m.bulk_add_count,
-        &app.edit_bulk_count,
-        !on_name,
-        inner[2],
-    );
-    let hint = Paragraph::new(m.bulk_add_hint).style(Style::default().fg(t.text_muted));
-    frame.render_widget(hint, inner[4]);
 }

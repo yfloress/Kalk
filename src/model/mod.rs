@@ -53,13 +53,20 @@ pub const MAX_GRADE: f64 = 100.0;
 // =============================================================================
 
 /// Represents a single evaluation within a category.
-/// Evaluations are averaged equally within their category.
+/// Evaluations are averaged equally within their category unless
+/// the category has `weighted_evaluations` enabled, in which case
+/// each evaluation carries its own weight (must sum to 100%).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Evaluation {
     pub id: Uuid,
     pub name: String,
     /// Grade obtained (None if not yet graded). Scale: 0-100
     pub grade: Option<f64>,
+    /// Individual weight within the category (0-100%).
+    /// Only used when `CategoryRules::weighted_evaluations` is true.
+    /// `None` means equal weight (default behavior).
+    #[serde(default)]
+    pub weight: Option<f64>,
 }
 
 impl Evaluation {
@@ -68,6 +75,7 @@ impl Evaluation {
             id: Uuid::new_v4(),
             name,
             grade: None,
+            weight: None,
         }
     }
 
@@ -77,6 +85,17 @@ impl Evaluation {
             id: Uuid::new_v4(),
             name,
             grade: Some(grade.clamp(MIN_GRADE, MAX_GRADE)),
+            weight: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_weight(name: String, grade: f64, weight: f64) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            grade: Some(grade.clamp(MIN_GRADE, MAX_GRADE)),
+            weight: Some(weight.clamp(0.0, MAX_GRADE)),
         }
     }
 }
@@ -648,6 +667,61 @@ impl Course {
             return NeededGrade::info();
         }
 
+        // Weighted evaluations mode: each eval has its own weight fraction
+        if category.rules.weighted_evaluations {
+            let eval_w = eval.weight.unwrap_or(0.0);
+            if eval_w.abs() < f64::EPSILON {
+                return NeededGrade::failure(None);
+            }
+
+            // Sum of (grade * eval_weight/100) for all OTHER evaluations in this category
+            let other_contribution: f64 = category
+                .evaluations
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != eval_idx)
+                .map(|(_, e)| {
+                    let g = e.grade.unwrap_or(0.0);
+                    let w = e.weight.unwrap_or(0.0) / 100.0;
+                    g * w
+                })
+                .sum();
+
+            // Contribution from all OTHER categories
+            let mut total_contribution = other_contribution * category.weight / 100.0;
+            for (ci, cat) in self.categories.iter().enumerate() {
+                if ci != category_idx
+                    && !cat.evaluations.is_empty()
+                    && let Some(contribution) = cat.weighted_contribution()
+                {
+                    total_contribution += contribution;
+                }
+            }
+
+            // Weight of this single evaluation in the final grade:
+            // (eval_w / 100) * (category.weight / 100)
+            let final_eval_weight = (eval_w / 100.0) * (category.weight / 100.0);
+            if final_eval_weight.abs() < f64::EPSILON {
+                return NeededGrade::failure(None);
+            }
+
+            let effective_passing = self.passing_grade - 0.5;
+            let needed = (effective_passing - total_contribution) / final_eval_weight;
+
+            if !needed.is_finite() {
+                return NeededGrade::failure(None);
+            }
+
+            return if needed <= 0.0 {
+                NeededGrade::success(0.0)
+            } else if needed > MAX_GRADE {
+                NeededGrade::failure(Some(needed))
+            } else {
+                NeededGrade::warning(needed)
+            };
+        }
+
+        // Equal-weight mode (original behavior)
         let (other_grades, effective_count) = category.effective_grades_excluding(eval_idx);
         if effective_count == 0 {
             return NeededGrade::info();

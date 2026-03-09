@@ -392,14 +392,15 @@ impl App {
         };
         let name = eval.name.clone();
         let grade = eval.grade;
-        self.clipboard_evaluation = Some((name.clone(), grade));
+        let weight = eval.weight;
+        self.clipboard_evaluation = Some((name.clone(), grade, weight));
         self.set_status(format!("{}: {}", m.yanked_eval, name));
     }
 
     /// Paste the clipboard evaluation into the current category.
     pub fn paste_evaluation(&mut self) {
         let m = self.messages();
-        let Some((name, grade)) = self.clipboard_evaluation.clone() else {
+        let Some((name, grade, weight)) = self.clipboard_evaluation.clone() else {
             self.set_status(m.no_eval_in_clipboard.to_string());
             return;
         };
@@ -410,6 +411,10 @@ impl App {
         {
             let mut eval = Evaluation::new(name.clone());
             eval.grade = grade;
+            // Preserve evaluation weight only if the target category uses weighted evaluations
+            if category.rules.weighted_evaluations {
+                eval.weight = weight;
+            }
             category.evaluations.push(eval);
             self.selected_evaluation = Some(category.evaluations.len() - 1);
             self.set_status(format!("{}: {}", m.pasted_eval, name));

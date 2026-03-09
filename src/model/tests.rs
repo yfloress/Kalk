@@ -2491,3 +2491,431 @@ fn test_no_needs_global_when_no_evaluations() {
     assert!((result.grade - 0.0).abs() < f64::EPSILON);
     assert!(result.overridden_by.is_none());
 }
+
+// =========================================================================
+// Weighted Evaluations tests
+// =========================================================================
+
+#[test]
+fn test_weighted_evals_average_basic() {
+    // Category with weighted evaluations: 40% weight on 80, 60% weight on 60
+    // Expected: 0.4 * 80 + 0.6 * 60 = 32 + 36 = 68
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("Report".to_string(), 80.0, 40.0),
+        Evaluation::with_weight("Presentation".to_string(), 60.0, 60.0),
+    ];
+    let cat = Category::with_rules("Project".to_string(), 100.0, evals, rules);
+    let avg = cat.average_grade().unwrap();
+    assert!((avg - 68.0).abs() < 0.01, "Expected 68.0, got {avg}");
+}
+
+#[test]
+fn test_weighted_evals_average_three_components() {
+    // Informe avance 20%, Informe final 40%, Presentación 40%
+    // Grades: 70, 80, 90
+    // Expected: 0.2*70 + 0.4*80 + 0.4*90 = 14 + 32 + 36 = 82
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("Informe avance".to_string(), 70.0, 20.0),
+        Evaluation::with_weight("Informe final".to_string(), 80.0, 40.0),
+        Evaluation::with_weight("Presentacion".to_string(), 90.0, 40.0),
+    ];
+    let cat = Category::with_rules("Proyecto".to_string(), 5.0, evals, rules);
+    let avg = cat.average_grade().unwrap();
+    assert!((avg - 82.0).abs() < 0.01, "Expected 82.0, got {avg}");
+}
+
+#[test]
+fn test_weighted_evals_ungraded_counts_as_zero() {
+    // Two evals: one graded 100 (weight 50%), one ungraded (weight 50%)
+    // Expected: 0.5 * 100 + 0.5 * 0 = 50
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let mut eval1 = Evaluation::new("Done".to_string());
+    eval1.grade = Some(100.0);
+    eval1.weight = Some(50.0);
+    let mut eval2 = Evaluation::new("Not done".to_string());
+    eval2.weight = Some(50.0);
+    let cat = Category::with_rules("Cat".to_string(), 100.0, vec![eval1, eval2], rules);
+    let avg = cat.average_grade().unwrap();
+    assert!((avg - 50.0).abs() < 0.01, "Expected 50.0, got {avg}");
+}
+
+#[test]
+fn test_weighted_evals_weighted_contribution() {
+    // Category weight 5%, weighted evals: 0.2*70 + 0.4*80 + 0.4*90 = 82
+    // Contribution: 82 * 5 / 100 = 4.1
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 70.0, 20.0),
+        Evaluation::with_weight("B".to_string(), 80.0, 40.0),
+        Evaluation::with_weight("C".to_string(), 90.0, 40.0),
+    ];
+    let cat = Category::with_rules("Project".to_string(), 5.0, evals, rules);
+    let contribution = cat.weighted_contribution().unwrap();
+    assert!(
+        (contribution - 4.1).abs() < 0.01,
+        "Expected 4.1, got {contribution}"
+    );
+}
+
+#[test]
+fn test_weighted_evals_course_grade() {
+    // Simulate the slide example:
+    // NF = 0.55*PC + 0.05*PT + 0.4*TI
+    // PC (controles, equal weight): 3 evals all 70 => avg 70
+    // PT (proyecto, weighted): avance 20% => 60, final 40% => 80, pres 40% => 90
+    //   PT avg = 0.2*60 + 0.4*80 + 0.4*90 = 12 + 32 + 36 = 80
+    // TI (tarea individual, equal weight): 1 eval => 85
+    // NF = 0.55*70 + 0.05*80 + 0.4*85 = 38.5 + 4.0 + 34.0 = 76.5
+    let mut course = Course::new("ILI 101".to_string(), DEFAULT_PASSING_GRADE);
+
+    // Controles (55%) — equal weight
+    let controles = Category::with_evaluations(
+        "Controles".to_string(),
+        55.0,
+        vec![
+            Evaluation::with_grade("C1".to_string(), 70.0),
+            Evaluation::with_grade("C2".to_string(), 70.0),
+            Evaluation::with_grade("C3".to_string(), 70.0),
+        ],
+    );
+
+    // Proyecto (5%) — weighted evaluations
+    let proyecto_rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let proyecto = Category::with_rules(
+        "Proyecto".to_string(),
+        5.0,
+        vec![
+            Evaluation::with_weight("Informe avance".to_string(), 60.0, 20.0),
+            Evaluation::with_weight("Informe final".to_string(), 80.0, 40.0),
+            Evaluation::with_weight("Presentacion".to_string(), 90.0, 40.0),
+        ],
+        proyecto_rules,
+    );
+
+    // Tarea Individual (40%) — equal weight, 1 eval
+    let tarea = Category::with_evaluations(
+        "Tarea Individual".to_string(),
+        40.0,
+        vec![Evaluation::with_grade("TI 1".to_string(), 85.0)],
+    );
+
+    course.categories = vec![controles, proyecto, tarea];
+    let grade = course.current_grade().unwrap();
+    assert!((grade - 76.5).abs() < 0.1, "Expected ~76.5, got {grade}");
+}
+
+#[test]
+fn test_weighted_evals_drop_lowest_ignored() {
+    // When weighted_evaluations is true, drop_lowest should have no effect
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        drop_lowest: 1,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 10.0, 50.0),
+        Evaluation::with_weight("B".to_string(), 90.0, 50.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+
+    // With weighted mode, drop_lowest is ignored:
+    // avg = 0.5 * 10 + 0.5 * 90 = 50
+    let avg = cat.average_grade().unwrap();
+    assert!((avg - 50.0).abs() < 0.01, "Expected 50.0, got {avg}");
+
+    // dropped_indices should be empty
+    assert!(cat.dropped_indices().is_empty());
+}
+
+#[test]
+fn test_weighted_evals_validate_weights_valid() {
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 80.0, 60.0),
+        Evaluation::with_weight("B".to_string(), 70.0, 40.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    assert_eq!(cat.validate_eval_weights(), WeightValidation::Valid);
+}
+
+#[test]
+fn test_weighted_evals_validate_weights_under() {
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 80.0, 30.0),
+        Evaluation::with_weight("B".to_string(), 70.0, 40.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    assert!(matches!(
+        cat.validate_eval_weights(),
+        WeightValidation::Under(t) if (t - 70.0).abs() < 0.01
+    ));
+}
+
+#[test]
+fn test_weighted_evals_validate_weights_over() {
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 80.0, 70.0),
+        Evaluation::with_weight("B".to_string(), 70.0, 40.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    assert!(matches!(
+        cat.validate_eval_weights(),
+        WeightValidation::Over(t) if (t - 110.0).abs() < 0.01
+    ));
+}
+
+#[test]
+fn test_weighted_evals_validate_weights_empty() {
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let cat = Category::with_rules("Cat".to_string(), 100.0, Vec::new(), rules);
+    assert_eq!(cat.validate_eval_weights(), WeightValidation::Empty);
+}
+
+#[test]
+fn test_weighted_evals_total_eval_weight() {
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 80.0, 20.0),
+        Evaluation::with_weight("B".to_string(), 70.0, 40.0),
+        Evaluation::with_weight("C".to_string(), 90.0, 40.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    assert!((cat.total_eval_weight() - 100.0).abs() < 0.01);
+}
+
+#[test]
+fn test_weighted_evals_none_weight_treated_as_zero() {
+    // Evaluation with weight = None in a weighted category is treated as 0% weight
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let mut eval_with_weight = Evaluation::with_grade("A".to_string(), 100.0);
+    eval_with_weight.weight = Some(100.0);
+    let eval_no_weight = Evaluation::with_grade("B".to_string(), 50.0);
+    // B has weight = None => treated as 0%
+    let cat = Category::with_rules(
+        "Cat".to_string(),
+        100.0,
+        vec![eval_with_weight, eval_no_weight],
+        rules,
+    );
+    // avg = 1.0 * 100 + 0.0 * 50 = 100
+    let avg = cat.average_grade().unwrap();
+    assert!((avg - 100.0).abs() < 0.01, "Expected 100.0, got {avg}");
+}
+
+#[test]
+fn test_weighted_evals_needed_grade() {
+    // Course with one weighted category (100%)
+    // Two evals: A (60% weight, grade 50), B (40% weight, unknown)
+    // Course passing grade: 55
+    // We need: 0.6*50 + 0.4*x >= 54.5  (rounding)
+    // 30 + 0.4x >= 54.5 => 0.4x >= 24.5 => x >= 61.25
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 50.0, 60.0),
+        Evaluation::with_weight("B".to_string(), 0.0, 40.0), // ungraded, will be solved
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    course.categories = vec![cat];
+
+    let needed = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(needed.status, NeededGradeStatus::Warning);
+    let val = needed.value.unwrap();
+    assert!((val - 61.25).abs() < 0.1, "Expected ~61.25, got {val}");
+}
+
+#[test]
+fn test_weighted_evals_needed_grade_already_passing() {
+    // Both evals graded, course already passing
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 80.0, 50.0),
+        Evaluation::with_weight("B".to_string(), 90.0, 50.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    course.categories = vec![cat];
+
+    let needed = course.needed_grade_for_evaluation(0, 0, false);
+    assert_eq!(needed.status, NeededGradeStatus::Success);
+}
+
+#[test]
+fn test_weighted_evals_needed_grade_zero_weight_eval() {
+    // Evaluation with 0% weight cannot affect outcome
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let mut eval = Evaluation::new("Zero".to_string());
+    eval.weight = Some(0.0);
+    let cat = Category::with_rules("Cat".to_string(), 100.0, vec![eval], rules);
+    course.categories = vec![cat];
+
+    let needed = course.needed_grade_for_evaluation(0, 0, true);
+    assert_eq!(needed.status, NeededGradeStatus::Failure);
+}
+
+#[test]
+fn test_weighted_evals_needed_grade_multi_category() {
+    // Two categories: one normal (60%), one weighted (40%)
+    // Normal cat: 1 eval graded 70
+    // Weighted cat: eval A (50%, grade 80), eval B (50%, unknown)
+    // Course grade = 0.6*70 + 0.4*(0.5*80 + 0.5*x)
+    //             = 42 + 0.4*(40 + 0.5x)
+    //             = 42 + 16 + 0.2x
+    //             = 58 + 0.2x
+    // Need: 58 + 0.2x >= 54.5  => 0.2x >= -3.5 => x >= -17.5
+    // Since x >= 0 always, any grade works => Success(0)
+    let mut course = Course::new("Test".to_string(), DEFAULT_PASSING_GRADE);
+    let normal_cat = Category::with_evaluations(
+        "Normal".to_string(),
+        60.0,
+        vec![Evaluation::with_grade("N1".to_string(), 70.0)],
+    );
+    let weighted_rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    let weighted_cat = Category::with_rules(
+        "Weighted".to_string(),
+        40.0,
+        vec![
+            Evaluation::with_weight("A".to_string(), 80.0, 50.0),
+            Evaluation::with_weight("B".to_string(), 0.0, 50.0),
+        ],
+        weighted_rules,
+    );
+    course.categories = vec![normal_cat, weighted_cat];
+
+    let needed = course.needed_grade_for_evaluation(1, 1, true);
+    assert_eq!(needed.status, NeededGradeStatus::Success);
+}
+
+#[test]
+fn test_weighted_evals_round_before_weighting() {
+    // Weighted evals with round_before_weighting
+    // avg = 0.5 * 73 + 0.5 * 78 = 36.5 + 39.0 = 75.5
+    // Rounded: 76
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        round_before_weighting: true,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 73.0, 50.0),
+        Evaluation::with_weight("B".to_string(), 78.0, 50.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    let avg = cat.average_grade().unwrap();
+    assert!(
+        (avg - 76.0).abs() < 0.01,
+        "Expected 76.0 (rounded), got {avg}"
+    );
+}
+
+#[test]
+fn test_weighted_evals_geometric_mean() {
+    // Weighted geometric mean: exp(w1*ln(g1) + w2*ln(g2))
+    // Weights: 50%, 50%. Grades: 64, 100.
+    // exp(0.5*ln(64) + 0.5*ln(100)) = exp(0.5*4.158 + 0.5*4.605)
+    //   = exp(2.079 + 2.303) = exp(4.382) = 80.0
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        averaging_method: AveragingMethod::Geometric,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 64.0, 50.0),
+        Evaluation::with_weight("B".to_string(), 100.0, 50.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    let avg = cat.average_grade().unwrap();
+    assert!((avg - 80.0).abs() < 0.1, "Expected ~80.0, got {avg}");
+}
+
+#[test]
+fn test_weighted_evals_geometric_mean_with_zero() {
+    // Weighted geometric mean: any zero grade → result is 0
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        averaging_method: AveragingMethod::Geometric,
+        ..Default::default()
+    };
+    let evals = vec![
+        Evaluation::with_weight("A".to_string(), 0.0, 50.0),
+        Evaluation::with_weight("B".to_string(), 100.0, 50.0),
+    ];
+    let cat = Category::with_rules("Cat".to_string(), 100.0, evals, rules);
+    let avg = cat.average_grade().unwrap();
+    assert!((avg - 0.0).abs() < 0.01, "Expected 0.0, got {avg}");
+}
+
+#[test]
+fn test_weighted_evals_is_default_false() {
+    let rules = CategoryRules {
+        weighted_evaluations: true,
+        ..Default::default()
+    };
+    assert!(!rules.is_default());
+}
+
+#[test]
+fn test_weighted_evals_serde_default() {
+    // Deserializing old data without weighted_evaluations should default to false
+    let json = r#"{"drop_lowest":0,"averaging_method":"Arithmetic"}"#;
+    let rules: CategoryRules = serde_json::from_str(json).unwrap();
+    assert!(!rules.weighted_evaluations);
+}
+
+#[test]
+fn test_eval_weight_serde_default() {
+    // Deserializing old eval data without weight should default to None
+    let json = r#"{"id":"00000000-0000-0000-0000-000000000000","name":"Test","grade":80.0}"#;
+    let eval: Evaluation = serde_json::from_str(json).unwrap();
+    assert!(eval.weight.is_none());
+}

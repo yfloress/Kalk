@@ -187,6 +187,8 @@ pub struct Messages {
     pub minimum_per_evaluation: &'static str,
     pub minimum_one_eval: &'static str,
     pub round_before_weighting: &'static str,
+    pub weighted_evaluations: &'static str,
+    pub eval_weight: &'static str,
     pub yes: &'static str,
     pub no: &'static str,
 
@@ -201,6 +203,7 @@ pub struct Messages {
     pub help_min_per_eval: &'static str,
     pub help_min_one_eval: &'static str,
     pub help_round_before_weighting: &'static str,
+    pub help_weighted_evaluations: &'static str,
     pub help_passing_grade: &'static str,
     pub help_global_policy: &'static str,
     pub help_global_weights: &'static str,
@@ -213,6 +216,9 @@ pub struct Messages {
     pub grade_capped_by: &'static str,
     pub dropped: &'static str,
     pub eval_below_min: &'static str,
+    pub eval_weights_ok: &'static str,
+    pub eval_weights_warning: &'static str,
+    pub eval_weights_error: &'static str,
 
     // Global exam
     pub global_exam: &'static str,
@@ -388,6 +394,8 @@ pub const EN: Messages = Messages {
     minimum_per_evaluation: "Min. Per Eval",
     minimum_one_eval: "Min. One Eval >=",
     round_before_weighting: "Round Category",
+    weighted_evaluations: "Weighted Evals",
+    eval_weight: "Eval Weight %",
     yes: "Yes",
     no: "No",
 
@@ -402,6 +410,7 @@ pub const EN: Messages = Messages {
     help_min_per_eval: "Minimum grade required on each individual evaluation. Leave empty for none.",
     help_min_one_eval: "At least one graded evaluation must reach this grade (e.g. 50). If none does, the 'If Not Met' action triggers. Leave empty for none.",
     help_round_before_weighting: "Round the category average before applying weight. Useful when the university rounds per category.",
+    help_weighted_evaluations: "When enabled, each evaluation has its own weight (must sum to 100%). Useful when a category has sub-components with different weights (e.g. report 40%, presentation 60%).",
     help_passing_grade: "Minimum grade to pass the course (0-100). Default is 55. Grades are rounded: 54.5 rounds up to 55 (pass).",
     help_global_policy: "The global exam replaces the worst grade in the failing category. Everything is recalculated. The grade can go up or down.",
     help_global_weights: "Final = semester grade * W1 + global grade * W2. They should add up to 100 (e.g. 70 + 30).",
@@ -413,7 +422,10 @@ pub const EN: Messages = Messages {
     needs_global: "NEEDS GLOBAL",
     grade_capped_by: "capped by",
     dropped: "dropped",
-    eval_below_min: "below min",
+    eval_below_min: "Below min",
+    eval_weights_ok: "Eval weights: 100%",
+    eval_weights_warning: "Eval weights: only",
+    eval_weights_error: "Eval weights err:",
 
     // Global exam
     global_exam: "Global Exam",
@@ -588,8 +600,10 @@ pub const ES: Messages = Messages {
     action_fail_course: "Reprobar Ramo",
     minimum_per_evaluation: "Min. Por Eval",
     minimum_one_eval: "Min. Una Eval >=",
-    round_before_weighting: "Redondear Categoría",
-    yes: "Sí",
+    round_before_weighting: "Redondear Categ.",
+    weighted_evaluations: "Pesos por Eval",
+    eval_weight: "Peso Eval %",
+    yes: "Si",
     no: "No",
 
     // Field help descriptions
@@ -602,8 +616,9 @@ pub const ES: Messages = Messages {
     help_minimum_average: "Nota mínima promedio requerida en esta categoría (ej: 55). Dejar vacío si no aplica.",
     help_min_per_eval: "Nota mínima requerida en cada evaluación individual. Dejar vacío si no aplica.",
     help_min_one_eval: "Al menos una evaluación calificada debe alcanzar esta nota (ej: 50). Si ninguna la alcanza, se activa la acción 'Si No Se Cumple'. Dejar vacío si no aplica.",
-    help_round_before_weighting: "Redondea el promedio de la categoría antes de ponderar. Útil cuando la universidad redondea por categoría.",
-    help_passing_grade: "Nota mínima para aprobar el ramo (0-100). Por defecto es 55. Las notas se redondean: 54.5 sube a 55 (aprueba).",
+    help_round_before_weighting: "Redondea el promedio de la categoria antes de aplicar el peso. Util cuando la universidad redondea por categoria.",
+    help_weighted_evaluations: "Cuando esta activado, cada evaluacion tiene su propio peso (deben sumar 100%). Util cuando una categoria tiene sub-componentes con distinto peso (ej. informe 40%, presentacion 60%).",
+    help_passing_grade: "Nota minima para aprobar el ramo (0-100). Por defecto es 55. Las notas se redondean: 54.5 sube a 55 (aprueba).",
     help_global_policy: "El global reemplaza la peor nota de la categoría que reprueba. Todo se recalcula. La nota puede subir o bajar.",
     help_global_weights: "Final = nota semestral * P1 + nota global * P2. Deben sumar 100 (ej: 70 + 30).",
     help_global_eligibility: "Nota mínima requerida para poder dar el global. Dejar vacío si no hay restricción (cualquiera puede darlo).",
@@ -614,7 +629,10 @@ pub const ES: Messages = Messages {
     needs_global: "NECESITA GLOBAL",
     grade_capped_by: "limitado por",
     dropped: "eliminada",
-    eval_below_min: "bajo min",
+    eval_below_min: "Bajo min",
+    eval_weights_ok: "Pesos eval: 100%",
+    eval_weights_warning: "Pesos eval: solo",
+    eval_weights_error: "Pesos eval err:",
 
     // Global exam
     global_exam: "Examen Global",
