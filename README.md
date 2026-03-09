@@ -23,11 +23,16 @@ Manage courses, track grades by categories, and automatically calculate the exac
 | Feature | Description |
 |---------|-------------|
 | **Hierarchical Grade System** | Course → Categories → Evaluations structure with weighted categories |
+| **Weighted Evaluations** | Assign individual weights to evaluations within a category (e.g., 20%/40%/40%) |
 | **Real-time Calculation** | Shows exactly what grade you need in each evaluation to pass |
-| **Advanced Category Rules** | Drop lowest grades, geometric mean, minimum averages, per-evaluation minimums, round before weighting |
+| **Global Exam Support** | Configure global exam policies: weighted average with semester, or replace worst category grade |
+| **Advanced Category Rules** | Drop lowest grades, geometric mean, minimum averages, per-evaluation minimums, weighted evaluations, round before weighting |
 | **Course Templates** | Pre-built templates + create your own reusable templates with `t` |
 | **Weight Validation** | Visual indicators when category weights don't sum to 100% |
 | **Auto-balance** | Automatically distribute weights equally across categories |
+| **Yank & Paste** | Copy evaluations between categories with `y`/`p` |
+| **Bulk-add Evaluations** | Add multiple evaluations at once with `Ctrl+N` |
+| **Compact View** | Toggle compact courses panel with `c` for more screen space |
 | **Nerd Font Icons** | Beautiful icons with Nerd Fonts (enabled by default), with Unicode fallback |
 | **Themed UI** | Rounded borders, semantic colours, and styled keybindings |
 | **Settings** | Toggle Nerd Font icons, change language — all persisted to disk |
@@ -54,9 +59,11 @@ Each category supports optional advanced rules (`Shift+A` while editing):
 |------|-------------|
 | **Drop Lowest** | Discard the N worst grades before averaging (0–5) |
 | **Averaging Method** | Arithmetic (default) or Geometric mean |
+| **Weighted Evaluations** | Assign individual percentage weights to evaluations instead of equal averaging |
 | **Minimum Average** | Require a minimum average in this category to pass |
-| **If Not Met** | When minimum isn't reached: final = category avg, or require global exam |
 | **Min. Per Eval** | Minimum grade required on each individual evaluation |
+| **Min. One Eval** | At least one evaluation must reach a minimum grade |
+| **If Not Met** | When minimum isn't reached: final = category avg, require global exam, or fail course |
 | **Round Category** | Round the category average before applying its weight |
 
 Press `?` inside the category editor for a full help overlay.
@@ -110,6 +117,11 @@ The Nix environment includes `cargo-audit` for security scanning.
 | `d` | Delete selected item |
 | `t` | Save current course as template |
 | `b` | Auto-balance category weights |
+| `y` | Yank (copy) selected evaluation |
+| `p` | Paste yanked evaluation into current category |
+| `Ctrl+N` | Bulk-add multiple evaluations |
+| `g` | Enter global exam grade |
+| `c` | Toggle compact courses view |
 | `S` | Open settings |
 | `L` | Change language |
 | `q` | Quit |
@@ -126,7 +138,7 @@ The Nix environment includes `cargo-audit` for security scanning.
 
 | Key | Action |
 |:---:|--------|
-| `Shift+A` | Toggle advanced rules section |
+| `Ctrl+R` | Toggle advanced rules section |
 | `?` | Toggle field help overlay |
 | `Space` / `Enter` | Cycle toggle fields (drop lowest, avg method, etc.) |
 
@@ -147,15 +159,19 @@ src/
 ├── main.rs          # Entry point, terminal setup, panic hooks
 ├── app/
 │   ├── mod.rs       # App struct, state, navigation, getters
-│   └── forms.rs     # Form handling: course/category/eval/template/settings
+│   ├── forms.rs     # Form handling: course/category/eval editing, deletion, weight mgmt
+│   └── actions.rs   # Secondary actions: templates, language, settings, global grade, yank/paste, bulk-add
 ├── model/
 │   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, templates
 │   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
+│   ├── global.rs    # Global exam grade computation logic
 │   └── tests.rs     # All model unit tests
 ├── ui/
 │   ├── mod.rs       # Main layout, courses panel, categories panel
 │   ├── panels.rs    # Evaluations panel, footer rendering
-│   ├── popups.rs    # All popup overlays (edit, delete, template, language, settings)
+│   ├── popups.rs    # Popup overlays (template, course, category, delete, language, save-template)
+│   ├── eval_popups.rs # Evaluation popup, global grade entry, bulk-add evaluations
+│   ├── settings_popup.rs # Settings popup
 │   ├── helpers.rs   # Shared rendering helpers and formatting functions
 │   ├── icons.rs     # Nerd Font and Unicode fallback icon sets
 │   └── theme.rs     # Semantic colour theme (rounded borders, palette)
