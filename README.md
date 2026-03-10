@@ -72,9 +72,11 @@ Press `?` inside the category editor for a full help overlay.
 
 ## Installation
 
+> For detailed platform-specific instructions (macOS, Fedora, Debian/Ubuntu, Arch Linux), see the [Installation Guide](docs/INSTALL.md).
+
 ### Requirements
 
-- [Rust & Cargo](https://rustup.rs/) or [Nix](https://nixos.org/)
+- [Rust & Cargo](https://rustup.rs/) (>= 1.85) or [Nix](https://nixos.org/)
 - A [Nerd Font](https://www.nerdfonts.com/) is recommended (icons enabled by default — can be disabled in Settings)
 
 ### Using Cargo

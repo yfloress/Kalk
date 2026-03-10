@@ -70,9 +70,11 @@ Presiona `?` dentro del editor de categoría para ver la ayuda completa.
 
 ## Instalación
 
+> Para instrucciones detalladas por plataforma (macOS, Fedora, Debian/Ubuntu, Arch Linux), consulta la [Guía de Instalación](docs/INSTALL.md).
+
 ### Requisitos
 
-- [Rust & Cargo](https://rustup.rs/) o [Nix](https://nixos.org/)
+- [Rust & Cargo](https://rustup.rs/) (>= 1.85) o [Nix](https://nixos.org/)
 - Se recomienda una [Nerd Font](https://www.nerdfonts.com/) (iconos activados por defecto — se pueden desactivar en Ajustes)
 
 ### Usando Cargo
