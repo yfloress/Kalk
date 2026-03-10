@@ -72,11 +72,7 @@ cargo build --release
 ### 4. Install the binary
 
 ```bash
-cp target/release/kalk /usr/local/bin/
-
-or just run
-
-cargo run --release
+sudo cp target/release/kalk /usr/local/bin/
 ```
 
 ### 5. (Optional) Install a Nerd Font
@@ -88,6 +84,8 @@ brew install --cask font-jetbrains-mono-nerd-font
 ```
 
 Then set your terminal emulator to use the installed Nerd Font.
+
+See [Post-install](#post-install) for usage and data paths.
 
 ---
 
@@ -144,6 +142,8 @@ fc-cache -fv
 
 Then configure your terminal emulator to use the installed Nerd Font.
 
+See [Post-install](#post-install) for usage and data paths.
+
 ---
 
 ## Debian / Ubuntu
@@ -196,6 +196,8 @@ fc-cache -fv
 
 Then configure your terminal emulator to use the installed Nerd Font.
 
+See [Post-install](#post-install) for usage and data paths.
+
 ---
 
 ## Arch Linux
@@ -240,6 +242,8 @@ sudo pacman -S ttf-jetbrains-mono-nerd
 ```
 
 Then configure your terminal emulator to use the installed Nerd Font.
+
+See [Post-install](#post-install) for usage and data paths.
 
 ---
 
