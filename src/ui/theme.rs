@@ -28,6 +28,10 @@ use ratatui::widgets::BorderType;
 // Catppuccin Mocha Palette
 // =============================================================================
 
+/// Subtle tint between the terminal base and SURFACE0 — used for the
+/// alternating "zebra" rows in the evaluations table.  Distinct enough to
+/// be perceptible but far softer than a regular Catppuccin surface.
+const ZEBRA: Color = Color::Rgb(0x26, 0x27, 0x38);
 const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
 const SURFACE2: Color = Color::Rgb(0x58, 0x5b, 0x70);
 const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
@@ -84,6 +88,9 @@ pub struct Theme {
     /// Foreground colour when an item is highlighted.
     pub highlight_fg: Color,
 
+    /// Subtle alternating row background for tabular views (zebra striping).
+    pub zebra_bg: Color,
+
     // -- Input fields -----------------------------------------------------
     /// Border / text colour for the currently active input field.
     pub input_active: Color,
@@ -139,6 +146,10 @@ pub const DEFAULT_THEME: Theme = Theme {
     // Highlight — Surface 2 bg keeps items readable
     highlight_bg: SURFACE2,
     highlight_fg: TEXT,
+
+    // Zebra striping — a touch lighter than the terminal base so alternating
+    // rows are scannable without looking selected.
+    zebra_bg: ZEBRA,
 
     // Input fields — Peach for active (warm accent), Overlay 0 for inactive
     input_active: PEACH,

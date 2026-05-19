@@ -102,8 +102,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .max()
             .unwrap_or(4);
 
-        // Longest second line: "  Actual: 100 (REPROBADO)"
-        // or "  Actual: 0 (REPROBADO) [CatName]"
+        // Longest second line: "  Actual: 100 (REPROBADO) · 12/15"
+        // or "  Actual: 0 (REPROBADO) [CatName] · 0/5"
+        // The trailing " · X/Y" chip is appended when the course has any
+        // evaluations, so factor its width into the layout estimate.
         let status_line_max: u16 = app
             .courses
             .iter()
@@ -112,6 +114,21 @@ pub fn draw(frame: &mut Frame, app: &App) {
                 let has_rule_issues = grade_result.overridden_by.is_some()
                     || grade_result.needs_global
                     || !grade_result.failed_minimums.is_empty();
+                let graded: usize = c.categories.iter().map(|cat| cat.graded_count()).sum();
+                let total: usize = c.categories.iter().map(|cat| cat.evaluations.len()).sum();
+                let digits = |n: usize| -> u16 {
+                    if n == 0 {
+                        1
+                    } else {
+                        (n as f64).log10().floor() as u16 + 1
+                    }
+                };
+                // " · {graded}/{total}" = 3 + digits(graded) + 1 + digits(total)
+                let chip_w = if total > 0 {
+                    3 + digits(graded) + 1 + digits(total)
+                } else {
+                    0
+                };
                 if !c.has_evaluations() {
                     // "  Sin evaluaciones"
                     2 + m.no_evaluations.chars().count() as u16
@@ -126,7 +143,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
                     } else {
                         format!("{}: {:.0} ({})", m.current, rounded, label)
                     };
-                    2 + base.chars().count() as u16 // "  " prefix
+                    2 + base.chars().count() as u16 + chip_w // "  " prefix + chip
                 }
             })
             .max()
@@ -163,10 +180,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     };
 
     let courses_constraint = if effective_compact {
-        // Dynamic width: accent(2) + name + space + grade(3) + borders(2)
-        //                + highlight + pad(1)
-        let needed = 2 + max_name_len + 1 + 3 + 2 + highlight_len + 1;
-        Constraint::Length(needed.max(title_width).clamp(12, 32))
+        // Dynamic width: accent(2) + name + space + grade(3) + chip(6 max
+        // for " 99/99") + borders(2) + highlight + pad(1)
+        let needed = 2 + max_name_len + 1 + 3 + 6 + 2 + highlight_len + 1;
+        Constraint::Length(needed.max(title_width).clamp(12, 38))
     } else {
         // Dynamic width based on actual content, clamped to reasonable bounds
         Constraint::Length(normal_needed.clamp(15, total_width / 2))
@@ -281,8 +298,17 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 Style::default().fg(true_color),
             );
 
+            // Progress chip — "graded/total" across every category of the
+            // course.  Lets the user see how far through the semester each
+            // course is without having to open it.
+            let graded_count: usize =
+                c.categories.iter().map(|cat| cat.graded_count()).sum();
+            let total_count: usize =
+                c.categories.iter().map(|cat| cat.evaluations.len()).sum();
+
             if compact {
-                // Compact: single line — "NAME GRADE" with color = true pass/fail
+                // Compact: single line — "NAME GRADE X/Y" with colour-coded
+                // grade and a muted progress chip.
                 let short_grade = if has_evals {
                     // When global was taken, show the after-global grade
                     let display_grade = if let Some(after) = grade_result.grade_after_global {
@@ -295,11 +321,18 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 } else {
                     " -".to_string()
                 };
-                ListItem::new(Line::from(vec![
+                let mut spans = vec![
                     accent,
                     Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
                     Span::styled(short_grade, Style::default().fg(true_color)),
-                ]))
+                ];
+                if total_count > 0 {
+                    spans.push(Span::styled(
+                        format!(" {}/{}", graded_count, total_count),
+                        Style::default().fg(t.text_muted),
+                    ));
+                }
+                ListItem::new(Line::from(spans))
             } else {
                 // Weight validation indicator (only in normal mode)
                 // When weights are valid but the course has academic issues
@@ -390,16 +423,23 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 } else {
                     m.no_evaluations.to_string()
                 };
+                let mut status_spans = vec![Span::styled(
+                    format!("    {}", status),
+                    Style::default().fg(true_color),
+                )];
+                if total_count > 0 {
+                    status_spans.push(Span::styled(
+                        format!(" \u{00b7} {}/{}", graded_count, total_count),
+                        Style::default().fg(t.text_muted),
+                    ));
+                }
                 ListItem::new(vec![
                     Line::from(vec![
                         accent,
                         Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
                         weight_status,
                     ]),
-                    Line::from(Span::styled(
-                        format!("    {}", status),
-                        Style::default().fg(true_color),
-                    )),
+                    Line::from(status_spans),
                 ])
             }
         })
@@ -556,8 +596,16 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 }
             };
 
+            // Coloured accent bar mirrors the one on the courses panel — it
+            // reflects this category's pass/fail/override status at a glance.
+            let accent = Span::styled(
+                "\u{258E} ",
+                Style::default().fg(avg_color),
+            );
+
             // Build name line with optional rules indicator
             let mut name_spans = vec![
+                accent,
                 Span::styled(&cat.name, Style::default().add_modifier(Modifier::BOLD)),
                 Span::styled(
                     format!(" ({:.0}%)", cat.weight),
@@ -583,9 +631,11 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 ));
             }
 
-            // Build avg line with optional minimum warning
+            // Build avg line with optional minimum warning. The extra two
+            // spaces of indent align this line with the start of the name
+            // after the accent bar above.
             let mut avg_spans = vec![
-                Span::raw(format!("  {}: ", m.avg)),
+                Span::raw(format!("    {}: ", m.avg)),
                 Span::styled(avg, Style::default().fg(avg_color)),
                 Span::styled(
                     format!(" | {}", progress),
@@ -686,7 +736,14 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
             GlobalExamPolicy::None => String::new(),
         };
 
+        // Same accent treatment as regular categories — keeps the visual
+        // language consistent for the virtual global row.
+        let accent = Span::styled(
+            "\u{258E} ",
+            Style::default().fg(global_color),
+        );
         let name_spans = vec![
+            accent,
             Span::styled(
                 m.global_exam,
                 Style::default()
@@ -696,7 +753,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(global_policy_hint, Style::default().fg(t.text_muted)),
         ];
         let avg_spans = vec![
-            Span::raw(format!("  {}: ", m.grade)),
+            Span::raw(format!("    {}: ", m.grade)),
             Span::styled(global_grade_text, Style::default().fg(global_color)),
             Span::styled(
                 format!(" | {}{}", progress, needed_hint),

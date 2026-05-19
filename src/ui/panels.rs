@@ -205,10 +205,15 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         .enumerate()
         .map(|(i, e)| {
             let is_selected = app.selected_evaluation == Some(i) && is_focused;
+            // Zebra-striping: odd rows get a subtle background tint so the
+            // table is easy to scan when there are many evaluations.
+            // Selection always wins to keep the active row obvious.
             let style = if is_selected {
                 Style::default()
                     .bg(t.highlight_bg)
                     .add_modifier(Modifier::BOLD)
+            } else if i % 2 == 1 {
+                Style::default().bg(t.zebra_bg)
             } else {
                 Style::default()
             };
