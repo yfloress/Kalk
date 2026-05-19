@@ -630,21 +630,150 @@ pub fn draw_delete_template_popup(frame: &mut Frame, app: &App) {
 
 pub fn draw_delete_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
-    let (message, warning) = match app.focus {
-        Focus::Courses => (m.delete_course_question, m.delete_course_warning),
-        Focus::Categories => (m.delete_category_question, m.delete_category_warning),
-        Focus::Evaluations => (m.delete_evaluation_question, m.delete_evaluation_warning),
+
+    // Build a warning string that includes the concrete blast radius of the
+    // delete (how many categories/evaluations the user will lose), so the
+    // confirmation is informed rather than abstract.
+    let (message, warning_owned) = match app.focus {
+        Focus::Courses => {
+            let course = app.current_course();
+            let cat_count = course.map(|c| c.categories.len()).unwrap_or(0);
+            let eval_count: usize = course
+                .map(|c| c.categories.iter().map(|cat| cat.evaluations.len()).sum())
+                .unwrap_or(0);
+            let cat_label = if cat_count == 1 {
+                m.category_singular
+            } else {
+                m.category_plural
+            };
+            let eval_label = if eval_count == 1 {
+                m.eval_singular
+            } else {
+                m.eval_plural
+            };
+            let warning = format!(
+                "{} ({} {}, {} {})",
+                m.delete_course_warning, cat_count, cat_label, eval_count, eval_label
+            );
+            (m.delete_course_question, warning)
+        }
+        Focus::Categories => {
+            let eval_count = app
+                .current_category()
+                .map(|c| c.evaluations.len())
+                .unwrap_or(0);
+            let eval_label = if eval_count == 1 {
+                m.eval_singular
+            } else {
+                m.eval_plural
+            };
+            let warning = format!(
+                "{} ({} {})",
+                m.delete_category_warning, eval_count, eval_label
+            );
+            (m.delete_category_question, warning)
+        }
+        Focus::Evaluations => (
+            m.delete_evaluation_question,
+            m.delete_evaluation_warning.to_string(),
+        ),
     };
 
     render_delete_confirmation(
         frame,
         m.confirm_delete,
         message,
-        warning,
+        &warning_owned,
         m.confirm,
         m.cancel,
         app.use_nerd_fonts,
     );
+}
+
+/// Render the global keyboard cheat-sheet overlay.
+/// Groups shortcuts by purpose so the user can scan instead of read top-down.
+pub fn draw_help_popup(frame: &mut Frame, app: &App) {
+    let m = app.messages();
+    let t = theme();
+    let term = frame.size();
+
+    // Centred popup with breathing room around the content.
+    let popup_w = 62u16.min(term.width.saturating_sub(2));
+    let popup_h = 32u16.min(term.height.saturating_sub(2));
+    let x = term.width.saturating_sub(popup_w) / 2;
+    let y = term.height.saturating_sub(popup_h) / 2;
+    let area = Rect::new(x, y, popup_w, popup_h);
+
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title(format!(" {} ", m.help_title))
+        .borders(Borders::ALL)
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let key_style = Style::default()
+        .fg(t.footer_key)
+        .add_modifier(Modifier::BOLD);
+    let desc_style = Style::default().fg(t.text_primary);
+    let group_style = Style::default()
+        .fg(t.status_info)
+        .add_modifier(Modifier::BOLD);
+    let muted_style = Style::default().fg(t.text_muted);
+
+    let row = |key: &str, desc: &str| -> Line<'static> {
+        Line::from(vec![
+            Span::styled(format!("  {:<12} ", key), key_style),
+            Span::styled(desc.to_string(), desc_style),
+        ])
+    };
+    let group = |title: &str| -> Line<'static> {
+        Line::from(Span::styled(title.to_string(), group_style))
+    };
+    let blank = || Line::from("");
+
+    let undo_redo = format!("{} / {}", m.undo, m.redo);
+    let copy_paste = format!("{} / {}", m.yank, m.paste);
+
+    let lines: Vec<Line> = vec![
+        group(m.help_group_global),
+        row("q", m.quit),
+        row("?", m.help_open),
+        row("Esc", m.help_close_popup),
+        blank(),
+        group(m.help_group_navigation),
+        row("k / j  ↑/↓", m.help_move_updown),
+        row("h / l  ←/→", m.help_focus_lr),
+        row("Tab", m.help_cycle_focus),
+        row("Home / End", m.jump_first_last),
+        blank(),
+        group(m.help_group_editing),
+        row("n", m.help_new_generic),
+        row("Enter", m.help_edit_selected),
+        row("d", m.help_delete_selected),
+        row("Ctrl+N", m.bulk_add),
+        row("Ctrl+Z / Y", &undo_redo),
+        blank(),
+        group(m.help_group_actions),
+        row("g", m.enter_global),
+        row("t", m.save_as_template),
+        row("b", m.balance),
+        row("y / p", &copy_paste),
+        blank(),
+        group(m.help_group_view),
+        row("c", m.compact),
+        row("S", m.settings),
+        row("L", m.change_language),
+        blank(),
+        Line::from(Span::styled(
+            format!("  {}", m.help_close_hint),
+            muted_style,
+        )),
+    ];
+
+    let para = Paragraph::new(lines).wrap(Wrap { trim: false });
+    frame.render_widget(para, inner);
 }
 
 pub fn draw_language_popup(frame: &mut Frame, app: &App) {

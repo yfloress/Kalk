@@ -67,6 +67,8 @@ pub enum Screen {
     Settings,
     BulkAddEvaluations,
     EnteringGlobalGrade,
+    /// Full keyboard cheat-sheet overlay (opened with `?` from Main).
+    Help,
 }
 
 /// Severity of a transient status message shown in the footer.

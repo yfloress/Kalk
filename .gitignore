@@ -31,3 +31,5 @@ target/
 *.swp
 .zed
 .direnv/
+
+**/.claude

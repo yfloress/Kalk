@@ -89,6 +89,18 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(app.should_quit);
         }
 
+        // ? from the main screen opens the global help overlay; pressing it
+        // again (or Esc) closes it.
+        if key.code == KeyCode::Char('?') {
+            if app.screen == Screen::Main {
+                app.show_help();
+                return Ok(app.should_quit);
+            } else if app.screen == Screen::Help {
+                app.close_help();
+                return Ok(app.should_quit);
+            }
+        }
+
         match &app.screen {
             Screen::Main => handle_main_keys(app, key.code, key.modifiers),
             Screen::SelectingTemplate => handle_template_keys(app, key.code),
@@ -102,6 +114,7 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             Screen::Settings => handle_settings_keys(app, key.code),
             Screen::BulkAddEvaluations => handle_bulk_add_keys(app, key.code),
             Screen::EnteringGlobalGrade => handle_global_grade_keys(app, key.code),
+            Screen::Help => handle_help_keys(app, key.code),
         }
     }
     Ok(app.should_quit)
@@ -164,6 +177,10 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
             Focus::Categories => app.next_category(),
             Focus::Evaluations => app.next_evaluation(),
         },
+
+        // Jump to first / last item in current focus
+        KeyCode::Home => app.goto_first(),
+        KeyCode::End | KeyCode::Char('G') => app.goto_last(),
 
         // Create new item
         KeyCode::Char('n') => match app.focus {
@@ -387,6 +404,16 @@ fn handle_bulk_add_keys(app: &mut App, key: KeyCode) {
                 app.edit_bulk_count.push(c);
             }
         }
+        _ => {}
+    }
+}
+
+/// Handle keys in the global help overlay.
+/// Any of Esc / q / Enter closes the overlay — pressing `?` again is handled
+/// by the global toggle above.
+fn handle_help_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => app.close_help(),
         _ => {}
     }
 }

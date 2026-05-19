@@ -94,7 +94,7 @@ pub fn render_delete_confirmation(
     let max_content = content_widths.iter().copied().max().unwrap_or(40);
     // Add 2 for left+right border, clamp to reasonable bounds
     let ideal_w = (max_content + 4) as u16;
-    let popup_w = ideal_w.clamp(36, 60).min(term.width);
+    let popup_w = ideal_w.clamp(36, 72).min(term.width);
 
     // Height: title(1) + question(2) + sep(1) + warning(2) + spacer(1) + hints(1) + border(2)
     let popup_h = 11u16.min(term.height);

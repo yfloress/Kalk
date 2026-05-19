@@ -25,7 +25,7 @@ use crate::i18n::Language;
 use crate::model::{Evaluation, GlobalExamPolicy, MAX_GRADE, MIN_GRADE};
 use crate::persistence;
 
-use super::{App, InputField, Screen};
+use super::{App, Focus, InputField, Screen};
 
 /// Parse a decimal string that may use comma as the decimal separator.
 fn parse_decimal(s: &str) -> Result<f64, std::num::ParseFloatError> {
@@ -492,5 +492,89 @@ impl App {
     /// Cancel bulk-add without creating anything.
     pub fn cancel_bulk_add(&mut self) {
         self.screen = Screen::Main;
+    }
+
+    // =========================================================================
+    // Help Overlay
+    // =========================================================================
+
+    /// Open the global help overlay. Idempotent — calling while already on
+    /// `Screen::Help` is a no-op so a second `?` press toggles via the events
+    /// layer instead.
+    pub fn show_help(&mut self) {
+        self.screen = Screen::Help;
+    }
+
+    /// Close the help overlay and return to the main screen.
+    pub fn close_help(&mut self) {
+        if self.screen == Screen::Help {
+            self.screen = Screen::Main;
+        }
+    }
+
+    // =========================================================================
+    // Jump Navigation (Home / End)
+    // =========================================================================
+
+    /// Total number of category rows currently visible in the categories
+    /// panel, including the virtual global row when shown.
+    fn category_row_count(&self) -> usize {
+        let Some(course) = self.current_course() else {
+            return 0;
+        };
+        course.categories.len() + if self.shows_virtual_global() { 1 } else { 0 }
+    }
+
+    /// Jump to the first item in the current focus (Home key).
+    pub fn goto_first(&mut self) {
+        match self.focus {
+            Focus::Courses => {
+                if !self.courses.is_empty() {
+                    self.selected_course = Some(0);
+                    self.reset_category_selection();
+                }
+            }
+            Focus::Categories => {
+                if self.category_row_count() > 0 {
+                    self.selected_category = Some(0);
+                    self.reset_evaluation_selection();
+                }
+            }
+            Focus::Evaluations => {
+                if self
+                    .current_category()
+                    .is_some_and(|cat| !cat.evaluations.is_empty())
+                {
+                    self.selected_evaluation = Some(0);
+                }
+            }
+        }
+    }
+
+    /// Jump to the last item in the current focus (End key).
+    /// For categories this includes the virtual global row when shown.
+    pub fn goto_last(&mut self) {
+        match self.focus {
+            Focus::Courses => {
+                if !self.courses.is_empty() {
+                    self.selected_course = Some(self.courses.len() - 1);
+                    self.reset_category_selection();
+                }
+            }
+            Focus::Categories => {
+                let total = self.category_row_count();
+                if total > 0 {
+                    self.selected_category = Some(total - 1);
+                    self.reset_evaluation_selection();
+                }
+            }
+            Focus::Evaluations => {
+                if let Some(cat) = self.current_category()
+                    && !cat.evaluations.is_empty()
+                {
+                    self.selected_evaluation = Some(cat.evaluations.len() - 1);
+                }
+            }
+        }
     }
 }

@@ -89,6 +89,10 @@ pub struct Messages {
     pub cancel: &'static str,
     pub next_field: &'static str,
     pub change_language: &'static str,
+    /// Footer label for the `g` shortcut that opens the global-grade input.
+    pub enter_global: &'static str,
+    /// Footer label for the Home/End jump shortcuts (combined "First / Last").
+    pub jump_first_last: &'static str,
 
     // Popups
     pub select_course_template: &'static str,
@@ -259,6 +263,29 @@ pub struct Messages {
     pub redo_done: &'static str,
     pub nothing_to_undo: &'static str,
     pub nothing_to_redo: &'static str,
+
+    // Delete impact (singular / plural forms)
+    pub eval_singular: &'static str,
+    pub eval_plural: &'static str,
+    pub category_singular: &'static str,
+    pub category_plural: &'static str,
+
+    // Help overlay
+    pub help_title: &'static str,
+    pub help_close_hint: &'static str,
+    pub help_open: &'static str,
+    pub help_group_global: &'static str,
+    pub help_group_navigation: &'static str,
+    pub help_group_editing: &'static str,
+    pub help_group_actions: &'static str,
+    pub help_group_view: &'static str,
+    pub help_cycle_focus: &'static str,
+    pub help_focus_lr: &'static str,
+    pub help_move_updown: &'static str,
+    pub help_close_popup: &'static str,
+    pub help_new_generic: &'static str,
+    pub help_edit_selected: &'static str,
+    pub help_delete_selected: &'static str,
 }
 
 /// English messages.
@@ -289,21 +316,23 @@ pub const EN: Messages = Messages {
 
     // Footer / Keybindings
     quit: "Quit",
-    new: "New",
+    new: "New Course",
     new_category: "New Category",
-    new_eval: "New Eval",
+    new_eval: "New Evaluation",
     edit: "Edit",
     delete: "Delete",
-    save_as_template: "Save as Template",
-    balance: "Balance",
-    yank: "Yank",
+    save_as_template: "Save Template",
+    balance: "Balance Weights",
+    yank: "Copy",
     paste: "Paste",
-    bulk_add: "Bulk Add",
+    bulk_add: "Add Many",
     select: "Select",
     confirm: "Confirm",
     cancel: "Cancel",
     next_field: "Next field",
     change_language: "Language",
+    enter_global: "Enter Global Grade",
+    jump_first_last: "First / Last",
 
     // Popups
     select_course_template: "Select Course Template",
@@ -457,7 +486,7 @@ pub const EN: Messages = Messages {
     settings_language: "Language",
     settings_compact_courses: "Compact Courses",
     settings_compact_courses_desc: "Show courses in a single line (name + status only)",
-    compact: "Compact",
+    compact: "Compact View",
     enabled: "Enabled",
     disabled: "Disabled",
     toggle: "Toggle",
@@ -474,6 +503,29 @@ pub const EN: Messages = Messages {
     redo_done: "Redone",
     nothing_to_undo: "Nothing to undo",
     nothing_to_redo: "Nothing to redo",
+
+    // Delete impact
+    eval_singular: "evaluation",
+    eval_plural: "evaluations",
+    category_singular: "category",
+    category_plural: "categories",
+
+    // Help overlay
+    help_title: "Keyboard Shortcuts",
+    help_close_hint: "Esc / Enter to close",
+    help_open: "Help",
+    help_group_global: "Global",
+    help_group_navigation: "Navigation",
+    help_group_editing: "Edit",
+    help_group_actions: "Actions",
+    help_group_view: "View & Settings",
+    help_cycle_focus: "Cycle panel",
+    help_focus_lr: "Panel left / right",
+    help_move_updown: "Move up / down",
+    help_close_popup: "Close popup / cancel",
+    help_new_generic: "New (course / category / evaluation)",
+    help_edit_selected: "Edit selected item",
+    help_delete_selected: "Delete selected item",
 };
 
 /// Spanish messages.
@@ -504,21 +556,23 @@ pub const ES: Messages = Messages {
 
     // Footer / Keybindings
     quit: "Salir",
-    new: "Nuevo",
+    new: "Nuevo Ramo",
     new_category: "Nueva Categoría",
-    new_eval: "Nueva Eval",
+    new_eval: "Nueva Evaluación",
     edit: "Editar",
     delete: "Eliminar",
-    save_as_template: "Guardar como Plantilla",
-    balance: "Balancear",
+    save_as_template: "Guardar Plantilla",
+    balance: "Equilibrar Pesos",
     yank: "Copiar",
     paste: "Pegar",
-    bulk_add: "Agregar Lote",
+    bulk_add: "Crear Varias",
     select: "Seleccionar",
     confirm: "Confirmar",
     cancel: "Cancelar",
     next_field: "Siguiente campo",
     change_language: "Idioma",
+    enter_global: "Ingresar Nota Global",
+    jump_first_last: "Primero / Último",
 
     // Popups
     select_course_template: "Seleccionar Plantilla",
@@ -672,7 +726,7 @@ pub const ES: Messages = Messages {
     settings_language: "Idioma",
     settings_compact_courses: "Ramos Compactos",
     settings_compact_courses_desc: "Mostrar ramos en una sola linea (nombre + estado)",
-    compact: "Compactar",
+    compact: "Vista Compacta",
     enabled: "Activado",
     disabled: "Desactivado",
     toggle: "Alternar",
@@ -689,6 +743,29 @@ pub const ES: Messages = Messages {
     redo_done: "Rehecho",
     nothing_to_undo: "Nada que deshacer",
     nothing_to_redo: "Nada que rehacer",
+
+    // Delete impact
+    eval_singular: "evaluación",
+    eval_plural: "evaluaciones",
+    category_singular: "categoría",
+    category_plural: "categorías",
+
+    // Help overlay
+    help_title: "Atajos de Teclado",
+    help_close_hint: "Esc / Enter para cerrar",
+    help_open: "Ayuda",
+    help_group_global: "Global",
+    help_group_navigation: "Navegación",
+    help_group_editing: "Edición",
+    help_group_actions: "Acciones",
+    help_group_view: "Vista y Ajustes",
+    help_cycle_focus: "Cambiar panel",
+    help_focus_lr: "Panel izq. / der.",
+    help_move_updown: "Mover arriba / abajo",
+    help_close_popup: "Cerrar popup / cancelar",
+    help_new_generic: "Nuevo (ramo / categoría / evaluación)",
+    help_edit_selected: "Editar selección",
+    help_delete_selected: "Eliminar selección",
 };
 
 impl Language {

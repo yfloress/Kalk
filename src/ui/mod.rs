@@ -39,7 +39,7 @@ use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
     draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
-    draw_language_popup, draw_save_template_popup, draw_template_popup,
+    draw_help_popup, draw_language_popup, draw_save_template_popup, draw_template_popup,
 };
 use ratatui::{
     Frame,
@@ -132,8 +132,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
             .max()
             .unwrap_or(10);
 
-        let line1_w = highlight_len + max_name_len + weight_status_max;
-        let line2_w = highlight_len + status_line_max;
+        // Accent column (the coloured "\u{258E} " bar shown before every
+        // course) costs 2 extra columns on both lines.
+        let accent_w = 2u16;
+        let line1_w = highlight_len + accent_w + max_name_len + weight_status_max;
+        let line2_w = highlight_len + accent_w + status_line_max;
         line1_w.max(line2_w) + 2 // +2 for borders
     };
 
@@ -160,9 +163,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     };
 
     let courses_constraint = if effective_compact {
-        // Dynamic width: name + space + grade(3) + borders(2) + highlight + pad(1)
-        let needed = max_name_len + 1 + 3 + 2 + highlight_len + 1;
-        Constraint::Length(needed.max(title_width).clamp(12, 30))
+        // Dynamic width: accent(2) + name + space + grade(3) + borders(2)
+        //                + highlight + pad(1)
+        let needed = 2 + max_name_len + 1 + 3 + 2 + highlight_len + 1;
+        Constraint::Length(needed.max(title_width).clamp(12, 32))
     } else {
         // Dynamic width based on actual content, clamped to reasonable bounds
         Constraint::Length(normal_needed.clamp(15, total_width / 2))
@@ -203,6 +207,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::Settings => draw_settings_popup(frame, app),
         Screen::BulkAddEvaluations => draw_bulk_add_popup(frame, app),
         Screen::EnteringGlobalGrade => draw_global_grade_popup(frame, app),
+        Screen::Help => draw_help_popup(frame, app),
         Screen::Main => {}
     }
 }
@@ -269,6 +274,13 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 t.status_pass
             };
 
+            // Coloured accent bar shown before each course so the user can
+            // scan the list and see pass/fail/no-data status at a glance.
+            let accent = Span::styled(
+                "\u{258E} ",
+                Style::default().fg(true_color),
+            );
+
             if compact {
                 // Compact: single line — "NAME GRADE" with color = true pass/fail
                 let short_grade = if has_evals {
@@ -284,6 +296,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                     " -".to_string()
                 };
                 ListItem::new(Line::from(vec![
+                    accent,
                     Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
                     Span::styled(short_grade, Style::default().fg(true_color)),
                 ]))
@@ -379,11 +392,12 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
                 };
                 ListItem::new(vec![
                     Line::from(vec![
+                        accent,
                         Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
                         weight_status,
                     ]),
                     Line::from(Span::styled(
-                        format!("  {}", status),
+                        format!("    {}", status),
                         Style::default().fg(true_color),
                     )),
                 ])

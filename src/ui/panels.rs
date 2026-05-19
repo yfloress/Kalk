@@ -274,12 +274,32 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let title = format!(
-        " {}{} ({}) ",
-        ic.evaluation,
-        m.evaluations,
-        category.evaluations.len()
-    );
+    // When the clipboard holds a yanked evaluation, surface it in the panel
+    // title so the user knows what `p` would paste without having to remember.
+    let title = if let Some((clip_name, _, _)) = &app.clipboard_evaluation {
+        let max_chars = 18usize;
+        let chars: Vec<char> = clip_name.chars().collect();
+        let (shown, ellipsis) = if chars.len() > max_chars {
+            (chars[..max_chars].iter().collect::<String>(), "\u{2026}")
+        } else {
+            (clip_name.clone(), "")
+        };
+        format!(
+            " {}{} ({}) [y: {}{}] ",
+            ic.evaluation,
+            m.evaluations,
+            category.evaluations.len(),
+            shown,
+            ellipsis,
+        )
+    } else {
+        format!(
+            " {}{} ({}) ",
+            ic.evaluation,
+            m.evaluations,
+            category.evaluations.len()
+        )
+    };
     let mut col_widths: Vec<Constraint> = vec![
         Constraint::Length(3),
         Constraint::Min(6),
@@ -553,20 +573,16 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
 
     let line: Line = match &app.screen {
         Screen::Main => match app.focus {
+            // Minimal footer: only the most common actions per focus.
+            // Full keymap lives in the `?` help overlay so descriptions are
+            // always readable here without falling back to compact mode.
             Focus::Courses => styled_keybindings(
                 &[
                     ("q", m.quit),
                     ("n", m.new),
                     ("Enter", m.edit),
                     ("d", m.delete),
-                    ("g", m.global_exam),
-                    ("t", m.save_as_template),
-                    ("b", m.balance),
-                    ("c", m.compact),
-                    ("Ctrl+Z", m.undo),
-                    ("Ctrl+Y", m.redo),
-                    ("S", m.settings),
-                    ("L", m.change_language),
+                    ("?", m.help_open),
                 ],
                 t,
                 ic,
@@ -578,10 +594,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("n", m.new_category),
                     ("Enter", m.edit),
                     ("d", m.delete),
-                    ("Ctrl+Z", m.undo),
-                    ("Ctrl+Y", m.redo),
-                    ("S", m.settings),
-                    ("L", m.change_language),
+                    ("?", m.help_open),
                 ],
                 t,
                 ic,
@@ -591,15 +604,11 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 &[
                     ("q", m.quit),
                     ("n", m.new_eval),
-                    ("Ctrl+N", m.bulk_add),
                     ("Enter", m.edit),
                     ("d", m.delete),
                     ("y", m.yank),
                     ("p", m.paste),
-                    ("Ctrl+Z", m.undo),
-                    ("Ctrl+Y", m.redo),
-                    ("S", m.settings),
-                    ("L", m.change_language),
+                    ("?", m.help_open),
                 ],
                 t,
                 ic,
@@ -702,6 +711,12 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ),
         Screen::EnteringGlobalGrade => styled_keybindings(
             &[("Enter", m.confirm), ("Esc", m.cancel)],
+            t,
+            ic,
+            available_width,
+        ),
+        Screen::Help => styled_keybindings(
+            &[("Esc/Enter/?", m.cancel)],
             t,
             ic,
             available_width,
