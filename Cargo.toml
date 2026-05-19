@@ -16,10 +16,10 @@ exclude = [
 ]
 
 [dependencies]
-ratatui = "0.26"
-crossterm = "0.27"
+ratatui = "0.30"
+crossterm = "0.29"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-directories = "5.0"
-uuid = { version = "1.22", features = ["v4", "serde"] }
+directories = "6.0"
+uuid = { version = "1.23", features = ["v4", "serde"] }
 color-eyre = "0.6.5"
