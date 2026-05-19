@@ -44,7 +44,9 @@ install_binary() {
 install_desktop() {
     local appdir="${DESTDIR}${PREFIX}/share/applications"
     mkdir -p "${appdir}"
-    install -m644 "${DESKTOP_FILE}" "${appdir}/${APP_NAME}.desktop"
+    sed "s|^Exec=.*|Exec=${PREFIX}/bin/${APP_NAME}|" "${DESKTOP_FILE}" \
+        > "${appdir}/${APP_NAME}.desktop"
+    chmod 644 "${appdir}/${APP_NAME}.desktop"
     echo "  -> ${appdir}/${APP_NAME}.desktop"
 }
 
