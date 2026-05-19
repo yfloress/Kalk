@@ -1,6 +1,8 @@
 <div align="center">
 
-# KALK
+<img src="./packaging/linux/kalk.svg" alt="Sanctum" width="120" height="120" />
+
+<h1>KALK</h1>
 
 **Your academic dashboard in the terminal.**
 
