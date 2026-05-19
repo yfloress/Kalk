@@ -42,7 +42,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
 
     let popup_w = 56u16;
     let popup_h = 18u16;
-    let term = frame.size();
+    let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));

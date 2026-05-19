@@ -73,7 +73,7 @@ pub fn render_delete_confirmation(
 ) {
     let t = theme();
     let ic = icons(use_nerd_fonts);
-    let term = frame.size();
+    let term = frame.area();
 
     // Build the formatted title with icon
     let title_str = format!(" {}{} ", ic.delete, title);
@@ -314,7 +314,7 @@ pub fn contextual_field_help(app: &App, m: &Messages) -> String {
 /// Draw a full-screen help overlay explaining every category field.
 pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
     let t = theme();
-    let area = centered_rect(70, 60, frame.size());
+    let area = centered_rect(70, 60, frame.area());
     frame.render_widget(Clear, area);
 
     let label_style = Style::default()
@@ -402,7 +402,7 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
 /// Draw a full-screen help overlay explaining every course field.
 pub fn draw_course_help_overlay(frame: &mut Frame, m: &Messages) {
     let t = theme();
-    let area = centered_rect(70, 55, frame.size());
+    let area = centered_rect(70, 55, frame.area());
     frame.render_widget(Clear, area);
 
     let label_style = Style::default()

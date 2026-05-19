@@ -42,7 +42,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     let t = theme();
     let has_weighted = app.category_has_weighted_evals();
     let popup_height = if has_weighted { 60 } else { 50 };
-    let area = centered_rect(60, popup_height, frame.size());
+    let area = centered_rect(60, popup_height, frame.area());
     frame.render_widget(Clear, area);
     let title = if is_new {
         format!(" {} ", m.new_evaluation)
@@ -172,7 +172,7 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
-    let area = centered_rect(50, 11, frame.size());
+    let area = centered_rect(50, 11, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -265,7 +265,7 @@ pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
     // Fixed size: 3+1+3+1+1 = 9 content + 2 v-margin + 2 borders = 13
     let popup_w = 50u16;
     let popup_h = 13u16;
-    let term = frame.size();
+    let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));

@@ -38,7 +38,7 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
-    let area = centered_rect(60, 70, frame.size());
+    let area = centered_rect(60, 70, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()
@@ -120,8 +120,8 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         GlobalExamPolicy::Weighted { .. } => 8 + 4, // weights + eligibility
         GlobalExamPolicy::ReplacesWorstGrade => 4,  // eligibility only
     };
-    let popup_h = (12 + extra + help_lines_needed + 2).min(frame.size().height);
-    let term = frame.size();
+    let popup_h = (12 + extra + help_lines_needed + 2).min(frame.area().height);
+    let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
@@ -318,7 +318,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         0
     };
     let popup_height = base_height + advanced_height;
-    let term = frame.size();
+    let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_width) / 2;
     let y = term.y + term.height.saturating_sub(popup_height) / 2;
     let area = Rect::new(
@@ -560,7 +560,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
-    let area = centered_rect(60, 40, frame.size());
+    let area = centered_rect(60, 40, frame.area());
     frame.render_widget(Clear, area);
     let block = Block::default()
         .title(format!(" {} ", m.save_as_template_title))
@@ -695,7 +695,7 @@ pub fn draw_delete_popup(frame: &mut Frame, app: &App) {
 pub fn draw_help_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
-    let term = frame.size();
+    let term = frame.area();
 
     // Centred popup with breathing room around the content.
     let popup_w = 62u16.min(term.width.saturating_sub(2));
@@ -780,7 +780,7 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
-    let area = centered_rect(40, 30, frame.size());
+    let area = centered_rect(40, 30, frame.area());
     frame.render_widget(Clear, area);
     let block = Block::default()
         .title(format!(" {}{} ", ic.language, m.select_language))

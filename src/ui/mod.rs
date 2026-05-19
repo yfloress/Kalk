@@ -60,7 +60,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(3)])
-        .split(frame.size());
+        .split(frame.area());
 
     // Main area: 3-column layout for Course -> Category -> Evaluation hierarchy
     // Compact mode triggers either by user toggle OR when the terminal is too
