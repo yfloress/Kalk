@@ -103,8 +103,15 @@ else
     need_root
 fi
 
-# Build if binary doesn't exist
+# Build if binary doesn't exist or source is newer
+NEEDS_BUILD=0
 if [ ! -f "${BINARY}" ]; then
+    NEEDS_BUILD=1
+elif [ -n "$(find src/ Cargo.toml Cargo.lock -newer "${BINARY}" 2>/dev/null)" ]; then
+    NEEDS_BUILD=1
+fi
+
+if [ "$NEEDS_BUILD" -eq 1 ]; then
     echo "Building release binary..."
     cargo build --release --locked
 fi
