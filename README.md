@@ -87,6 +87,15 @@ cd Kalk
 cargo run --release
 ```
 
+### Quick Install (Linux)
+
+```bash
+sudo ./install.sh        # system-wide
+./install.sh --user      # user-local (~/.local)
+```
+
+Installs the binary, desktop entry, and icon. See [Desktop Integration](docs/INSTALL.md#desktop-integration-linux).
+
 ### Using Nix
 
 ```bash
@@ -96,7 +105,7 @@ cargo run
 
 The Nix environment includes `cargo-audit` for security scanning.
 
---
+---
  
 ## Keybindings
  

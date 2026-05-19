@@ -85,6 +85,15 @@ cd Kalk
 cargo run --release
 ```
 
+### Instalacion Rapida (Linux)
+
+```bash
+sudo ./install.sh        # todo el sistema
+./install.sh --user      # solo tu usuario (~/.local)
+```
+
+Instala el binario, acceso directo de escritorio e icono. Ver [Integracion de Escritorio](docs/INSTALL.md#desktop-integration-linux).
+
 ### Usando Nix
 
 ```bash
