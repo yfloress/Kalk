@@ -27,13 +27,36 @@ use std::time::Duration;
 /// Poll for events and handle them.
 /// Returns true if the application should quit.
 pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
-    if event::poll(Duration::from_millis(100))?
-        && let Event::Key(key) = event::read()?
-    {
-        // Only handle key press events, not release
-        if key.kind != KeyEventKind::Press {
-            return Ok(false);
+    if !event::poll(Duration::from_millis(100))? {
+        return Ok(app.should_quit);
+    }
+
+    match event::read()? {
+        Event::Paste(s) => {
+            // Only step 2 of the import wizard consumes paste events.  Other
+            // screens silently ignore them so a stray paste doesn't clobber
+            // form fields.
+            if app.screen == Screen::ImportPaste {
+                app.import_handle_paste(s);
+            }
+            return Ok(app.should_quit);
         }
+        Event::Key(key) => {
+            // Only handle key press events, not release
+            if key.kind != KeyEventKind::Press {
+                return Ok(false);
+            }
+
+            handle_key_event(app, key)
+        }
+        _ => Ok(app.should_quit),
+    }
+}
+
+/// Dispatch a key-press event to the correct handler based on the current
+/// screen.  Returns `Ok(true)` when the application should quit.
+fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyre::Result<bool> {
+    {
 
         // Global: Ctrl+Z / Ctrl+Y for undo / redo (Main screen only — popups
         // and forms have their own Esc-based cancel semantics).
@@ -115,6 +138,9 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             Screen::BulkAddEvaluations => handle_bulk_add_keys(app, key.code),
             Screen::EnteringGlobalGrade => handle_global_grade_keys(app, key.code),
             Screen::Help => handle_help_keys(app, key.code),
+            Screen::ImportPrompt => handle_import_prompt_keys(app, key.code),
+            Screen::ImportPaste => handle_import_paste_keys(app, key.code),
+            Screen::ImportPreview => handle_import_preview_keys(app, key.code),
         }
     }
     Ok(app.should_quit)
@@ -429,6 +455,39 @@ fn handle_global_grade_keys(app: &mut App, key: KeyCode) {
         KeyCode::Char(c) if c.is_ascii_digit() || c == '.' || c == ',' => {
             app.edit_global_grade.push(c);
         }
+        _ => {}
+    }
+}
+
+
+/// Step 1 of the AI import wizard — copy the prompt to the clipboard or
+/// advance to the paste step.
+fn handle_import_prompt_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.import_cancel(),
+        KeyCode::Char('c') | KeyCode::Char('y') => app.import_copy_prompt(),
+        KeyCode::Enter | KeyCode::Char('n') => app.import_goto_paste(),
+        _ => {}
+    }
+}
+
+/// Step 2 of the AI import wizard — waits for a paste event.  Pure key events
+/// only support going back or cancelling; the actual paste content is fed in
+/// via [`App::import_handle_paste`] from the [`Event::Paste`] branch.
+fn handle_import_paste_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.import_cancel(),
+        KeyCode::Char('b') => app.import_back_to_prompt(),
+        _ => {}
+    }
+}
+
+/// Step 3 of the AI import wizard — preview and confirm/back/cancel.
+fn handle_import_preview_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.import_cancel(),
+        KeyCode::Char('b') => app.import_back_to_paste(),
+        KeyCode::Enter => app.import_confirm(),
         _ => {}
     }
 }

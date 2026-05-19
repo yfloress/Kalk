@@ -95,8 +95,15 @@ impl App {
     }
 
     /// Check if current selected template is a user template (can be deleted).
+    ///
+    /// `selected_template` includes the synthetic AI entry at index 0, so the
+    /// real-template index is `selected_template - 1` when > 0.
     pub fn is_user_template_selected(&self) -> bool {
-        self.selected_template >= self.built_in_templates.len()
+        if self.selected_template == 0 {
+            return false;
+        }
+        let real_idx = self.selected_template - 1;
+        real_idx >= self.built_in_templates.len()
     }
 
     /// Request deletion of current user template.
@@ -113,15 +120,15 @@ impl App {
             return;
         }
 
-        let user_template_idx = self.selected_template - self.built_in_templates.len();
+        // `selected_template` is offset by 1 because of the AI entry at index 0.
+        let real_idx = self.selected_template - 1;
+        let user_template_idx = real_idx - self.built_in_templates.len();
         self.user_templates.remove(user_template_idx);
 
-        // Adjust selection
-        let total = self.templates_count();
-        if total == 0 {
-            self.selected_template = 0;
-        } else if self.selected_template >= total {
-            self.selected_template = total - 1;
+        // Adjust selection within the selectable range (includes the AI entry).
+        let selectable = self.selectable_templates_count();
+        if self.selected_template >= selectable {
+            self.selected_template = selectable.saturating_sub(1);
         }
 
         // Save updated user templates
@@ -576,5 +583,115 @@ impl App {
                 }
             }
         }
+    }
+
+    // =========================================================================
+    // AI Import Wizard
+    // =========================================================================
+
+    /// Enter the AI import wizard at step 1 (prompt).  Called from the
+    /// template selector when the synthetic AI entry is confirmed.
+    pub fn start_ai_import(&mut self) {
+        self.screen = Screen::ImportPrompt;
+        self.import_copied = false;
+        self.import_paste_error = None;
+        self.import_parsed = None;
+        self.import_renamed_from = None;
+        self.import_total_weight = 0.0;
+        self.import_total_evals = 0;
+    }
+
+    /// Copy the AI prompt to the system clipboard (OSC 52) and surface a
+    /// confirmation in the UI.  Silently no-ops if the terminal doesn't
+    /// support OSC 52 — the user can still select-and-copy from the popup.
+    pub fn import_copy_prompt(&mut self) {
+        let prompt = self.messages().import_prompt;
+        if crate::clipboard::copy(prompt).is_ok() {
+            self.import_copied = true;
+        }
+    }
+
+    /// Advance from step 1 (prompt) to step 2 (paste).
+    pub fn import_goto_paste(&mut self) {
+        self.screen = Screen::ImportPaste;
+        self.import_paste_error = None;
+    }
+
+    /// Step back from step 2 to step 1.  Keeps any prior copy-feedback state.
+    pub fn import_back_to_prompt(&mut self) {
+        self.screen = Screen::ImportPrompt;
+        self.import_paste_error = None;
+    }
+
+    /// Step back from step 3 to step 2 (paste).  Clears the cached parse so
+    /// the user can supply a different blob.
+    pub fn import_back_to_paste(&mut self) {
+        self.screen = Screen::ImportPaste;
+        self.import_parsed = None;
+        self.import_renamed_from = None;
+    }
+
+    /// Process a clipboard paste received during step 2.  On success
+    /// transitions to step 3 (preview); on failure leaves the user on step 2
+    /// with `import_paste_error` populated for display.
+    pub fn import_handle_paste(&mut self, raw: String) {
+        let m = self.messages();
+        match crate::app::import::parse(&raw) {
+            Ok(schema) => {
+                let existing: Vec<&str> =
+                    self.courses.iter().map(|c| c.name.as_str()).collect();
+                let course = crate::app::import::to_course(
+                    &schema,
+                    &existing,
+                    m.import_copy_suffix,
+                );
+                let renamed_from = if course.name != schema.name.trim() {
+                    Some(schema.name.trim().to_string())
+                } else {
+                    None
+                };
+                self.import_total_weight = crate::app::import::total_weight(&schema);
+                self.import_total_evals = crate::app::import::total_evaluations(&schema);
+                self.import_parsed = Some(course);
+                self.import_renamed_from = renamed_from;
+                self.import_paste_error = None;
+                self.screen = Screen::ImportPreview;
+            }
+            Err(e) => {
+                self.import_paste_error = Some(e.user_message(m));
+            }
+        }
+    }
+
+    /// Confirm step 3: insert the parsed course into the working set and
+    /// return to Main, selecting the new course.
+    pub fn import_confirm(&mut self) {
+        let Some(course) = self.import_parsed.take() else {
+            self.screen = Screen::Main;
+            return;
+        };
+
+        self.push_undo();
+        self.courses.push(course);
+        let new_idx = self.courses.len() - 1;
+        self.selected_course = Some(new_idx);
+        self.reset_category_selection();
+        self.persist();
+
+        let msg = self.messages().import_imported_ok.to_string();
+        self.set_status(msg);
+        self.screen = Screen::Main;
+    }
+
+    /// Cancel the wizard from any step.  Clears all wizard state and returns
+    /// to Main.
+    pub fn import_cancel(&mut self) {
+        self.import_copied = false;
+        self.import_paste_error = None;
+        self.import_parsed = None;
+        self.import_renamed_from = None;
+        self.import_total_weight = 0.0;
+        self.import_total_evals = 0;
+        self.screen = Screen::Main;
     }
 }

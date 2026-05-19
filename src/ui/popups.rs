@@ -50,37 +50,50 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    // Combine built-in and user templates
+    // The synthetic "Create with AI" entry is always at index 0, above the
+    // real templates.  Built-in templates follow, then user templates.
     let all_templates = app.all_templates();
     let built_in_count = app.built_in_templates.len();
 
-    let items: Vec<ListItem> = all_templates
-        .iter()
-        .enumerate()
-        .map(|(i, tmpl)| {
-            let is_user_template = i >= built_in_count;
-            let prefix = if is_user_template {
-                ic.user_template
-            } else {
-                ic.template
-            };
+    let mut items: Vec<ListItem> = Vec::with_capacity(1 + all_templates.len());
 
-            ListItem::new(vec![
-                Line::from(Span::styled(
-                    format!("{}{}", prefix, tmpl.name),
-                    Style::default().add_modifier(Modifier::BOLD),
-                )),
-                Line::from(Span::styled(
-                    format!("  {}", tmpl.description),
-                    Style::default().fg(if is_user_template {
-                        t.user_template
-                    } else {
-                        t.text_secondary
-                    }),
-                )),
-            ])
-        })
-        .collect();
+    // AI entry — uses the popup-border (Lavender) accent so it stands apart.
+    items.push(ListItem::new(vec![
+        Line::from(Span::styled(
+            format!("{}{}", ic.template, m.tpl_ai),
+            Style::default()
+                .fg(t.popup_border)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(
+            format!("  {}", m.tpl_ai_desc),
+            Style::default().fg(t.text_secondary),
+        )),
+    ]));
+
+    items.extend(all_templates.iter().enumerate().map(|(i, tmpl)| {
+        let is_user_template = i >= built_in_count;
+        let prefix = if is_user_template {
+            ic.user_template
+        } else {
+            ic.template
+        };
+
+        ListItem::new(vec![
+            Line::from(Span::styled(
+                format!("{}{}", prefix, tmpl.name),
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Line::from(Span::styled(
+                format!("  {}", tmpl.description),
+                Style::default().fg(if is_user_template {
+                    t.user_template
+                } else {
+                    t.text_secondary
+                }),
+            )),
+        ])
+    }));
 
     let list = List::new(items)
         .highlight_style(

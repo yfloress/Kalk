@@ -286,6 +286,33 @@ pub struct Messages {
     pub help_new_generic: &'static str,
     pub help_edit_selected: &'static str,
     pub help_delete_selected: &'static str,
+
+    // AI import wizard
+    pub tpl_ai: &'static str,
+    pub tpl_ai_desc: &'static str,
+    pub import_step1_title: &'static str,
+    pub import_step1_hint: &'static str,
+    pub import_step1_copy_key: &'static str,
+    pub import_step1_copied: &'static str,
+    pub import_step1_next: &'static str,
+    pub import_step2_title: &'static str,
+    pub import_step2_hint: &'static str,
+    pub import_step2_back: &'static str,
+    pub import_step3_title: &'static str,
+    pub import_step3_total_weight: &'static str,
+    pub import_step3_evaluations: &'static str,
+    pub import_step3_save_as_template: &'static str,
+    pub import_step3_confirm: &'static str,
+    pub import_warning_weight_not_100: &'static str,
+    pub import_err_invalid_json: &'static str,
+    pub import_err_schema_version: &'static str,
+    pub import_err_empty_name: &'static str,
+    pub import_err_no_categories: &'static str,
+    pub import_imported_ok: &'static str,
+    pub import_copy_suffix: &'static str,
+    pub import_renamed_to: &'static str,
+    /// Full prompt template handed to the AI (raw multi-line string).
+    pub import_prompt: &'static str,
 }
 
 /// English messages.
@@ -526,6 +553,80 @@ pub const EN: Messages = Messages {
     help_new_generic: "New (course / category / evaluation)",
     help_edit_selected: "Edit selected item",
     help_delete_selected: "Delete selected item",
+
+    // AI import wizard
+    tpl_ai: "Create with AI",
+    tpl_ai_desc: "Generate from a syllabus PDF/image via ChatGPT, Claude, etc.",
+    import_step1_title: "Step 1 of 3 — Copy the AI prompt",
+    import_step1_hint: "Copy this prompt and paste it into your AI of choice along with the syllabus PDF or image. The AI will return a JSON blob you'll paste in step 2.",
+    import_step1_copy_key: "c: Copy",
+    import_step1_copied: "Copied to clipboard",
+    import_step1_next: "Enter: Continue",
+    import_step2_title: "Step 2 of 3 — Paste the AI response",
+    import_step2_hint: "Paste here the JSON returned by the AI (Ctrl+V or right-click paste). Code fences are tolerated.",
+    import_step2_back: "b / Esc: Back",
+    import_step3_title: "Step 3 of 3 — Confirm import",
+    import_step3_total_weight: "Total weight",
+    import_step3_evaluations: "evaluations",
+    import_step3_save_as_template: "t: Also save as template",
+    import_step3_confirm: "Enter: Import",
+    import_warning_weight_not_100: "Category weights do not sum to 100%",
+    import_err_invalid_json: "Invalid JSON",
+    import_err_schema_version: "Unsupported schema version:",
+    import_err_empty_name: "Course name is required",
+    import_err_no_categories: "At least one category is required",
+    import_imported_ok: "Course imported",
+    import_copy_suffix: "copy",
+    import_renamed_to: "Renamed to",
+    import_prompt: r#"You are helping a student import a course syllabus into Kalk (a TUI grade tracker).
+
+The user is attaching a PDF or image with the syllabus.  Read it carefully and extract the grading structure.
+
+Respond with ONLY a JSON object — no prose, no markdown code fences, nothing before or after — that matches this schema:
+
+{
+  "schema_version": 1,
+  "name": "<course name>",
+  "passing_grade": <number, default 55>,
+  "global_exam": {
+    "policy": "<none | weighted | replaces_worst>",
+    "semester_weight": <0..1 if policy is weighted, else null>,
+    "global_weight":   <0..1 if policy is weighted, else null>,
+    "min_grade":       <number or null>
+  },
+  "categories": [
+    {
+      "name": "<category name>",
+      "weight": <0..100>,
+      "drop_lowest": <integer, default 0>,
+      "minimum_average": <number or null>,
+      "minimum_per_evaluation": <number or null>,
+      "weighted_evaluations": <true | false>,
+      "averaging_method": "<arithmetic | geometric>",
+      "round_before_weighting": <true | false>,
+      "evaluations": [
+        { "name": "<eval name>", "grade": <number or null>, "weight": <0..100 or null> }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Output ONLY the JSON.  No code fences, no comments, no explanation.
+- Use null for anything not stated in the syllabus.
+- If passing_grade is not stated, default to 55.
+- Category weights MUST add up to 100.  Adjust if the syllabus is ambiguous.
+- global_exam.policy:
+  * "none"            — there is no global / final exam.
+  * "weighted"        — final_grade = semester * X + global * Y.
+  * "replaces_worst"  — the global replaces the worst evaluation of a category.
+- Do not invent grades — leave "grade" as null unless the syllabus literally provides it.
+- Generate evaluation names like "C1", "C2", "Quiz 1", "Lab 1", "Tarea 1", based on what the syllabus describes.
+- If the syllabus lists "drop the lowest N", set drop_lowest accordingly; otherwise 0.
+
+Example:
+{"schema_version":1,"name":"Digital Systems","passing_grade":55,"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null},"categories":[{"name":"Tests","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Labs","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
+"#,
 };
 
 /// Spanish messages.
@@ -766,6 +867,80 @@ pub const ES: Messages = Messages {
     help_new_generic: "Nuevo (ramo / categoría / evaluación)",
     help_edit_selected: "Editar selección",
     help_delete_selected: "Eliminar selección",
+
+    // AI import wizard
+    tpl_ai: "Crear con IA",
+    tpl_ai_desc: "Genera el ramo desde un PDF/imagen del programa vía ChatGPT, Claude, etc.",
+    import_step1_title: "Paso 1 de 3 — Copiar el prompt para la IA",
+    import_step1_hint: "Copia este prompt y pégalo en la IA junto al PDF o imagen del programa. La IA devolverá un JSON que pegarás en el paso 2.",
+    import_step1_copy_key: "c: Copiar",
+    import_step1_copied: "Copiado al portapapeles",
+    import_step1_next: "Enter: Continuar",
+    import_step2_title: "Paso 2 de 3 — Pegar la respuesta de la IA",
+    import_step2_hint: "Pega aquí el JSON devuelto por la IA (Ctrl+V o clic derecho → pegar). Se tolera el formato con ``` ```.",
+    import_step2_back: "b / Esc: Atrás",
+    import_step3_title: "Paso 3 de 3 — Confirmar importación",
+    import_step3_total_weight: "Peso total",
+    import_step3_evaluations: "evaluaciones",
+    import_step3_save_as_template: "t: Guardar también como plantilla",
+    import_step3_confirm: "Enter: Importar",
+    import_warning_weight_not_100: "Los pesos de las categorías no suman 100%",
+    import_err_invalid_json: "JSON inválido",
+    import_err_schema_version: "Versión de schema no soportada:",
+    import_err_empty_name: "El nombre del ramo es obligatorio",
+    import_err_no_categories: "Se requiere al menos una categoría",
+    import_imported_ok: "Ramo importado",
+    import_copy_suffix: "copia",
+    import_renamed_to: "Renombrado a",
+    import_prompt: r#"Estás ayudando a un estudiante a importar el programa de un ramo a Kalk (un gestor de notas en TUI).
+
+El usuario adjuntará un PDF o imagen con el programa del ramo. Léelo con cuidado y extrae la estructura de evaluación.
+
+Responde EXCLUSIVAMENTE con un objeto JSON — sin texto adicional, sin code fences de markdown, nada antes ni después — que cumpla este schema:
+
+{
+  "schema_version": 1,
+  "name": "<nombre del ramo>",
+  "passing_grade": <número, default 55>,
+  "global_exam": {
+    "policy": "<none | weighted | replaces_worst>",
+    "semester_weight": <0..1 si policy es weighted, sino null>,
+    "global_weight":   <0..1 si policy es weighted, sino null>,
+    "min_grade":       <número o null>
+  },
+  "categories": [
+    {
+      "name": "<nombre de la categoría>",
+      "weight": <0..100>,
+      "drop_lowest": <entero, default 0>,
+      "minimum_average": <número o null>,
+      "minimum_per_evaluation": <número o null>,
+      "weighted_evaluations": <true | false>,
+      "averaging_method": "<arithmetic | geometric>",
+      "round_before_weighting": <true | false>,
+      "evaluations": [
+        { "name": "<nombre eval>", "grade": <número o null>, "weight": <0..100 o null> }
+      ]
+    }
+  ]
+}
+
+Reglas:
+- Devuelve SOLO el JSON. Sin code fences, sin comentarios, sin explicaciones.
+- Usa null para cualquier dato que no esté en el programa.
+- Si no se menciona passing_grade, usa 55.
+- Los pesos de las categorías DEBEN sumar 100. Ajusta si el programa es ambiguo.
+- global_exam.policy:
+  * "none"            — no hay examen global / final.
+  * "weighted"        — nota_final = semestral * X + global * Y.
+  * "replaces_worst"  — el global reemplaza la peor nota de una categoría.
+- No inventes notas — deja "grade" en null salvo que el programa las dé explícitamente.
+- Genera nombres de evaluación tipo "C1", "C2", "Tarea 1", "Lab 1", "Quiz 1" según lo que indique el programa.
+- Si el programa permite descartar las N peores notas, pon drop_lowest acorde; sino 0.
+
+Ejemplo:
+{"schema_version":1,"name":"Sistemas Digitales","passing_grade":55,"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null},"categories":[{"name":"Controles","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Laboratorios","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
+"#,
 };
 
 impl Language {

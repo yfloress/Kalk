@@ -28,6 +28,7 @@ pub(crate) mod helpers;
 pub(crate) mod icons;
 mod panels;
 mod popups;
+mod popups_import;
 mod settings_popup;
 pub(crate) mod theme;
 
@@ -41,6 +42,7 @@ use popups::{
     draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
     draw_help_popup, draw_language_popup, draw_save_template_popup, draw_template_popup,
 };
+use popups_import::{draw_import_paste, draw_import_preview, draw_import_prompt};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -225,6 +227,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::BulkAddEvaluations => draw_bulk_add_popup(frame, app),
         Screen::EnteringGlobalGrade => draw_global_grade_popup(frame, app),
         Screen::Help => draw_help_popup(frame, app),
+        Screen::ImportPrompt => draw_import_prompt(frame, app),
+        Screen::ImportPaste => draw_import_paste(frame, app),
+        Screen::ImportPreview => draw_import_preview(frame, app),
         Screen::Main => {}
     }
 }

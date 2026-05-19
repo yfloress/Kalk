@@ -21,6 +21,7 @@
 //! Supports hierarchical grade calculation: Course -> Categories -> Evaluations.
 
 mod app;
+mod clipboard;
 mod events;
 mod i18n;
 mod model;
@@ -31,6 +32,7 @@ mod ui;
 use app::App;
 use color_eyre::eyre::Result;
 use crossterm::{
+    event::{DisableBracketedPaste, EnableBracketedPaste},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -43,7 +45,9 @@ struct TerminalGuard;
 impl TerminalGuard {
     fn new() -> Result<Self> {
         enable_raw_mode()?;
-        execute!(stdout(), EnterAlternateScreen)?;
+        // Enable bracketed paste so the AI import wizard can receive whole
+        // JSON blobs as `Event::Paste` instead of a stream of key events.
+        execute!(stdout(), EnterAlternateScreen, EnableBracketedPaste)?;
         Ok(Self)
     }
 }
@@ -79,7 +83,7 @@ fn setup_terminal() -> Result<(Terminal<CrosstermBackend<io::Stdout>>, TerminalG
 /// Restore terminal to normal state.
 fn restore_terminal() -> Result<()> {
     disable_raw_mode()?;
-    execute!(stdout(), LeaveAlternateScreen)?;
+    execute!(stdout(), DisableBracketedPaste, LeaveAlternateScreen)?;
     Ok(())
 }
 

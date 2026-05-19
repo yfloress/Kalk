@@ -26,6 +26,7 @@
 mod actions;
 mod forms;
 mod history;
+pub mod import;
 
 use crate::i18n::{Language, Messages};
 use crate::model::{
@@ -69,6 +70,12 @@ pub enum Screen {
     EnteringGlobalGrade,
     /// Full keyboard cheat-sheet overlay (opened with `?` from Main).
     Help,
+    /// AI import wizard — step 1: shows the prompt to copy to clipboard.
+    ImportPrompt,
+    /// AI import wizard — step 2: waits for the user to paste the AI response.
+    ImportPaste,
+    /// AI import wizard — step 3: previews the parsed course and confirms.
+    ImportPreview,
 }
 
 /// Severity of a transient status message shown in the footer.
@@ -231,6 +238,22 @@ pub struct App {
     pub compact_courses: bool,
     /// Index of the focused setting in the settings popup.
     pub selected_setting: usize,
+
+    // -- AI import wizard state ----------------------------------------------
+    /// Set to `true` after the user copies the prompt in step 1 so the UI can
+    /// flash a "Copied" confirmation.  Cleared on screen change.
+    pub import_copied: bool,
+    /// Error message produced by the last paste attempt in step 2 (if any).
+    pub import_paste_error: Option<String>,
+    /// Course parsed from the AI response, ready to confirm in step 3.
+    pub import_parsed: Option<Course>,
+    /// Whether the parsed course was renamed because of a name collision
+    /// (so the preview can show a note).
+    pub import_renamed_from: Option<String>,
+    /// Cached weight sum from the parsed schema (for the preview banner).
+    pub import_total_weight: f64,
+    /// Cached evaluation count from the parsed schema.
+    pub import_total_evals: usize,
 }
 
 impl Default for App {
@@ -282,6 +305,12 @@ impl Default for App {
             use_nerd_fonts: true,
             compact_courses: false,
             selected_setting: 0,
+            import_copied: false,
+            import_paste_error: None,
+            import_parsed: None,
+            import_renamed_from: None,
+            import_total_weight: 0.0,
+            import_total_evals: 0,
         }
     }
 }
@@ -486,7 +515,12 @@ impl App {
         });
     }
 
-    /// Get all templates combined: built-in first, then user templates.
+    /// Get all real templates combined: built-in first, then user templates.
+    ///
+    /// Note: the AI import option occupies the synthetic index 0 in the UI;
+    /// real templates start at displayed index 1.  This getter still returns
+    /// only the real templates — callers translating from `selected_template`
+    /// must subtract 1.
     pub fn all_templates(&self) -> Vec<&CourseTemplate> {
         self.built_in_templates
             .iter()
@@ -494,14 +528,31 @@ impl App {
             .collect()
     }
 
-    /// Get the currently selected template.
-    pub fn current_template(&self) -> Option<&CourseTemplate> {
-        self.all_templates().get(self.selected_template).copied()
+    /// `true` when the synthetic "Create with AI" entry is selected (index 0).
+    pub fn is_ai_template_selected(&self) -> bool {
+        self.selected_template == 0
     }
 
-    /// Get the total number of templates.
+    /// Get the currently selected real template, or `None` if the AI entry
+    /// (index 0) is the current selection.
+    pub fn current_template(&self) -> Option<&CourseTemplate> {
+        if self.selected_template == 0 {
+            return None;
+        }
+        self.all_templates()
+            .get(self.selected_template - 1)
+            .copied()
+    }
+
+    /// Count of real templates (excluding the synthetic AI entry).
     pub fn templates_count(&self) -> usize {
         self.built_in_templates.len() + self.user_templates.len()
+    }
+
+    /// Total number of selectable rows in the template picker, including the
+    /// AI entry at index 0.
+    pub fn selectable_templates_count(&self) -> usize {
+        1 + self.templates_count()
     }
 
     // =========================================================================
@@ -588,14 +639,14 @@ impl App {
     }
 
     pub fn next_template(&mut self) {
-        let count = self.templates_count();
+        let count = self.selectable_templates_count();
         if count > 0 {
             self.selected_template = (self.selected_template + 1) % count;
         }
     }
 
     pub fn previous_template(&mut self) {
-        let count = self.templates_count();
+        let count = self.selectable_templates_count();
         if count > 0 {
             self.selected_template = if self.selected_template == 0 {
                 count - 1

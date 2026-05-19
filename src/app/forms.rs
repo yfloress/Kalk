@@ -59,6 +59,13 @@ impl App {
     }
 
     pub fn confirm_template_selection(&mut self) {
+        // The synthetic AI entry at index 0 launches the import wizard instead
+        // of opening the manual course form.
+        if self.is_ai_template_selected() {
+            self.start_ai_import();
+            return;
+        }
+
         self.screen = Screen::EditingCourse { is_new: true };
         self.input_field = InputField::Name;
         self.edit_name.clear();

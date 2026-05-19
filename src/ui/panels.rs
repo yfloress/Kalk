@@ -726,6 +726,32 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             ic,
             available_width,
         ),
+        Screen::ImportPrompt => styled_keybindings(
+            &[
+                ("c", m.import_step1_copied),
+                ("Enter", m.confirm),
+                ("Esc", m.cancel),
+            ],
+            t,
+            ic,
+            available_width,
+        ),
+        Screen::ImportPaste => styled_keybindings(
+            &[("Ctrl+V", m.paste), ("b/Esc", m.cancel)],
+            t,
+            ic,
+            available_width,
+        ),
+        Screen::ImportPreview => styled_keybindings(
+            &[
+                ("Enter", m.confirm),
+                ("b", m.cancel),
+                ("Esc", m.cancel),
+            ],
+            t,
+            ic,
+            available_width,
+        ),
     };
 
     let footer = Paragraph::new(line).block(
