@@ -528,13 +528,15 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     // Inner width = total width minus 2 border columns
     let available_width = area.width.saturating_sub(2);
 
-    // If there's a status message (error/info), show it prominently
+    // If there's a status message (info/warning/error), show it prominently.
+    // Colour is driven by `status_severity` so the banner works correctly in
+    // every supported language (a string-prefix check like `starts_with("Error")`
+    // would not match localised messages such as "Advertencia").
     if let Some(ref status) = app.status_message {
-        let is_error = status.starts_with("Error");
-        let color = if is_error {
-            t.status_fail
-        } else {
-            t.status_warn
+        let color = match app.status_severity {
+            crate::app::StatusSeverity::Error => t.status_fail,
+            crate::app::StatusSeverity::Warning => t.status_warn,
+            crate::app::StatusSeverity::Info => t.status_info,
         };
 
         let footer = Paragraph::new(status.as_str())
@@ -561,6 +563,8 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("t", m.save_as_template),
                     ("b", m.balance),
                     ("c", m.compact),
+                    ("Ctrl+Z", m.undo),
+                    ("Ctrl+Y", m.redo),
                     ("S", m.settings),
                     ("L", m.change_language),
                 ],
@@ -574,6 +578,8 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("n", m.new_category),
                     ("Enter", m.edit),
                     ("d", m.delete),
+                    ("Ctrl+Z", m.undo),
+                    ("Ctrl+Y", m.redo),
                     ("S", m.settings),
                     ("L", m.change_language),
                 ],
@@ -590,6 +596,8 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("d", m.delete),
                     ("y", m.yank),
                     ("p", m.paste),
+                    ("Ctrl+Z", m.undo),
+                    ("Ctrl+Y", m.redo),
                     ("S", m.settings),
                     ("L", m.change_language),
                 ],

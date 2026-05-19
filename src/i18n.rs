@@ -251,6 +251,14 @@ pub struct Messages {
     pub no_eval_to_yank: &'static str,
     pub no_eval_in_clipboard: &'static str,
     pub bulk_added_evals: &'static str,
+
+    // Undo / redo
+    pub undo: &'static str,
+    pub redo: &'static str,
+    pub undo_done: &'static str,
+    pub redo_done: &'static str,
+    pub nothing_to_undo: &'static str,
+    pub nothing_to_redo: &'static str,
 }
 
 /// English messages.
@@ -458,6 +466,14 @@ pub const EN: Messages = Messages {
     no_eval_to_yank: "No evaluation to copy",
     no_eval_in_clipboard: "Nothing to paste (copy first with y)",
     bulk_added_evals: "evaluations added",
+
+    // Undo / redo
+    undo: "Undo",
+    redo: "Redo",
+    undo_done: "Undone",
+    redo_done: "Redone",
+    nothing_to_undo: "Nothing to undo",
+    nothing_to_redo: "Nothing to redo",
 };
 
 /// Spanish messages.
@@ -665,6 +681,14 @@ pub const ES: Messages = Messages {
     no_eval_to_yank: "No hay evaluación para copiar",
     no_eval_in_clipboard: "Nada para pegar (copia primero con y)",
     bulk_added_evals: "evaluaciones agregadas",
+
+    // Undo / redo
+    undo: "Deshacer",
+    redo: "Rehacer",
+    undo_done: "Deshecho",
+    redo_done: "Rehecho",
+    nothing_to_undo: "Nada que deshacer",
+    nothing_to_redo: "Nada que rehacer",
 };
 
 impl Language {

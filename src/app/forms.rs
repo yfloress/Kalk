@@ -144,6 +144,9 @@ impl App {
         let global_policy = self.build_global_policy();
         let global_eligibility = self.build_global_eligibility();
 
+        // Snapshot for undo (after validation, before mutation).
+        self.push_undo();
+
         match self.screen {
             Screen::EditingCourse { is_new: true } => {
                 let mut course = if let Some(template) = self.current_template() {
@@ -339,6 +342,9 @@ impl App {
         let rules = self.build_rules_from_fields();
         let selected_cat = self.selected_category;
 
+        // Snapshot for undo (after validation, before mutation).
+        self.push_undo();
+
         match self.screen {
             Screen::EditingCategory { is_new: true } => {
                 if let Some(idx) = self.selected_course
@@ -430,6 +436,9 @@ impl App {
         let cat_idx = self.selected_category;
         let eval_idx = self.selected_evaluation;
 
+        // Snapshot for undo (after validation, before mutation).
+        self.push_undo();
+
         match self.screen {
             Screen::EditingEvaluation { is_new: true } => {
                 if let Some(ci) = course_idx
@@ -481,6 +490,8 @@ impl App {
     }
 
     pub fn delete_current(&mut self) {
+        // Snapshot for undo (delete is the canonical destructive action).
+        self.push_undo();
         match self.focus {
             super::Focus::Courses => {
                 if let Some(idx) = self.selected_course {
@@ -535,9 +546,13 @@ impl App {
     /// Auto-balance weights for current course.
     pub fn auto_balance_weights(&mut self) {
         if let Some(course_idx) = self.selected_course
-            && let Some(course) = self.courses.get_mut(course_idx)
+            && self.courses.get(course_idx).is_some()
         {
-            course.auto_balance_weights();
+            // Snapshot for undo before mutating weights.
+            self.push_undo();
+            if let Some(course) = self.courses.get_mut(course_idx) {
+                course.auto_balance_weights();
+            }
             self.clear_status();
             self.persist();
         }

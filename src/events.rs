@@ -35,6 +35,22 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             return Ok(false);
         }
 
+        // Global: Ctrl+Z / Ctrl+Y for undo / redo (Main screen only — popups
+        // and forms have their own Esc-based cancel semantics).
+        if app.screen == Screen::Main && key.modifiers.contains(KeyModifiers::CONTROL) {
+            match key.code {
+                KeyCode::Char('z') => {
+                    app.undo();
+                    return Ok(app.should_quit);
+                }
+                KeyCode::Char('y') => {
+                    app.redo();
+                    return Ok(app.should_quit);
+                }
+                _ => {}
+            }
+        }
+
         // Global: Shift+L for language selection (works from main screen)
         if key.code == KeyCode::Char('L')
             && key.modifiers.contains(KeyModifiers::SHIFT)

@@ -88,7 +88,7 @@ impl App {
         // Save user templates to disk
         if persistence::save_user_templates(&self.user_templates).is_err() {
             let msg = self.messages().save_template_error.to_string();
-            self.set_status(msg);
+            self.set_error(msg);
         }
 
         self.screen = Screen::Main;
@@ -127,7 +127,7 @@ impl App {
         // Save updated user templates
         if persistence::save_user_templates(&self.user_templates).is_err() {
             let msg = self.messages().save_template_error.to_string();
-            self.set_status(msg);
+            self.set_error(msg);
         }
 
         self.screen = Screen::SelectingTemplate;
@@ -183,7 +183,7 @@ impl App {
             };
             if persistence::save_config(&config).is_err() {
                 let msg = self.messages().config_save_error.to_string();
-                self.set_status(msg);
+                self.set_error(msg);
             }
         }
 
@@ -266,7 +266,7 @@ impl App {
         };
         if persistence::save_config(&config).is_err() {
             let msg = self.messages().config_save_error.to_string();
-            self.set_status(msg);
+            self.set_error(msg);
         }
         self.screen = Screen::Main;
     }
@@ -297,7 +297,7 @@ impl App {
         };
         if let Err(e) = persistence::save_config(&config) {
             let m = self.messages();
-            self.set_status(format!("{}: {}", m.config_save_error, e));
+            self.set_error(format!("{}: {}", m.config_save_error, e));
         }
     }
 
@@ -316,7 +316,7 @@ impl App {
 
         if course.global_policy == GlobalExamPolicy::None {
             let m = self.messages();
-            self.set_status(m.global_no_policy.to_string());
+            self.set_warning(m.global_no_policy.to_string());
             return;
         }
 
@@ -334,16 +334,22 @@ impl App {
             self.screen = Screen::Main;
             return;
         };
+        if self.courses.get(idx).is_none() {
+            self.screen = Screen::Main;
+            return;
+        }
+
+        let trimmed = self.edit_global_grade.trim().to_string();
+        // Snapshot for undo (before applying the new global grade).
+        self.push_undo();
         let Some(course) = self.courses.get_mut(idx) else {
             self.screen = Screen::Main;
             return;
         };
-
-        let trimmed = self.edit_global_grade.trim();
         if trimmed.is_empty() {
             // Empty input clears the global grade
             course.global_exam_grade = None;
-        } else if let Ok(grade) = parse_decimal(trimmed) {
+        } else if let Ok(grade) = parse_decimal(&trimmed) {
             course.global_exam_grade = Some(grade.clamp(MIN_GRADE, MAX_GRADE));
         }
 
@@ -387,7 +393,7 @@ impl App {
     pub fn yank_evaluation(&mut self) {
         let m = self.messages();
         let Some(eval) = self.current_evaluation() else {
-            self.set_status(m.no_eval_to_yank.to_string());
+            self.set_warning(m.no_eval_to_yank.to_string());
             return;
         };
         let name = eval.name.clone();
@@ -399,11 +405,13 @@ impl App {
 
     /// Paste the clipboard evaluation into the current category.
     pub fn paste_evaluation(&mut self) {
-        let m = self.messages();
         let Some((name, grade, weight)) = self.clipboard_evaluation.clone() else {
-            self.set_status(m.no_eval_in_clipboard.to_string());
+            let msg = self.messages().no_eval_in_clipboard.to_string();
+            self.set_warning(msg);
             return;
         };
+        // Snapshot for undo (paste appends a new evaluation).
+        self.push_undo();
         if let Some(ci) = self.selected_course
             && let Some(cati) = self.selected_category
             && let Some(course) = self.courses.get_mut(ci)
@@ -417,7 +425,8 @@ impl App {
             }
             category.evaluations.push(eval);
             self.selected_evaluation = Some(category.evaluations.len() - 1);
-            self.set_status(format!("{}: {}", m.pasted_eval, name));
+            let pasted_label = self.messages().pasted_eval;
+            self.set_status(format!("{}: {}", pasted_label, name));
             self.persist();
         }
     }
@@ -446,14 +455,15 @@ impl App {
             }
         };
 
-        let m = self.messages();
-
         let base_name = self.edit_name.trim().to_string();
         if base_name.is_empty() {
             self.screen = Screen::Main;
             return;
         }
 
+        // Snapshot for undo (bulk-add can create many evaluations at once).
+        self.push_undo();
+        let mut inserted = false;
         if let Some(ci) = self.selected_course
             && let Some(cati) = self.selected_category
             && let Some(course) = self.courses.get_mut(ci)
@@ -464,8 +474,16 @@ impl App {
                 category.evaluations.push(eval);
             }
             self.selected_evaluation = Some(category.evaluations.len() - 1);
-            self.set_status(format!("{count} {}", m.bulk_added_evals));
+            inserted = true;
+        }
+
+        if inserted {
+            let label = self.messages().bulk_added_evals;
+            self.set_status(format!("{count} {label}"));
             self.persist();
+        } else {
+            // Snapshot was taken but nothing changed — discard it.
+            self.undo_stack.pop();
         }
 
         self.screen = Screen::Main;

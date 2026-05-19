@@ -25,6 +25,7 @@
 
 mod actions;
 mod forms;
+mod history;
 
 use crate::i18n::{Language, Messages};
 use crate::model::{
@@ -33,6 +34,8 @@ use crate::model::{
 };
 use crate::persistence;
 use crate::templates;
+
+use history::Snapshot;
 
 /// Maximum value for the "drop lowest" toggle cycle (0..=MAX_DROP_LOWEST).
 const MAX_DROP_LOWEST: usize = 5;
@@ -64,6 +67,17 @@ pub enum Screen {
     Settings,
     BulkAddEvaluations,
     EnteringGlobalGrade,
+}
+
+/// Severity of a transient status message shown in the footer.
+/// Drives the colour of the banner so that informational, warning and
+/// error states are distinguishable in any language.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StatusSeverity {
+    #[default]
+    Info,
+    Warning,
+    Error,
 }
 
 /// Input field being edited.
@@ -159,6 +173,13 @@ pub struct App {
     /// Temporary status message shown to the user (errors, confirmations, etc.)
     /// Cleared on the next action.
     pub status_message: Option<String>,
+    /// Severity of the current `status_message` — controls its colour.
+    pub status_severity: StatusSeverity,
+
+    /// Undo stack: snapshots taken before each mutating action.
+    pub undo_stack: Vec<Snapshot>,
+    /// Redo stack: snapshots displaced by undo, repopulated on redo.
+    pub redo_stack: Vec<Snapshot>,
 
     // Language
     pub language: Language,
@@ -227,6 +248,9 @@ impl Default for App {
             should_quit: false,
             clipboard_evaluation: None,
             status_message: None,
+            status_severity: StatusSeverity::Info,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             language,
             input_field: InputField::Name,
             edit_name: String::new(),
@@ -274,16 +298,19 @@ impl App {
         let compact_courses = config.compact_courses;
         let m = language.messages();
         let mut status_message: Option<String> = None;
+        let mut status_severity = StatusSeverity::Info;
 
         // Surface config load warning via i18n
         if config_warning.is_some() {
             status_message = Some(m.config_load_warning.to_string());
+            status_severity = StatusSeverity::Warning;
         }
 
         let courses = match persistence::load_data() {
             Ok(courses) => courses,
             Err(_) => {
                 status_message = Some(m.load_error.to_string());
+                status_severity = StatusSeverity::Error;
                 Vec::new()
             }
         };
@@ -292,6 +319,7 @@ impl App {
             Ok(templates) => templates,
             Err(_) => {
                 status_message = Some(m.load_template_error.to_string());
+                status_severity = StatusSeverity::Warning;
                 Vec::new()
             }
         };
@@ -315,6 +343,7 @@ impl App {
             selected_course,
             selected_category,
             status_message,
+            status_severity,
             language,
             use_nerd_fonts,
             compact_courses,
@@ -335,18 +364,32 @@ impl App {
     /// Clear the status message (called before each user action).
     pub fn clear_status(&mut self) {
         self.status_message = None;
+        self.status_severity = StatusSeverity::Info;
     }
 
-    /// Set a status message visible to the user.
+    /// Set an informational status message (neutral colour).
     pub fn set_status(&mut self, msg: String) {
         self.status_message = Some(msg);
+        self.status_severity = StatusSeverity::Info;
+    }
+
+    /// Set a warning status message (yellow/peach colour).
+    pub fn set_warning(&mut self, msg: String) {
+        self.status_message = Some(msg);
+        self.status_severity = StatusSeverity::Warning;
+    }
+
+    /// Set an error status message (red colour).
+    pub fn set_error(&mut self, msg: String) {
+        self.status_message = Some(msg);
+        self.status_severity = StatusSeverity::Error;
     }
 
     /// Persist state to disk. Shows error to user via status message on failure.
     pub(crate) fn persist(&mut self) {
         if self.save().is_err() {
             let msg = self.messages().save_error.to_string();
-            self.set_status(msg);
+            self.set_error(msg);
         }
     }
 

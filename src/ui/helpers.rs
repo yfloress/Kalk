@@ -176,10 +176,14 @@ pub fn render_delete_confirmation(
 // =============================================================================
 
 /// Return a border style that highlights when the panel is focused.
+/// Focused panels get a bold border in addition to the accent colour so
+/// the active panel reads at a glance even on monochrome terminals.
 pub fn focused_border_style(is_focused: bool) -> Style {
     let t = theme();
     if is_focused {
-        Style::default().fg(t.border_focused)
+        Style::default()
+            .fg(t.border_focused)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(t.border_unfocused)
     }
