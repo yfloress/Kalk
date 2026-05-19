@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Kalk
+GenericName=Academic Dashboard
+GenericName[es]=Panel Academico
+Comment=Track grades and compute pass thresholds
+Comment[es]=Seguimiento de notas y umbral para aprobar
+Exec=kalk
+Icon=kalk
+Terminal=true
+Categories=Education;Office;Utility;
+Keywords=grades;academic;university;notes;notas;universidad;
+StartupNotify=false

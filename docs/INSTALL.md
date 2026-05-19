@@ -4,6 +4,8 @@ This guide covers how to build and install Kalk from source on **macOS**, **Fedo
 
 Kalk is a pure terminal application with no system library dependencies beyond the Rust toolchain. It uses the Rust 2024 edition, which requires **Rust 1.85 or newer**.
 
+> **Quick install (Linux):** clone the repo and run `sudo ./install.sh`. See [Desktop Integration](#desktop-integration-linux).
+
 ---
 
 ## Table of Contents
@@ -14,6 +16,7 @@ Kalk is a pure terminal application with no system library dependencies beyond t
 - [Debian / Ubuntu](#debian--ubuntu)
 - [Arch Linux](#arch-linux)
 - [Post-install](#post-install)
+- [Desktop Integration (Linux)](#desktop-integration-linux)
 - [Uninstall](#uninstall)
 
 ---
@@ -69,7 +72,15 @@ cd Kalk
 cargo build --release
 ```
 
-### 4. Install the binary
+### 4. Install
+
+Use the provided install script (recommended):
+
+```bash
+sudo ./install.sh
+```
+
+Or install just the binary manually:
 
 ```bash
 sudo cp target/release/kalk /usr/local/bin/
@@ -124,7 +135,15 @@ cd Kalk
 cargo build --release
 ```
 
-### 4. Install the binary
+### 4. Install
+
+Use the provided install script (recommended):
+
+```bash
+sudo ./install.sh
+```
+
+Or install just the binary manually:
 
 ```bash
 sudo cp target/release/kalk /usr/local/bin/
@@ -178,7 +197,15 @@ cd Kalk
 cargo build --release
 ```
 
-### 4. Install the binary
+### 4. Install
+
+Use the provided install script (recommended):
+
+```bash
+sudo ./install.sh
+```
+
+Or install just the binary manually:
 
 ```bash
 sudo cp target/release/kalk /usr/local/bin/
@@ -229,7 +256,15 @@ cd Kalk
 cargo build --release
 ```
 
-### 3. Install the binary
+### 3. Install
+
+Use the provided install script (recommended):
+
+```bash
+sudo ./install.sh
+```
+
+Or install just the binary manually:
 
 ```bash
 sudo cp target/release/kalk /usr/local/bin/
@@ -272,6 +307,40 @@ Kalk stores its data in the XDG data directory:
 On macOS, the path is `~/Library/Application Support/kalk/`.
 
 Press `?` inside any editor popup for contextual help, or see the [README](../README.md) for the full keybindings reference.
+
+---
+
+## Desktop Integration (Linux)
+
+The `install.sh` script handles everything in one step and is the recommended way to install:
+
+```bash
+# System-wide (requires sudo)
+sudo ./install.sh
+
+# User-local (no sudo needed)
+./install.sh --user
+```
+
+This installs three things:
+
+| Artifact | System path | User path |
+|----------|-------------|-----------|
+| Binary | `/usr/local/bin/kalk` | `~/.local/bin/kalk` |
+| Desktop entry | `/usr/local/share/applications/kalk.desktop` | `~/.local/share/applications/kalk.desktop` |
+| Icon | `/usr/local/share/icons/hicolor/scalable/apps/kalk.svg` | `~/.local/share/icons/hicolor/scalable/apps/kalk.svg` |
+
+The desktop entry (`kalk.desktop`) uses `Terminal=true`, so clicking Kalk from your application menu will automatically open a terminal, run the app, and close when you exit.
+
+**To customize the icon:** replace `packaging/linux/kalk.svg` with your own SVG before running `install.sh`. The file must be named `kalk.svg`.
+
+**To uninstall** what `install.sh` installed:
+
+```bash
+sudo ./install.sh --uninstall
+```
+
+User data at `~/.local/share/kalk/` is never touched by the install script — you can delete it manually if desired.
 
 ---
 
