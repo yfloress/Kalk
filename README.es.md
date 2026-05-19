@@ -95,61 +95,11 @@ cargo run
 El entorno Nix incluye `cargo-audit` para análisis de seguridad.
 
 ---
-
+ 
 ## Atajos de Teclado
-
-### Navegación
-
-| Tecla | Acción |
-|:-----:|--------|
-| `Tab` | Ciclar foco entre paneles |
-| `h` / `←` | Enfocar panel izquierdo |
-| `l` / `→` | Enfocar panel derecho |
-| `j` / `↓` | Moverse hacia abajo en la lista |
-| `k` / `↑` | Moverse hacia arriba en la lista |
-
-### Acciones
-
-| Tecla | Acción |
-|:-----:|--------|
-| `n` | Crear nuevo item (ramo/categoría/evaluación) |
-| `Enter` | Editar item seleccionado |
-| `d` | Eliminar item seleccionado |
-| `t` | Guardar ramo actual como plantilla |
-| `b` | Auto-balancear pesos de categorías |
-| `y` | Copiar (yank) la evaluación seleccionada |
-| `p` | Pegar evaluación copiada en la categoría actual |
-| `Ctrl+N` | Agregar múltiples evaluaciones en lote |
-| `g` | Ingresar nota de examen global |
-| `c` | Alternar vista compacta de ramos |
-| `S` | Abrir ajustes |
-| `L` | Cambiar idioma |
-| `q` | Salir |
-
-### En Popups de Edición
-
-| Tecla | Acción |
-|:-----:|--------|
-| `Tab` | Cambiar entre campos de entrada |
-| `Enter` | Confirmar |
-| `Esc` | Cancelar |
-
-### En Editor de Categoría
-
-| Tecla | Acción |
-|:-----:|--------|
-| `Ctrl+R` | Mostrar/ocultar sección de reglas avanzadas |
-| `?` | Mostrar/ocultar ayuda de campos |
-| `Space` / `Enter` | Ciclar campos toggle (eliminar peores, método prom., etc.) |
-
-### En Ajustes
-
-| Tecla | Acción |
-|:-----:|--------|
-| `Space` | Alternar ajuste seleccionado |
-| `Enter` | Confirmar y guardar |
-| `Esc` | Cancelar sin guardar |
-
+ 
+Presiona `?` dentro de la app para ver la referencia completa.
+ 
 ---
 
 ## Estructura del Proyecto

@@ -96,62 +96,12 @@ cargo run
 
 The Nix environment includes `cargo-audit` for security scanning.
 
----
-
+--
+ 
 ## Keybindings
-
-### Navigation
-
-| Key | Action |
-|:---:|--------|
-| `Tab` | Cycle focus between panels |
-| `h` / `←` | Focus left panel |
-| `l` / `→` | Focus right panel |
-| `j` / `↓` | Move down in list |
-| `k` / `↑` | Move up in list |
-
-### Actions
-
-| Key | Action |
-|:---:|--------|
-| `n` | Create new item (course/category/evaluation) |
-| `Enter` | Edit selected item |
-| `d` | Delete selected item |
-| `t` | Save current course as template |
-| `b` | Auto-balance category weights |
-| `y` | Yank (copy) selected evaluation |
-| `p` | Paste yanked evaluation into current category |
-| `Ctrl+N` | Bulk-add multiple evaluations |
-| `g` | Enter global exam grade |
-| `c` | Toggle compact courses view |
-| `S` | Open settings |
-| `L` | Change language |
-| `q` | Quit |
-
-### In Edit Popups
-
-| Key | Action |
-|:---:|--------|
-| `Tab` | Switch between input fields |
-| `Enter` | Confirm |
-| `Esc` | Cancel |
-
-### In Category Editor
-
-| Key | Action |
-|:---:|--------|
-| `Ctrl+R` | Toggle advanced rules section |
-| `?` | Toggle field help overlay |
-| `Space` / `Enter` | Cycle toggle fields (drop lowest, avg method, etc.) |
-
-### In Settings
-
-| Key | Action |
-|:---:|--------|
-| `Space` | Toggle selected setting |
-| `Enter` | Confirm and save |
-| `Esc` | Cancel without saving |
-
+ 
+Press `?` inside the app for the full keybinding reference.
+ 
 ---
 
 ## Project Structure
