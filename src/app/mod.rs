@@ -243,6 +243,14 @@ pub struct App {
     /// Set to `true` after the user copies the prompt in step 1 so the UI can
     /// flash a "Copied" confirmation.  Cleared on screen change.
     pub import_copied: bool,
+    /// When `true`, step 1 renders the prompt full-screen with no borders so
+    /// the user can select-and-copy with the mouse in any terminal (universal
+    /// fallback when OSC 52 isn't supported).
+    pub import_prompt_fullscreen: bool,
+    /// Vertical scroll offset (in source lines) for the step-1 prompt view —
+    /// shared between the popup and full-screen variants so the user keeps
+    /// their place when toggling.
+    pub import_prompt_scroll: u16,
     /// Error message produced by the last paste attempt in step 2 (if any).
     pub import_paste_error: Option<String>,
     /// Course parsed from the AI response, ready to confirm in step 3.
@@ -306,6 +314,8 @@ impl Default for App {
             compact_courses: false,
             selected_setting: 0,
             import_copied: false,
+            import_prompt_fullscreen: false,
+            import_prompt_scroll: 0,
             import_paste_error: None,
             import_parsed: None,
             import_renamed_from: None,

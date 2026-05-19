@@ -460,13 +460,39 @@ fn handle_global_grade_keys(app: &mut App, key: KeyCode) {
 }
 
 
-/// Step 1 of the AI import wizard — copy the prompt to the clipboard or
-/// advance to the paste step.
+/// Step 1 of the AI import wizard — copy the prompt to the clipboard, scroll
+/// it, enter the full-screen view, or advance to the paste step.
 fn handle_import_prompt_keys(app: &mut App, key: KeyCode) {
+    // In full-screen mode the scrolling and exit shortcuts are the only
+    // active keys so the terminal's selection isn't interrupted.
+    if app.import_prompt_fullscreen {
+        match key {
+            KeyCode::Esc
+            | KeyCode::Char('q')
+            | KeyCode::Char('f')
+            | KeyCode::Char('F') => app.import_toggle_fullscreen(),
+            KeyCode::Down | KeyCode::Char('j') => app.import_scroll_prompt(1),
+            KeyCode::Up | KeyCode::Char('k') => app.import_scroll_prompt(-1),
+            KeyCode::PageDown | KeyCode::Char(' ') => app.import_scroll_prompt(10),
+            KeyCode::PageUp => app.import_scroll_prompt(-10),
+            KeyCode::Home | KeyCode::Char('g') => app.import_scroll_prompt_top(),
+            KeyCode::End | KeyCode::Char('G') => app.import_scroll_prompt_bottom(),
+            _ => {}
+        }
+        return;
+    }
+
     match key {
         KeyCode::Esc => app.import_cancel(),
         KeyCode::Char('c') | KeyCode::Char('y') => app.import_copy_prompt(),
-        KeyCode::Enter | KeyCode::Char('n') => app.import_goto_paste(),
+        KeyCode::Char('f') | KeyCode::Char('F') => app.import_toggle_fullscreen(),
+        KeyCode::Down | KeyCode::Char('j') => app.import_scroll_prompt(1),
+        KeyCode::Up | KeyCode::Char('k') => app.import_scroll_prompt(-1),
+        KeyCode::PageDown => app.import_scroll_prompt(10),
+        KeyCode::PageUp => app.import_scroll_prompt(-10),
+        KeyCode::Home => app.import_scroll_prompt_top(),
+        KeyCode::End => app.import_scroll_prompt_bottom(),
+        KeyCode::Enter => app.import_goto_paste(),
         _ => {}
     }
 }

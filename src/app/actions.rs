@@ -594,11 +594,41 @@ impl App {
     pub fn start_ai_import(&mut self) {
         self.screen = Screen::ImportPrompt;
         self.import_copied = false;
+        self.import_prompt_fullscreen = false;
+        self.import_prompt_scroll = 0;
         self.import_paste_error = None;
         self.import_parsed = None;
         self.import_renamed_from = None;
         self.import_total_weight = 0.0;
         self.import_total_evals = 0;
+    }
+
+    /// Toggle the full-screen prompt view in step 1.  Used as a universal
+    /// copy-fallback for terminals that don't honour OSC 52: the user can
+    /// select with the mouse and copy with the terminal's own shortcut.
+    pub fn import_toggle_fullscreen(&mut self) {
+        self.import_prompt_fullscreen = !self.import_prompt_fullscreen;
+    }
+
+    /// Scroll the step-1 prompt view by `delta` source lines (positive scrolls
+    /// down, negative up).  Clamped between 0 and the prompt's source-line
+    /// count — wrapped lines may extend further, so this is a soft upper
+    /// bound rather than the exact end of the rendered text.
+    pub fn import_scroll_prompt(&mut self, delta: i32) {
+        let max = self.messages().import_prompt.lines().count() as i32;
+        let new_scroll = (self.import_prompt_scroll as i32 + delta).clamp(0, max);
+        self.import_prompt_scroll = new_scroll as u16;
+    }
+
+    /// Jump the step-1 prompt view back to the top.
+    pub fn import_scroll_prompt_top(&mut self) {
+        self.import_prompt_scroll = 0;
+    }
+
+    /// Jump the step-1 prompt view to the bottom (last source line).
+    pub fn import_scroll_prompt_bottom(&mut self) {
+        let max = self.messages().import_prompt.lines().count() as u16;
+        self.import_prompt_scroll = max.saturating_sub(1);
     }
 
     /// Copy the AI prompt to the system clipboard (OSC 52) and surface a
@@ -687,6 +717,7 @@ impl App {
     /// to Main.
     pub fn import_cancel(&mut self) {
         self.import_copied = false;
+        self.import_prompt_fullscreen = false;
         self.import_paste_error = None;
         self.import_parsed = None;
         self.import_renamed_from = None;

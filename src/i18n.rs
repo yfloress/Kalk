@@ -295,6 +295,8 @@ pub struct Messages {
     pub import_step1_copy_key: &'static str,
     pub import_step1_copied: &'static str,
     pub import_step1_next: &'static str,
+    pub import_step1_fullscreen: &'static str,
+    pub import_step1_fullscreen_exit: &'static str,
     pub import_step2_title: &'static str,
     pub import_step2_hint: &'static str,
     pub import_step2_back: &'static str,
@@ -562,6 +564,8 @@ pub const EN: Messages = Messages {
     import_step1_copy_key: "c: Copy",
     import_step1_copied: "Copied to clipboard",
     import_step1_next: "Enter: Continue",
+    import_step1_fullscreen: "f: Fullscreen (mouse-select)",
+    import_step1_fullscreen_exit: "Esc / f: Back",
     import_step2_title: "Step 2 of 3 — Paste the AI response",
     import_step2_hint: "Paste here the JSON returned by the AI (Ctrl+V or right-click paste). Code fences are tolerated.",
     import_step2_back: "b / Esc: Back",
@@ -625,7 +629,7 @@ Rules:
 - If the syllabus lists "drop the lowest N", set drop_lowest accordingly; otherwise 0.
 
 Example:
-{"schema_version":1,"name":"Digital Systems","passing_grade":55,"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null},"categories":[{"name":"Tests","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Labs","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
+{"schema_version":1,"name":"Calculus 1","passing_grade":55,"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null},"categories":[{"name":"Tests","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Labs","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
 "#,
 };
 
@@ -876,6 +880,8 @@ pub const ES: Messages = Messages {
     import_step1_copy_key: "c: Copiar",
     import_step1_copied: "Copiado al portapapeles",
     import_step1_next: "Enter: Continuar",
+    import_step1_fullscreen: "f: Pantalla completa (selección con mouse)",
+    import_step1_fullscreen_exit: "Esc / f: Volver",
     import_step2_title: "Paso 2 de 3 — Pegar la respuesta de la IA",
     import_step2_hint: "Pega aquí el JSON devuelto por la IA (Ctrl+V o clic derecho → pegar). Se tolera el formato con ``` ```.",
     import_step2_back: "b / Esc: Atrás",

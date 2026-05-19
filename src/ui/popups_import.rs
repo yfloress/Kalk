@@ -40,6 +40,14 @@ use ratatui::{
 // =============================================================================
 
 pub fn draw_import_prompt(frame: &mut Frame, app: &App) {
+    // Full-screen variant: no borders, fills the terminal so the user can
+    // mouse-select the prompt text and copy it using the terminal's own
+    // shortcut.  Universal fallback for terminals without OSC 52 support.
+    if app.import_prompt_fullscreen {
+        draw_import_prompt_fullscreen(frame, app);
+        return;
+    }
+
     let m = app.messages();
     let t = theme();
     let area = centered_rect(80, 80, frame.area());
@@ -74,6 +82,7 @@ pub fn draw_import_prompt(frame: &mut Frame, app: &App) {
     let prompt = Paragraph::new(m.import_prompt)
         .style(Style::default().fg(t.text_primary))
         .wrap(Wrap { trim: false })
+        .scroll((app.import_prompt_scroll, 0))
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -95,11 +104,45 @@ pub fn draw_import_prompt(frame: &mut Frame, app: &App) {
     ));
     spans.push(Span::raw("   "));
     spans.push(Span::styled(
+        m.import_step1_fullscreen,
+        Style::default().fg(t.footer_key),
+    ));
+    spans.push(Span::raw("   "));
+    spans.push(Span::styled(
         m.import_step1_next,
         Style::default().fg(t.footer_key),
     ));
     let footer = Paragraph::new(Line::from(spans));
     frame.render_widget(footer, chunks[2]);
+}
+
+/// Full-screen prompt view: bare text covering the whole terminal so the
+/// user can select with the mouse and copy via their terminal's own shortcut.
+fn draw_import_prompt_fullscreen(frame: &mut Frame, app: &App) {
+    let m = app.messages();
+    let t = theme();
+    let area = frame.area();
+
+    // Wipe whatever was rendered underneath (popup borders, panels, …) so the
+    // selection only picks up the prompt text.
+    frame.render_widget(Clear, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(area);
+
+    let prompt = Paragraph::new(m.import_prompt)
+        .style(Style::default().fg(t.text_primary))
+        .wrap(Wrap { trim: false })
+        .scroll((app.import_prompt_scroll, 0));
+    frame.render_widget(prompt, chunks[0]);
+
+    let hint = Paragraph::new(Line::from(Span::styled(
+        m.import_step1_fullscreen_exit,
+        Style::default().fg(t.text_muted),
+    )));
+    frame.render_widget(hint, chunks[1]);
 }
 
 // =============================================================================
