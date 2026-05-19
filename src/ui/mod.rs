@@ -525,17 +525,22 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         );
     frame.render_widget(header, chunks[0]);
 
-    // Course total average with pass/fail status, rule overrides, and needs_global
+    // Course total average with pass/fail status, rule overrides, and needs_global.
+    // The line carries per-span colours so the descriptive label stays neutral
+    // and only the value portion turns red/green.  The title is forced to the
+    // primary text colour so it doesn't inherit the accent from the paragraph.
     let grade_result = course.compute_grade();
-    let (avg_text, avg_color) = format_course_average(course, &grade_result, m);
+    let (avg_line, avg_color) = format_course_average(course, &grade_result, m);
+    let avg_title = Line::from(Span::styled(
+        format!(" {} ", m.course_average),
+        Style::default().fg(t.text_primary),
+    ));
     let avg_block = Block::default()
-        .title(format!(" {} ", m.course_average))
+        .title(avg_title)
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(avg_color));
-    let avg_widget = Paragraph::new(avg_text)
-        .style(Style::default().fg(avg_color))
-        .block(avg_block);
+    let avg_widget = Paragraph::new(avg_line).block(avg_block);
     frame.render_widget(avg_widget, chunks[1]);
 
     // Category list — use grade_result to show failed minimums and eval violations

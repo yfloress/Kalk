@@ -469,11 +469,41 @@ pub fn draw_course_help_overlay(frame: &mut Frame, m: &Messages) {
 // Formatting Functions
 // =============================================================================
 
-/// Compute the display text and colour for the course average widget.
+/// Compute the display line and accent colour for the course average widget.
 ///
-/// Accounts for rule overrides (`overridden_by`), `needs_global`, and normal
-/// pass/fail colouring.  Returns `(text, Color)`.
+/// Returns a `Line` whose label prefix (e.g. "Actual: ") is rendered in the
+/// neutral primary-text colour and whose value portion carries the pass/fail
+/// status colour, so the panel never reads as fully red/green on a single
+/// outcome.  The accompanying `Color` is the panel accent (used for the
+/// border) and matches the value colour.
 pub fn format_course_average(
+    course: &Course,
+    grade_result: &CourseGradeResult,
+    m: &Messages,
+) -> (Line<'static>, Color) {
+    let t = theme();
+    let (text, color) = format_course_average_raw(course, grade_result, m);
+
+    // Split on the first "{label}: " prefix so the descriptive label stays in
+    // neutral text and only the value carries the status colour.
+    let prefix = format!("{}: ", m.current);
+    let line = if let Some(rest) = text.strip_prefix(&prefix) {
+        Line::from(vec![
+            Span::styled(prefix, Style::default().fg(t.text_primary)),
+            Span::styled(rest.to_string(), Style::default().fg(color)),
+        ])
+    } else {
+        // No "Actual: " prefix (e.g. the "no grades yet" branch) — leave the
+        // whole line in the panel accent colour.
+        Line::from(Span::styled(text, Style::default().fg(color)))
+    };
+    (line, color)
+}
+
+/// Internal helper that builds the raw text + accent colour.  Kept private so
+/// the public [`format_course_average`] can return styled spans without every
+/// branch having to know about ratatui types.
+fn format_course_average_raw(
     course: &Course,
     grade_result: &CourseGradeResult,
     m: &Messages,

@@ -31,11 +31,10 @@ use ratatui::widgets::BorderType;
 /// Subtle tint between the terminal base and SURFACE0 — used for the
 /// alternating "zebra" rows in the evaluations table.  Distinct enough to
 /// be perceptible but far softer than a regular Catppuccin surface.
-const ZEBRA: Color = Color::Rgb(0x26, 0x27, 0x38);
+const ZEBRA: Color = Color::Rgb(0x2a, 0x2b, 0x3c);
 const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
 const SURFACE2: Color = Color::Rgb(0x58, 0x5b, 0x70);
 const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
-const OVERLAY1: Color = Color::Rgb(0x7f, 0x84, 0x9c);
 const SUBTEXT0: Color = Color::Rgb(0xa6, 0xad, 0xc8);
 const SUBTEXT1: Color = Color::Rgb(0xba, 0xc2, 0xde);
 const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
@@ -43,10 +42,11 @@ const FLAMINGO: Color = Color::Rgb(0xf2, 0xcd, 0xcd);
 const RED: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
 const PEACH: Color = Color::Rgb(0xfa, 0xb3, 0x87);
 const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
-const GREEN: Color = Color::Rgb(0x00, 0x99, 0x6b);
+const GREEN: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
 const SAPPHIRE: Color = Color::Rgb(0x74, 0xc7, 0xec);
 const BLUE: Color = Color::Rgb(0x89, 0xb4, 0xfa);
 const LAVENDER: Color = Color::Rgb(0xb4, 0xbe, 0xfe);
+const MAUVE: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
 
 /// A complete semantic colour theme used by every UI component.
 #[derive(Debug, Clone, Copy)]
@@ -124,15 +124,18 @@ pub struct Theme {
 
 /// The default Kalk theme — Catppuccin Mocha with rounded borders.
 pub const DEFAULT_THEME: Theme = Theme {
-    // Borders — Lavender for focused, Overlay 0 for unfocused
-    border_focused: LAVENDER,
+    // Borders — Mauve for focused (vibrant, clear active panel), Overlay 0 for
+    // unfocused.  Lavender is reserved for popup borders where the contrast is
+    // against the dimmed underlay rather than other panels.
+    border_focused: MAUVE,
     border_unfocused: OVERLAY0,
     border_type: BorderType::Rounded,
 
-    // Text — Catppuccin text hierarchy
+    // Text — Catppuccin text hierarchy.  `text_muted` uses OVERLAY0 so
+    // placeholders/disabled items read as genuinely dim.
     text_primary: TEXT,
     text_secondary: SUBTEXT1,
-    text_muted: OVERLAY1,
+    text_muted: OVERLAY0,
 
     // Semantic status — standard Catppuccin accent mapping
     status_pass: GREEN,
@@ -165,8 +168,9 @@ pub const DEFAULT_THEME: Theme = Theme {
     popup_border_danger: RED,
     popup_separator: SURFACE1,
 
-    // Weight label — Peach (warm, distinct from status colours)
-    weight_label: PEACH,
+    // Weight label — Mauve so it does not visually rhyme with the Peach used
+    // for active input borders, while staying distinct from status colours.
+    weight_label: MAUVE,
 
     // User template — Flamingo (soft pink, distinct from system templates)
     user_template: FLAMINGO,
