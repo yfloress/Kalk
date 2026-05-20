@@ -32,6 +32,23 @@ need_root() {
     fi
 }
 
+require_linux() {
+    local os
+    os="$(uname -s 2>/dev/null || echo unknown)"
+    case "$os" in
+        Linux) ;;
+        Darwin)
+            die "macOS is not supported yet — this installer only targets Linux. To run Kalk on macOS, build it manually with: cargo build --release"
+            ;;
+        MINGW*|MSYS*|CYGWIN*|Windows_NT)
+            die "Windows is not supported yet — this installer only targets Linux. To run Kalk on Windows, build it manually with: cargo build --release"
+            ;;
+        *)
+            die "Unsupported OS '${os}' — this installer only targets Linux."
+            ;;
+    esac
+}
+
 # --- install ---
 
 install_binary() {
@@ -81,6 +98,8 @@ if [ "${1:-}" = "--user" ]; then
     IS_USER=1
     shift
 fi
+
+require_linux
 
 if [ "${1:-}" = "--uninstall" ]; then
     if [ "$IS_USER" -eq 1 ]; then
