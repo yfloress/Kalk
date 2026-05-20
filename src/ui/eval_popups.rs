@@ -172,7 +172,7 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
-    let area = centered_rect(50, 11, frame.area());
+    let area = centered_rect(50, 20, frame.area());
     frame.render_widget(Clear, area);
 
     let block = Block::default()

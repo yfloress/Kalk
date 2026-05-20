@@ -186,9 +186,15 @@ pub fn draw_import_paste(frame: &mut Frame, app: &App) {
             .style(Style::default().fg(t.status_fail))
             .wrap(Wrap { trim: true })
     } else {
-        Paragraph::new("…").style(Style::default().fg(t.text_muted))
+        Paragraph::new("")
     };
-    frame.render_widget(body, chunks[1]);
+    let paste_box = Block::default()
+        .borders(Borders::ALL)
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.border_unfocused));
+    let paste_inner = paste_box.inner(chunks[1]);
+    frame.render_widget(paste_box, chunks[1]);
+    frame.render_widget(body, paste_inner);
 
     let footer = Paragraph::new(Line::from(vec![
         Span::styled(m.import_step2_back, Style::default().fg(t.footer_key)),
