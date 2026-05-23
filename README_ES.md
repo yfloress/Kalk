@@ -6,6 +6,8 @@
 
 **Tu dashboard académico en la terminal.**
 
+[![English](https://img.shields.io/badge/README-English-blue?style=flat-square)](README.md)
+
 Gestiona ramos, registra notas por categorías y calcula automáticamente la nota que necesitas para aprobar — todo sin tocar el mouse.
 
 [![Rust](https://img.shields.io/badge/Hecho_con-Rust-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
@@ -72,7 +74,7 @@ Presiona `?` dentro del editor de categoría para ver la ayuda completa.
 
 ## Instalación
 
-> Para instrucciones detalladas por plataforma (macOS, Fedora, Debian/Ubuntu, Arch Linux), consulta la [Guía de Instalación](docs/INSTALL.md).
+> Para instrucciones detalladas por plataforma (macOS, Fedora, Debian/Ubuntu, Arch Linux), consulta la [Guía de Instalación](docs/INSTALL_ES.md).
 
 ### Requisitos
 
@@ -94,7 +96,7 @@ sudo ./install.sh        # todo el sistema
 ./install.sh --user      # solo tu usuario (~/.local)
 ```
 
-Instala el binario, acceso directo de escritorio e icono. Ver [Integracion de Escritorio](docs/INSTALL.md#desktop-integration-linux).
+Instala el binario, acceso directo de escritorio e icono (solo el binario en macOS). Ver [El script de instalación](docs/INSTALL_ES.md#el-script-de-instalación).
 
 ### Usando Nix
 

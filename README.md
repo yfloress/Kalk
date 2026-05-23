@@ -6,7 +6,7 @@
 
 **Your academic dashboard in the terminal.**
 
-[![Español](https://img.shields.io/badge/README-Español-blue?style=flat-square)](README.es.md)
+[![Español](https://img.shields.io/badge/README-Español-blue?style=flat-square)](README_ES.md)
 
 Manage courses, track grades by categories, and automatically calculate the exact score needed to pass — all without touching the mouse.
 
@@ -96,7 +96,7 @@ sudo ./install.sh        # system-wide
 ./install.sh --user      # user-local (~/.local)
 ```
 
-Installs the binary, desktop entry, and icon. See [Desktop Integration](docs/INSTALL.md#desktop-integration-linux).
+Installs the binary, desktop entry, and icon (binary only on macOS). See [The install script](docs/INSTALL.md#the-install-script).
 
 ### Using Nix
 
