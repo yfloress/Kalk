@@ -10,6 +10,10 @@ set -euo pipefail
 #   ./install.sh --user --uninstall   # remove user-local install
 #   sudo ./install.sh --uninstall     # remove system-wide install
 #   PREFIX=/usr sudo ./install.sh     # custom prefix
+#
+# Platforms:
+#   Linux  — installs the binary, desktop entry, and icon.
+#   macOS  — installs the binary only (no XDG desktop entry / icon theme).
 
 PREFIX="${PREFIX:-/usr/local}"
 DESTDIR="${DESTDIR:-}"
@@ -19,10 +23,17 @@ BINARY="target/release/${APP_NAME}"
 DESKTOP_FILE="packaging/linux/${APP_NAME}.desktop"
 ICON_FILE="packaging/linux/${APP_NAME}.svg"
 
+# --- pretty output ---
+
+log()  { printf '\n\033[1;32m[+] %s\033[0m\n' "$*"; }
+warn() { printf '\n\033[1;33m[!] %s\033[0m\n' "$*"; }
+err()  { printf '\n\033[1;31m[✗] %s\033[0m\n' "$*"; }
+info() { printf '     \033[1;37m%s\033[0m\n\n' "$*"; }
+
 # --- helpers ---
 
 die() {
-    echo "ERROR: $*" >&2
+    err "$*"
     exit 1
 }
 
@@ -32,19 +43,21 @@ need_root() {
     fi
 }
 
-require_linux() {
+# Detect the platform. Linux installs everything (binary + desktop entry +
+# icon); macOS installs the binary only, since it has no XDG desktop entries
+# or hicolor icon theme. Other platforms are unsupported.
+IS_MACOS=0
+detect_os() {
     local os
     os="$(uname -s 2>/dev/null || echo unknown)"
     case "$os" in
         Linux) ;;
-        Darwin)
-            die "macOS is not supported yet — this installer only targets Linux. To run Kalk on macOS, build it manually with: cargo build --release"
-            ;;
+        Darwin) IS_MACOS=1 ;;
         MINGW*|MSYS*|CYGWIN*|Windows_NT)
-            die "Windows is not supported yet — this installer only targets Linux. To run Kalk on Windows, build it manually with: cargo build --release"
+            die "Windows is not supported — this installer only targets Linux and macOS. Build manually with: cargo build --release"
             ;;
         *)
-            die "Unsupported OS '${os}' — this installer only targets Linux."
+            die "Unsupported OS '${os}' — this installer only targets Linux and macOS."
             ;;
     esac
 }
@@ -55,7 +68,7 @@ install_binary() {
     local bindir="${DESTDIR}${PREFIX}/bin"
     mkdir -p "${bindir}"
     install -m755 "${BINARY}" "${bindir}/${APP_NAME}"
-    echo "  -> ${bindir}/${APP_NAME}"
+    info "${bindir}/${APP_NAME}"
 }
 
 install_desktop() {
@@ -64,30 +77,32 @@ install_desktop() {
     sed "s|^Exec=.*|Exec=${PREFIX}/bin/${APP_NAME}|" "${DESKTOP_FILE}" \
         > "${appdir}/${APP_NAME}.desktop"
     chmod 644 "${appdir}/${APP_NAME}.desktop"
-    echo "  -> ${appdir}/${APP_NAME}.desktop"
+    info "${appdir}/${APP_NAME}.desktop"
 }
 
 install_icon() {
     local icondir="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
     mkdir -p "${icondir}"
     install -m644 "${ICON_FILE}" "${icondir}/${APP_NAME}.svg"
-    echo "  -> ${icondir}/${APP_NAME}.svg"
+    info "${icondir}/${APP_NAME}.svg"
 }
 
 # --- uninstall ---
 
 uninstall_files() {
     local bindir="${DESTDIR}${PREFIX}/bin"
-    local appdir="${DESTDIR}${PREFIX}/share/applications"
-    local icondir="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
-
     rm -f "${bindir}/${APP_NAME}"
-    rm -f "${appdir}/${APP_NAME}.desktop"
-    rm -f "${icondir}/${APP_NAME}.svg"
+    info "Removed ${bindir}/${APP_NAME}"
 
-    echo "  Removed ${bindir}/${APP_NAME}"
-    echo "  Removed ${appdir}/${APP_NAME}.desktop"
-    echo "  Removed ${icondir}/${APP_NAME}.svg"
+    # Desktop entry and icon only exist on Linux installs.
+    if [ "$IS_MACOS" -eq 0 ]; then
+        local appdir="${DESTDIR}${PREFIX}/share/applications"
+        local icondir="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
+        rm -f "${appdir}/${APP_NAME}.desktop"
+        rm -f "${icondir}/${APP_NAME}.svg"
+        info "Removed ${appdir}/${APP_NAME}.desktop"
+        info "Removed ${icondir}/${APP_NAME}.svg"
+    fi
 }
 
 # --- main ---
@@ -99,7 +114,7 @@ if [ "${1:-}" = "--user" ]; then
     shift
 fi
 
-require_linux
+detect_os
 
 if [ "${1:-}" = "--uninstall" ]; then
     if [ "$IS_USER" -eq 1 ]; then
@@ -108,20 +123,24 @@ if [ "${1:-}" = "--uninstall" ]; then
     else
         need_root
     fi
-    echo "Uninstalling Kalk from ${PREFIX}..."
+    log "Uninstalling Kalk from ${PREFIX}..."
     uninstall_files
-    echo "Done. User data (~/.local/share/kalk/) was left untouched."
+    info "User data (~/.local/share/kalk/) was left untouched."
     exit 0
 fi
 
 if [ "$IS_USER" -eq 1 ]; then
     PREFIX="${HOME}/.local"
     DESTDIR=""
-    echo "Installing Kalk for current user (${PREFIX})..."
+    log "Installing Kalk for current user (${PREFIX})..."
 elif [ "$(id -u)" -eq 0 ]; then
-    echo "Installing Kalk system-wide (${PREFIX})..."
+    log "Installing Kalk system-wide (${PREFIX})..."
 else
     need_root
+fi
+
+if [ "$IS_MACOS" -eq 1 ]; then
+    warn "macOS detected: only the binary will be installed (no desktop entry or icon)."
 fi
 
 # Build if binary doesn't exist or source is newer
@@ -133,19 +152,27 @@ elif [ -n "$(find src/ Cargo.toml Cargo.lock -newer "${BINARY}" 2>/dev/null)" ];
 fi
 
 if [ "$NEEDS_BUILD" -eq 1 ]; then
-    echo "Building release binary..."
+    log "Building release binary..."
     cargo build --release --locked
 fi
 
 install_binary
-install_desktop
-install_icon
+if [ "$IS_MACOS" -eq 0 ]; then
+    install_desktop
+    install_icon
+fi
 
-echo ""
-echo "Kalk installed successfully."
-echo "Run 'kalk' from your terminal, or find it in your application menu."
-if [ "$IS_USER" -eq 1 ]; then
-    echo "Uninstall with: ./install.sh --user --uninstall"
+log "Kalk installed successfully."
+if [ "$IS_MACOS" -eq 1 ]; then
+    info "Run 'kalk' from your terminal."
 else
-    echo "Uninstall with: sudo $(realpath "$0") --uninstall"
+    info "Run 'kalk' from your terminal, or find it in your application menu."
+fi
+
+# Portable absolute path to this script (macOS has no coreutils realpath).
+script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+if [ "$IS_USER" -eq 1 ]; then
+    info "Uninstall with: ./install.sh --user --uninstall"
+else
+    info "Uninstall with: sudo ${script_path} --uninstall"
 fi

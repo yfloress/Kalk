@@ -1,22 +1,32 @@
 # Installation Guide
 
-This guide covers how to build and install Kalk from source on **macOS**, **Fedora**, **Debian/Ubuntu**, and **Arch Linux**.
+Kalk is a pure-Rust terminal application. It has **no C dependencies** — you do
+not need `gcc`, `pkg-config`, or any `-dev` / `-devel` packages, only the Rust
+toolchain. It targets the Rust **2024 edition**, which requires **Rust 1.85 or
+newer**.
 
-Kalk is a pure terminal application with no system library dependencies beyond the Rust toolchain. It uses the Rust 2024 edition, which requires **Rust 1.85 or newer**.
+Supported platforms: **macOS** and **Linux** (Fedora, Debian/Ubuntu, Arch, and
+any other distribution with a recent Rust toolchain).
 
-> **Quick install (Linux):** clone the repo and run `sudo ./install.sh`. See [Desktop Integration](#desktop-integration-linux).
+> **TL;DR** — install Rust, then:
+> ```bash
+> git clone https://codeberg.org/Kyronix/Kalk.git
+> cd Kalk
+> sudo ./install.sh        # or: ./install.sh --user  (no sudo)
+> ```
 
 ---
 
 ## Table of Contents
 
 - [Requirements](#requirements)
-- [macOS](#macos)
-- [Fedora](#fedora)
-- [Debian / Ubuntu](#debian--ubuntu)
-- [Arch Linux](#arch-linux)
-- [Post-install](#post-install)
-- [Desktop Integration (Linux)](#desktop-integration-linux)
+- [Step 1 — Install Rust and Git](#step-1--install-rust-and-git)
+- [Step 2 — Get the source](#step-2--get-the-source)
+- [Step 3 — Build and install](#step-3--build-and-install)
+- [The install script](#the-install-script)
+- [Nerd Font (optional)](#nerd-font-optional)
+- [Running Kalk](#running-kalk)
+- [Data locations](#data-locations)
 - [Uninstall](#uninstall)
 
 ---
@@ -27,332 +37,233 @@ Kalk is a pure terminal application with no system library dependencies beyond t
 |-------------|---------|
 | **Rust** | >= 1.85 (edition 2024) |
 | **Git** | To clone the repository |
-| **Nerd Font** | Recommended for icons (can be disabled in Settings) |
-
-> Kalk has no C dependencies. All crates are pure Rust, so you do not need `gcc`, `pkg-config`, or any `-dev` / `-devel` packages.
+| **Nerd Font** | Optional — for icons (can be disabled in Settings) |
 
 ---
 
-## macOS
+## Step 1 — Install Rust and Git
 
-### 1. Install Rust
+Pick your platform. Afterwards, verify the toolchain on every platform with:
 
-If you don't have Rust installed, use [rustup](https://rustup.rs/):
+```bash
+rustc --version   # must report 1.85 or newer
+```
+
+### macOS
+
+Install Rust with [rustup](https://rustup.rs/):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-If you already have Rust, make sure it's up to date:
-
-```bash
-rustup update stable
-```
-
-Verify the version (must be >= 1.85):
-
-```bash
-rustc --version
-```
-
-### 2. Install Git (if needed)
-
-Git comes with the Xcode Command Line Tools:
+Git ships with the Xcode Command Line Tools:
 
 ```bash
 xcode-select --install
 ```
 
-### 3. Clone and build
-
-```bash
-git clone https://codeberg.org/Kyronix/Kalk.git
-cd Kalk
-cargo build --release
-```
-
-### 4. Install
-
-Use the provided install script (recommended):
-
-```bash
-sudo ./install.sh
-```
-
-Or install just the binary manually:
-
-```bash
-sudo cp target/release/kalk /usr/local/bin/
-```
-
-### 5. (Optional) Install a Nerd Font
-
-Download a patched font from [nerdfonts.com](https://www.nerdfonts.com/) and install it through Font Book, or use Homebrew:
-
-```bash
-brew install --cask font-jetbrains-mono-nerd-font
-```
-
-Then set your terminal emulator to use the installed Nerd Font.
-
-See [Post-install](#post-install) for usage and data paths.
-
----
-
-## Fedora
-
-### 1. Install Rust
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-```
-
-Or if you prefer the system package (check that it provides Rust >= 1.85):
-
-```bash
-sudo dnf install rust cargo
-```
-
-Verify the version:
-
-```bash
-rustc --version
-```
-
-### 2. Install Git
+### Fedora
 
 ```bash
 sudo dnf install git
-```
-
-### 3. Clone and build
-
-```bash
-git clone https://codeberg.org/Kyronix/Kalk.git
-cd Kalk
-cargo build --release
-```
-
-### 4. Install
-
-Use the provided install script (recommended):
-
-```bash
-sudo ./install.sh
-```
-
-Or install just the binary manually:
-
-```bash
-sudo cp target/release/kalk /usr/local/bin/
-```
-
-### 5. (Optional) Install a Nerd Font
-
-```bash
-mkdir -p ~/.local/share/fonts
-cd ~/.local/share/fonts
-curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz
-tar -xf JetBrainsMono.tar.xz
-fc-cache -fv
-```
-
-Then configure your terminal emulator to use the installed Nerd Font.
-
-See [Post-install](#post-install) for usage and data paths.
-
----
-
-## Debian / Ubuntu
-
-### 1. Install Rust
-
-The Rust packages in Debian/Ubuntu repositories are often outdated. Use [rustup](https://rustup.rs/) to get Rust >= 1.85:
-
-```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 ```
 
-Verify the version:
+The distro package (`sudo dnf install rust cargo`) also works **if** it provides
+Rust >= 1.85; otherwise use rustup as shown above.
+
+### Debian / Ubuntu
+
+The Rust in Debian/Ubuntu repositories is often too old, so use
+[rustup](https://rustup.rs/):
 
 ```bash
-rustc --version
+sudo apt update && sudo apt install git
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
 ```
 
-### 2. Install Git
+### Arch Linux
 
-```bash
-sudo apt update
-sudo apt install git
-```
-
-### 3. Clone and build
-
-```bash
-git clone https://codeberg.org/Kyronix/Kalk.git
-cd Kalk
-cargo build --release
-```
-
-### 4. Install
-
-Use the provided install script (recommended):
-
-```bash
-sudo ./install.sh
-```
-
-Or install just the binary manually:
-
-```bash
-sudo cp target/release/kalk /usr/local/bin/
-```
-
-### 5. (Optional) Install a Nerd Font
-
-```bash
-mkdir -p ~/.local/share/fonts
-cd ~/.local/share/fonts
-curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz
-tar -xf JetBrainsMono.tar.xz
-fc-cache -fv
-```
-
-Then configure your terminal emulator to use the installed Nerd Font.
-
-See [Post-install](#post-install) for usage and data paths.
-
----
-
-## Arch Linux
-
-### 1. Install Rust and Git
+Arch ships a current Rust:
 
 ```bash
 sudo pacman -S rust git
 ```
 
-Arch rolling releases typically ship Rust >= 1.85. Verify:
+Or manage toolchains with rustup instead: `sudo pacman -S rustup && rustup default stable`.
 
-```bash
-rustc --version
-```
+---
 
-Alternatively, use `rustup` for managing multiple toolchains:
-
-```bash
-sudo pacman -S rustup
-rustup default stable
-```
-
-### 2. Clone and build
+## Step 2 — Get the source
 
 ```bash
 git clone https://codeberg.org/Kyronix/Kalk.git
 cd Kalk
+```
+
+---
+
+## Step 3 — Build and install
+
+The provided `install.sh` is the recommended path — **it builds the release
+binary for you** (running `cargo build --release` only when the binary is
+missing or the sources changed) and then installs it.
+
+```bash
+sudo ./install.sh          # system-wide install to /usr/local
+./install.sh --user        # user-local install to ~/.local (no sudo)
+```
+
+What gets installed depends on the platform:
+
+| Platform | Installs |
+|----------|----------|
+| **Linux** | Binary **+** desktop entry **+** application icon |
+| **macOS** | Binary **only** (desktop entries and icon themes are Linux-only and are skipped automatically) |
+
+### Which one on macOS?
+
+- **`sudo ./install.sh`** installs to `/usr/local/bin/kalk`, which is already on
+  the default macOS `PATH`, so `kalk` runs immediately. This is the simplest
+  choice. (macOS admin users have `sudo`.)
+- **`./install.sh --user`** installs to `~/.local/bin/kalk` without `sudo`, but
+  `~/.local/bin` is **not** on the default macOS `PATH`. Add it once:
+  ```bash
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+  ```
+
+On Linux, `--user` is usually the most convenient — `~/.local/bin` is typically
+already on the `PATH`, so no `sudo` and no extra setup is needed.
+
+### Manual install (any platform)
+
+If you prefer not to use the script, build and copy the binary yourself:
+
+```bash
 cargo build --release
-```
-
-### 3. Install
-
-Use the provided install script (recommended):
-
-```bash
-sudo ./install.sh
-```
-
-Or install just the binary manually:
-
-```bash
 sudo cp target/release/kalk /usr/local/bin/
 ```
 
-### 4. (Optional) Install a Nerd Font
+---
+
+## The install script
+
+```bash
+sudo ./install.sh                 # system-wide   (PREFIX=/usr/local)
+./install.sh --user               # user-local    (PREFIX=~/.local)
+sudo ./install.sh --uninstall     # remove a system-wide install
+./install.sh --user --uninstall   # remove a user-local install
+PREFIX=/usr sudo ./install.sh     # custom prefix
+```
+
+The script:
+
+- Refuses to run on unsupported platforms (anything other than Linux/macOS).
+- On macOS, prints a notice that only the binary is installed.
+- Builds the binary with `cargo build --release --locked` if needed.
+- Never touches your data directory — see [Uninstall](#uninstall).
+
+Artifacts installed on **Linux**:
+
+| Artifact | System path (`sudo`) | User path (`--user`) |
+|----------|----------------------|----------------------|
+| Binary | `/usr/local/bin/kalk` | `~/.local/bin/kalk` |
+| Desktop entry | `/usr/local/share/applications/kalk.desktop` | `~/.local/share/applications/kalk.desktop` |
+| Icon | `/usr/local/share/icons/hicolor/scalable/apps/kalk.svg` | `~/.local/share/icons/hicolor/scalable/apps/kalk.svg` |
+
+The desktop entry uses `Terminal=true`, so launching Kalk from your application
+menu opens a terminal, runs the app, and closes on exit.
+
+**Custom icon:** replace `packaging/linux/kalk.svg` with your own SVG (same file
+name) before running the script.
+
+---
+
+## Nerd Font (optional)
+
+Kalk uses Nerd Font glyphs for icons. They can be turned off in Settings, but a
+patched font makes the UI look its best.
+
+**macOS** — via Homebrew (or install any patched font through Font Book):
+
+```bash
+brew install --cask font-jetbrains-mono-nerd-font
+```
+
+**Fedora / Debian / Ubuntu** — download a patched font and refresh the cache:
+
+```bash
+mkdir -p ~/.local/share/fonts && cd ~/.local/share/fonts
+curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz
+tar -xf JetBrainsMono.tar.xz
+fc-cache -fv
+```
+
+**Arch Linux**:
 
 ```bash
 sudo pacman -S ttf-jetbrains-mono-nerd
 ```
 
-Then configure your terminal emulator to use the installed Nerd Font.
-
-See [Post-install](#post-install) for usage and data paths.
+Then set your terminal emulator to use the installed Nerd Font.
 
 ---
 
-## Post-install
+## Running Kalk
 
-Once installed, simply run:
+After installing:
 
 ```bash
 kalk
 ```
 
-You can also run it directly from the project directory without installing:
+Or run it straight from the project directory without installing:
 
 ```bash
 cargo run --release
 ```
 
-Kalk stores its data in the XDG data directory:
-
-| File | Path | Purpose |
-|------|------|---------|
-| `data.json` | `~/.local/share/kalk/` | Course data |
-| `config.json` | `~/.local/share/kalk/` | Settings (language, icons) |
-| `user_templates.json` | `~/.local/share/kalk/` | Custom course templates |
-
-On macOS, the path is `~/Library/Application Support/kalk/`.
-
-Press `?` inside any editor popup for contextual help, or see the [README](../README.md) for the full keybindings reference.
+Press `?` inside any editor popup for contextual help, or see the
+[README](../README.md) for the full keybindings reference.
 
 ---
 
-## Desktop Integration (Linux)
+## Data locations
 
-The `install.sh` script handles everything in one step and is the recommended way to install:
+Kalk stores everything in your platform's standard data directory:
 
-```bash
-# System-wide (requires sudo)
-sudo ./install.sh
+| Platform | Directory |
+|----------|-----------|
+| Linux | `~/.local/share/kalk/` |
+| macOS | `~/Library/Application Support/kalk/` |
 
-# User-local (no sudo needed)
-./install.sh --user
-```
+That directory holds:
 
-This installs three things:
-
-| Artifact | System path | User path |
-|----------|-------------|-----------|
-| Binary | `/usr/local/bin/kalk` | `~/.local/bin/kalk` |
-| Desktop entry | `/usr/local/share/applications/kalk.desktop` | `~/.local/share/applications/kalk.desktop` |
-| Icon | `/usr/local/share/icons/hicolor/scalable/apps/kalk.svg` | `~/.local/share/icons/hicolor/scalable/apps/kalk.svg` |
-
-The desktop entry (`kalk.desktop`) uses `Terminal=true`, so clicking Kalk from your application menu will automatically open a terminal, run the app, and close when you exit.
-
-**To customize the icon:** replace `packaging/linux/kalk.svg` with your own SVG before running `install.sh`. The file must be named `kalk.svg`.
-
-**To uninstall** what `install.sh` installed:
-
-```bash
-sudo ./install.sh --uninstall
-```
-
-User data at `~/.local/share/kalk/` is never touched by the install script — you can delete it manually if desired.
+| File | Purpose |
+|------|---------|
+| `data.json` | Course data |
+| `config.json` | Settings (language, icons) |
+| `user_templates.json` | Custom course templates |
 
 ---
 
 ## Uninstall
 
-Remove the binary and (optionally) your data:
+Use the script to remove what it installed (binary, and on Linux the desktop
+entry and icon):
 
 ```bash
-# Remove the binary
-sudo rm /usr/local/bin/kalk
+sudo ./install.sh --uninstall      # system-wide
+./install.sh --user --uninstall    # user-local
+```
 
-# Remove all data (optional — this deletes your courses and settings)
-rm -rf ~/.local/share/kalk       # Linux
-rm -rf ~/Library/Application\ Support/kalk  # macOS
+Your data directory is **never** removed by the script. To delete it manually:
+
+```bash
+rm -rf ~/.local/share/kalk                       # Linux
+rm -rf ~/Library/Application\ Support/kalk        # macOS
 ```
