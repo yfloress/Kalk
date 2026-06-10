@@ -173,15 +173,18 @@ Artifacts installed on **Linux**:
 |----------|----------------------|----------------------|
 | Binary | `/usr/local/bin/kalk` | `~/.local/bin/kalk` |
 | Desktop entry | `/usr/local/share/applications/kalk.desktop` | `~/.local/share/applications/kalk.desktop` |
-| Icon | `/usr/local/share/pixmaps/kalk.png` | `~/.local/share/pixmaps/kalk.png` |
+| Icon (SVG) | `/usr/local/share/icons/hicolor/scalable/apps/kalk.svg` | `~/.local/share/icons/hicolor/scalable/apps/kalk.svg` |
+| Icon (48x48) | `/usr/local/share/icons/hicolor/48x48/apps/kalk.png` | `~/.local/share/icons/hicolor/48x48/apps/kalk.png` |
+| Icon (256x256) | `/usr/local/share/icons/hicolor/256x256/apps/kalk.png` | `~/.local/share/icons/hicolor/256x256/apps/kalk.png` |
 
 The desktop entry uses `Terminal=true`, so launching Kalk from your application
 menu opens a terminal, runs the app, and closes on exit. The installer also
 refreshes the icon cache and desktop database so the entry appears without a
 re-login.
 
-**Custom icon:** replace `packaging/linux/kalk.png` with your own PNG (same file
-name) before running the script.
+**Custom icon:** replace the SVG (`packaging/linux/kalk.svg`) and the PNG variants
+(`packaging/linux/kalk_48.png`, `kalk_256.png`) with your own files (same names)
+before running the script.
 
 ---
 

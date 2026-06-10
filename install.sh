@@ -22,7 +22,9 @@ DESTDIR="${DESTDIR:-}"
 APP_NAME="kalk"
 BINARY="target/release/${APP_NAME}"
 DESKTOP_FILE="packaging/linux/${APP_NAME}.desktop"
-ICON_FILE="packaging/linux/${APP_NAME}.png"
+ICON_SVG="packaging/linux/${APP_NAME}.svg"
+ICON_PNG48="packaging/linux/${APP_NAME}_48.png"
+ICON_PNG256="packaging/linux/${APP_NAME}_256.png"
 
 # --- pretty output ---
 
@@ -82,20 +84,26 @@ install_desktop() {
 }
 
 install_icon() {
-    # Install the raster PNG to the legacy pixmaps directory. The previous
-    # "icon.svg" actually embedded a WebP image, which the GTK/librsvg icon
-    # loader cannot decode — so no icon ever showed. pixmaps has no size
-    # requirement and is searched by name, so Icon=kalk resolves to this PNG
-    # across GNOME/KDE/XFCE without needing a perfectly-sized hicolor set.
-    local pixmaps="${DESTDIR}${PREFIX}/share/pixmaps"
-    mkdir -p "${pixmaps}"
-    install -m644 "${ICON_FILE}" "${pixmaps}/${APP_NAME}.png"
-    info "${pixmaps}/${APP_NAME}.png"
+    # Install the SVG icon to the hicolor scalable directory. This SVG contains
+    # an embedded PNG (data:image/png), not WebP, so librsvg/GTK can render it
+    # as the application icon.
+    local scalable="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
+    mkdir -p "${scalable}"
+    install -m644 "${ICON_SVG}" "${scalable}/${APP_NAME}.svg"
+    info "${scalable}/${APP_NAME}.svg"
 
-    # Remove any previously-installed broken SVG: the themed scalable dir is
-    # searched before pixmaps, so a leftover unrenderable SVG would shadow the
-    # PNG and still show no icon.
-    rm -f "${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps/${APP_NAME}.svg"
+    # Install pre-sized PNGs for desktop environments that prefer raster
+    # icons or don't use librsvg. The hicolor theme searches sized dirs
+    # before scalable, but having both ensures maximum compatibility.
+    local pngdir48="${DESTDIR}${PREFIX}/share/icons/hicolor/48x48/apps"
+    local pngdir256="${DESTDIR}${PREFIX}/share/icons/hicolor/256x256/apps"
+    mkdir -p "${pngdir48}" "${pngdir256}"
+    install -m644 "${ICON_PNG48}" "${pngdir48}/${APP_NAME}.png"
+    install -m644 "${ICON_PNG256}" "${pngdir256}/${APP_NAME}.png"
+
+    # Clean up any leftover files from previous installs (pixmaps PNG,
+    # old broken SVG) so stale entries don't shadow the proper icon.
+    rm -f "${DESTDIR}${PREFIX}/share/pixmaps/${APP_NAME}.png"
 }
 
 # Refresh the icon cache and desktop database so the entry and icon appear
@@ -122,13 +130,17 @@ uninstall_files() {
     # Desktop entry and icon only exist on Linux installs.
     if [ "$IS_MACOS" -eq 0 ]; then
         local appdir="${DESTDIR}${PREFIX}/share/applications"
-        local pixmaps="${DESTDIR}${PREFIX}/share/pixmaps"
         local scalable="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
+        local pngdir48="${DESTDIR}${PREFIX}/share/icons/hicolor/48x48/apps"
+        local pngdir256="${DESTDIR}${PREFIX}/share/icons/hicolor/256x256/apps"
+        local pixmaps="${DESTDIR}${PREFIX}/share/pixmaps"
         rm -f "${appdir}/${APP_NAME}.desktop"
+        rm -f "${scalable}/${APP_NAME}.svg"
+        rm -f "${pngdir48}/${APP_NAME}.png"
+        rm -f "${pngdir256}/${APP_NAME}.png"
         rm -f "${pixmaps}/${APP_NAME}.png"
-        rm -f "${scalable}/${APP_NAME}.svg" # legacy: clean up the old broken SVG
         info "Removed ${appdir}/${APP_NAME}.desktop"
-        info "Removed ${pixmaps}/${APP_NAME}.png"
+        info "Removed ${scalable}/${APP_NAME}.svg"
         update_caches
     fi
 }
