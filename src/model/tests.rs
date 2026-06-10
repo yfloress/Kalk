@@ -559,6 +559,103 @@ fn test_needed_grade_with_drop_lowest() {
     assert!(result.value.unwrap() < 35.0); // Should be around 29
 }
 
+#[test]
+fn test_needed_grade_respects_binding_category_minimum() {
+    // Scenario from the field: a "Tipo 1" category whose average must reach 50
+    // or the whole course is failed (FailCourse), while a high-scoring "Tipo 2"
+    // already covers the weighted total. The needed grade must reflect the
+    // category minimum, not just the (already satisfied) weighted total.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut tipo1 = Category::new("Tipo 1".to_string(), 50.0);
+    tipo1.rules.minimum_average = Some(50.0);
+    tipo1.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    tipo1
+        .evaluations
+        .push(Evaluation::with_grade("E1".to_string(), 40.0));
+    tipo1
+        .evaluations
+        .push(Evaluation::with_grade("E2".to_string(), 45.0));
+    tipo1.evaluations.push(Evaluation::new("E3".to_string()));
+    course.categories.push(tipo1);
+
+    let mut tipo2 = Category::new("Tipo 2".to_string(), 50.0);
+    tipo2
+        .evaluations
+        .push(Evaluation::with_grade("G1".to_string(), 100.0));
+    tipo2
+        .evaluations
+        .push(Evaluation::with_grade("G2".to_string(), 100.0));
+    course.categories.push(tipo2);
+
+    // The weighted total alone is already satisfied, but the category minimum
+    // requires (40 + 45 + X) / 3 >= 50  =>  X >= 65.
+    let result = course.needed_grade_for_evaluation(0, 2, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    let value = result.value.unwrap();
+    assert!(
+        (64.0..=66.0).contains(&value),
+        "expected needed grade around 65, got {value}"
+    );
+}
+
+#[test]
+fn test_needed_grade_binding_minimum_weighted_evaluations() {
+    // Same idea but with per-evaluation weights inside the category.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut tipo1 = Category::new("Tipo 1".to_string(), 50.0);
+    tipo1.rules.weighted_evaluations = true;
+    tipo1.rules.minimum_average = Some(50.0);
+    tipo1.rules.on_minimum_not_met = MinimumNotMetAction::FailCourse;
+    tipo1
+        .evaluations
+        .push(Evaluation::with_weight("E1".to_string(), 30.0, 50.0));
+    let mut e2 = Evaluation::new("E2".to_string());
+    e2.weight = Some(50.0);
+    tipo1.evaluations.push(e2);
+    course.categories.push(tipo1);
+
+    let mut tipo2 = Category::new("Tipo 2".to_string(), 50.0);
+    tipo2
+        .evaluations
+        .push(Evaluation::with_grade("G1".to_string(), 100.0));
+    course.categories.push(tipo2);
+
+    // Category min: 30*0.5 + X*0.5 >= 50  =>  X >= 70.
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    let value = result.value.unwrap();
+    assert!(
+        (69.0..=71.0).contains(&value),
+        "expected needed grade around 70, got {value}"
+    );
+}
+
+#[test]
+fn test_needed_grade_minimum_above_passing_not_binding() {
+    // FinalEqualsAverage with a minimum ABOVE the passing grade is not a pass
+    // blocker (the capped average could still pass), so it must not inflate the
+    // needed grade. Locks the `min <= passing_grade` gate.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_average = Some(70.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 60.0));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    // Weighted need is (54.5 - 30) / 0.5 = 49; the 70 minimum must NOT raise it.
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    assert!(
+        result.value.unwrap() < 55.0,
+        "minimum above passing should not inflate the needed grade"
+    );
+}
+
 // =========================================================================
 // CategoryRules default tests
 // =========================================================================

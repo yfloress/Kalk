@@ -278,6 +278,41 @@ impl Category {
         (grades, effective_count)
     }
 
+    /// Grade needed in evaluation `eval_idx` for this category's own average to
+    /// reach `target`, mirroring the averaging mode (equal-weight or weighted
+    /// evaluations) and `drop_lowest` handling used by [`Self::average_grade`].
+    ///
+    /// Other ungraded evaluations count as 0. Returns `None` when the
+    /// evaluation cannot move the average (zero individual weight, or no
+    /// effective evaluations remain). The result is not clamped — callers
+    /// decide whether a value above [`MAX_GRADE`](super::MAX_GRADE) is
+    /// unreachable.
+    pub(crate) fn needed_in_eval_for_average(&self, eval_idx: usize, target: f64) -> Option<f64> {
+        if self.rules.weighted_evaluations {
+            let eval_w = self.evaluations.get(eval_idx)?.weight.unwrap_or(0.0) / 100.0;
+            if eval_w.abs() < f64::EPSILON {
+                return None;
+            }
+            // Contribution already locked in by every other evaluation.
+            let other: f64 = self
+                .evaluations
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != eval_idx)
+                .map(|(_, e)| e.grade.unwrap_or(0.0) * (e.weight.unwrap_or(0.0) / 100.0))
+                .sum();
+            Some((target - other) / eval_w)
+        } else {
+            let (other_grades, effective_count) = self.effective_grades_excluding(eval_idx);
+            if effective_count == 0 {
+                return None;
+            }
+            // avg = (sum(others) + X) / count  >=  target
+            let other_sum: f64 = other_grades.iter().sum();
+            Some(target * effective_count as f64 - other_sum)
+        }
+    }
+
     /// Calculate the average grade of all evaluations in this category,
     /// respecting rules (drop_lowest, averaging_method, round_before_weighting,
     /// weighted_evaluations).

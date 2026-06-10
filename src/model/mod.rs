@@ -625,10 +625,39 @@ impl Course {
     // Needed Grade
     // =========================================================================
 
+    /// The category's `minimum_average` requirement, but only when failing it
+    /// actually blocks passing the course — in which case the needed-grade
+    /// solver must also satisfy it, not just the weighted course total.
+    ///
+    /// Binding cases (mirroring [`Self::compute_grade`]):
+    /// - `FailCourse`: breaking it caps the course grade at 0. Always binding.
+    /// - `FinalEqualsAverage`: the final grade becomes the category average, so
+    ///   it only blocks passing when the minimum sits at or below the passing
+    ///   grade (otherwise the capped average could itself still pass).
+    /// - `RequiresGlobal`: only binding when no global exam is configured, since
+    ///   `compute_grade` then degrades it to the `FinalEqualsAverage` failure.
+    fn binding_category_minimum(&self, category: &Category) -> Option<f64> {
+        let min = category.rules.minimum_average?;
+        let binds = match category.rules.on_minimum_not_met {
+            MinimumNotMetAction::FailCourse => true,
+            MinimumNotMetAction::FinalEqualsAverage => min <= self.passing_grade,
+            MinimumNotMetAction::RequiresGlobal => {
+                self.global_policy == GlobalExamPolicy::None && min <= self.passing_grade
+            }
+        };
+        binds.then_some(min)
+    }
+
     /// Calculate the grade needed in a specific evaluation to pass the course.
     ///
     /// When `ignore_current_grade` is true, the current eval's grade is treated
     /// as 0 (used when editing to show what's needed regardless of existing grade).
+    ///
+    /// The result accounts for both the weighted course total *and* the
+    /// category's own `minimum_average` rule when that rule blocks passing
+    /// (see [`Self::binding_category_minimum`]): the needed grade is the larger
+    /// of the two, so a category whose minimum would fail the course is never
+    /// under-reported.
     pub fn needed_grade_for_evaluation(
         &self,
         category_idx: usize,
@@ -656,15 +685,22 @@ impl Course {
             };
         }
 
-        // Categories with zero weight cannot affect the course outcome
-        if category.weight.abs() < f64::EPSILON {
-            return NeededGrade::failure(None);
-        }
-
         // For geometric mean, the needed-grade calculation is different and complex.
         // For now, only support arithmetic mean in needed-grade calculation.
         if category.rules.averaging_method == AveragingMethod::Geometric {
             return NeededGrade::info();
+        }
+
+        // A binding `minimum_average` rule (one whose failure blocks passing)
+        // raises the needed grade beyond what the weighted total alone requires.
+        let min_target = self.binding_category_minimum(category);
+
+        // Categories with zero weight don't move the weighted total, but a
+        // binding minimum can still force a needed grade (e.g. a 0%-weight
+        // hurdle category that fails the course on its own).
+        if category.weight.abs() < f64::EPSILON {
+            let needed = Self::apply_min_floor(category, eval_idx, f64::NEG_INFINITY, min_target);
+            return Self::classify_needed(needed);
         }
 
         // Weighted evaluations mode: each eval has its own weight fraction
@@ -707,18 +743,8 @@ impl Course {
 
             let effective_passing = self.passing_grade - 0.5;
             let needed = (effective_passing - total_contribution) / final_eval_weight;
-
-            if !needed.is_finite() {
-                return NeededGrade::failure(None);
-            }
-
-            return if needed <= 0.0 {
-                NeededGrade::success(0.0)
-            } else if needed > MAX_GRADE {
-                NeededGrade::failure(Some(needed))
-            } else {
-                NeededGrade::warning(needed)
-            };
+            let needed = Self::apply_min_floor(category, eval_idx, needed, min_target);
+            return Self::classify_needed(needed);
         }
 
         // Equal-weight mode (original behavior)
@@ -753,12 +779,33 @@ impl Course {
         // Because 0.5+ rounds up (54.5 rounds to 55)
         let effective_passing = self.passing_grade - 0.5;
         let needed = (effective_passing - total_contribution) / eval_weight;
+        let needed = Self::apply_min_floor(category, eval_idx, needed, min_target);
+        Self::classify_needed(needed)
+    }
 
-        if !needed.is_finite() {
-            return NeededGrade::failure(None);
+    /// Raise `needed` so it also satisfies a binding category `minimum_average`.
+    /// `min_target` is the binding minimum (if any); the floor is the grade this
+    /// evaluation needs for the category average to reach it. Returns `needed`
+    /// unchanged when there is no binding minimum or the eval can't move it.
+    fn apply_min_floor(
+        category: &Category,
+        eval_idx: usize,
+        needed: f64,
+        min_target: Option<f64>,
+    ) -> f64 {
+        match min_target.and_then(|min| category.needed_in_eval_for_average(eval_idx, min)) {
+            Some(floor) => needed.max(floor),
+            None => needed,
         }
+    }
 
-        if needed <= 0.0 {
+    /// Turn a raw "needed grade" value into a [`NeededGrade`] verdict:
+    /// non-finite or unreachable (> [`MAX_GRADE`]) → failure, already satisfied
+    /// (<= 0) → success, otherwise a warning carrying the value.
+    fn classify_needed(needed: f64) -> NeededGrade {
+        if !needed.is_finite() {
+            NeededGrade::failure(None)
+        } else if needed <= 0.0 {
             NeededGrade::success(0.0)
         } else if needed > MAX_GRADE {
             NeededGrade::failure(Some(needed))
