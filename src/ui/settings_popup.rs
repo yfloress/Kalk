@@ -63,7 +63,6 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
             Constraint::Length(1), // padding
             Constraint::Length(1), // setting 0: nerd fonts
             Constraint::Length(1), // setting 1: language
-            Constraint::Length(1), // setting 2: compact courses
             Constraint::Length(1), // separator
             Constraint::Length(2), // description of selected setting
             Constraint::Min(0),    // spacer
@@ -98,20 +97,6 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
             value: app.language.display_name().to_string(),
             value_color: t.status_info,
         },
-        SettingRow {
-            label: m.settings_compact_courses,
-            value: if app.compact_courses {
-                m.enabled
-            } else {
-                m.disabled
-            }
-            .to_string(),
-            value_color: if app.compact_courses {
-                t.status_pass
-            } else {
-                t.text_muted
-            },
-        },
     ];
 
     for (i, row) in rows.iter().enumerate() {
@@ -133,7 +118,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
                 Style::default().fg(row.value_color),
             ),
         ]);
-        // chunks[1], chunks[2], chunks[3] for the 3 settings
+        // chunks[1], chunks[2] for the 2 settings
         frame.render_widget(Paragraph::new(line), chunks[1 + i]);
     }
 
@@ -142,13 +127,12 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
         "  ──────────────────────────────────────────────",
         Style::default().fg(t.popup_separator),
     )));
-    frame.render_widget(sep, chunks[4]);
+    frame.render_widget(sep, chunks[3]);
 
     // --- Description of selected setting ---
     let desc_text = match app.selected_setting {
         0 => m.settings_nerd_fonts_desc,
         1 => app.language.display_name(),
-        2 => m.settings_compact_courses_desc,
         _ => "",
     };
     let desc = Paragraph::new(Line::from(Span::styled(
@@ -156,7 +140,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
         Style::default().fg(t.text_secondary),
     )))
     .wrap(Wrap { trim: true });
-    frame.render_widget(desc, chunks[5]);
+    frame.render_widget(desc, chunks[4]);
 
     // --- Bottom hint ---
     let hint = Line::from(vec![
@@ -191,5 +175,5 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
             Style::default().fg(t.footer_desc),
         ),
     ]);
-    frame.render_widget(Paragraph::new(hint), chunks[7]);
+    frame.render_widget(Paragraph::new(hint), chunks[6]);
 }

@@ -144,7 +144,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
             };
             (format_needed_grade(&needed, m), color)
         } else {
-            let text = format_course_status(course, m);
+            let text = format_course_status(course, m, app.use_nerd_fonts);
             let color = match course.current_grade() {
                 Some(g) if course.is_passing_grade(g) => t.status_pass,
                 Some(_) => t.status_fail,

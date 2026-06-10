@@ -775,7 +775,6 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
         row("y / p", &copy_paste),
         blank(),
         group(m.help_group_view),
-        row("c", m.compact),
         row("S", m.settings),
         row("L", m.change_language),
         blank(),

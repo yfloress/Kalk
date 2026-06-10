@@ -64,10 +64,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .constraints([Constraint::Min(0), Constraint::Length(3)])
         .split(frame.area());
 
-    // Main area: 3-column layout for Course -> Category -> Evaluation hierarchy
-    // Compact mode triggers either by user toggle OR when the terminal is too
-    // narrow for the normal two-line courses layout to display without clipping.
-    let total_width = chunks[0].width;
+    // Main area: 3-column layout for Course -> Category -> Evaluation hierarchy.
+    // The courses panel always uses the compact single-line layout.
     let ic = icons(app.use_nerd_fonts);
     let m = app.messages();
 
@@ -79,93 +77,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
         .max()
         .unwrap_or(4);
 
-    // Calculate the exact width normal mode needs per course, then take the max.
-    // Line 1: highlight + "NAME [OK]"  (name + weight_status)
-    // Line 2: highlight + "  Actual: 100 (REPROBADO) [CatName]"
-    let normal_needed = {
-        let weight_status_max: u16 = app
-            .courses
-            .iter()
-            .map(|c| match c.validate_weights() {
-                WeightValidation::Valid => {
-                    // " [✓]"
-                    2 + ic.weight_ok.chars().count() as u16 + 1
-                }
-                WeightValidation::Under(w) | WeightValidation::Over(w) => {
-                    // " [!80%]"
-                    let digits = format!("{:.0}", w).len() as u16;
-                    2 + 1 + digits + 1 + 1 // " [" + icon + digits + "%" + "]"
-                }
-                WeightValidation::Empty => {
-                    // " [Sin categorias]"
-                    2 + m.no_categories.chars().count() as u16 + 1
-                }
-            })
-            .max()
-            .unwrap_or(4);
-
-        // Longest second line: "  Actual: 100 (REPROBADO) · 12/15"
-        // or "  Actual: 0 (REPROBADO) [CatName] · 0/5"
-        // The trailing " · X/Y" chip is appended when the course has any
-        // evaluations, so factor its width into the layout estimate.
-        let status_line_max: u16 = app
-            .courses
-            .iter()
-            .map(|c| {
-                let grade_result = c.compute_grade();
-                let has_rule_issues = grade_result.overridden_by.is_some()
-                    || grade_result.needs_global
-                    || !grade_result.failed_minimums.is_empty();
-                let graded: usize = c.categories.iter().map(|cat| cat.graded_count()).sum();
-                let total: usize = c.categories.iter().map(|cat| cat.evaluations.len()).sum();
-                let digits = |n: usize| -> u16 {
-                    if n == 0 {
-                        1
-                    } else {
-                        (n as f64).log10().floor() as u16 + 1
-                    }
-                };
-                // " · {graded}/{total}" = 3 + digits(graded) + 1 + digits(total)
-                let chip_w = if total > 0 {
-                    3 + digits(graded) + 1 + digits(total)
-                } else {
-                    0
-                };
-                if !c.has_evaluations() {
-                    // "  Sin evaluaciones"
-                    2 + m.no_evaluations.chars().count() as u16
-                } else {
-                    let rounded = Course::round_grade(grade_result.grade);
-                    let is_truly_passing =
-                        c.is_passing_grade(grade_result.grade) && !has_rule_issues;
-                    let label = if is_truly_passing { m.passed } else { m.failed };
-                    let base = if let Some(ref cat_name) = grade_result.overridden_by {
-                        // "  Actual: 0 (REPROBADO) [CatName]"
-                        format!("{}: {:.0} ({}) [{}]", m.current, rounded, label, cat_name)
-                    } else {
-                        format!("{}: {:.0} ({})", m.current, rounded, label)
-                    };
-                    2 + base.chars().count() as u16 + chip_w // "  " prefix + chip
-                }
-            })
-            .max()
-            .unwrap_or(10);
-
-        // Accent column (the coloured "\u{258E} " bar shown before every
-        // course) costs 2 extra columns on both lines.
-        let accent_w = 2u16;
-        let line1_w = highlight_len + accent_w + max_name_len + weight_status_max;
-        let line2_w = highlight_len + accent_w + status_line_max;
-        line1_w.max(line2_w) + 2 // +2 for borders
-    };
-
-    // Auto-compact when the normal layout would need more width than
-    // available, or when the terminal is very narrow overall.
-    let auto_compact = normal_needed > (total_width * 2 / 5) || total_width < 100;
-    let effective_compact = app.compact_courses || auto_compact;
-
-    // Minimum width = title text so it never gets clipped
-    // Title: " {icon}Courses (N) " + 2 border columns
+    // Minimum width = title text so it never gets clipped.
+    // Title: " {icon}Courses (N) " + 2 border columns.
     let title_width = {
         let count_digits = if app.courses.is_empty() {
             1
@@ -181,34 +94,21 @@ pub fn draw(frame: &mut Frame, app: &App) {
             + 2
     };
 
-    let courses_constraint = if effective_compact {
-        // Dynamic width: accent(2) + name + space + grade(3) + chip(6 max
-        // for " 99/99") + borders(2) + highlight + pad(1)
-        let needed = 2 + max_name_len + 1 + 3 + 6 + 2 + highlight_len + 1;
-        Constraint::Length(needed.max(title_width).clamp(12, 38))
-    } else {
-        // Dynamic width based on actual content, clamped to reasonable bounds
-        Constraint::Length(normal_needed.clamp(15, total_width / 2))
-    };
+    // Compact courses column: accent(2) + name + space + grade(3) + chip(6 max
+    // for " 99/99") + borders(2) + highlight + pad(1).
+    let needed = 2 + max_name_len + 1 + 3 + 6 + 2 + highlight_len + 1;
+    let courses_constraint = Constraint::Length(needed.max(title_width).clamp(12, 38));
 
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints(if effective_compact {
-            [
-                courses_constraint,
-                Constraint::Percentage(45),
-                Constraint::Min(0),
-            ]
-        } else {
-            [
-                courses_constraint,
-                Constraint::Min(0),
-                Constraint::Percentage(40),
-            ]
-        })
+        .constraints([
+            courses_constraint,
+            Constraint::Percentage(45),
+            Constraint::Min(0),
+        ])
         .split(chunks[0]);
 
-    draw_courses_panel(frame, app, main_chunks[0], effective_compact);
+    draw_courses_panel(frame, app, main_chunks[0]);
     draw_categories_panel(frame, app, main_chunks[1]);
     draw_evaluations_panel(frame, app, main_chunks[2]);
     draw_footer(frame, app, chunks[1]);
@@ -238,14 +138,12 @@ pub fn draw(frame: &mut Frame, app: &App) {
 // Panel Drawing
 // =============================================================================
 
-fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compact: bool) {
+fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
     let is_focused = app.focus == Focus::Courses;
     let border_style = focused_border_style(is_focused);
-
-    let compact = effective_compact;
 
     let items: Vec<ListItem> = app
         .courses
@@ -311,142 +209,32 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect, effective_compac
             let total_count: usize =
                 c.categories.iter().map(|cat| cat.evaluations.len()).sum();
 
-            if compact {
-                // Compact: single line — "NAME GRADE X/Y" with colour-coded
-                // grade and a muted progress chip.
-                let short_grade = if has_evals {
-                    // When global was taken, show the after-global grade
-                    let display_grade = if let Some(after) = grade_result.grade_after_global {
-                        after
-                    } else {
-                        grade_result.grade
-                    };
-                    let rounded = Course::round_grade(display_grade);
-                    format!(" {:.0}", rounded)
+            // Single line — "NAME GRADE X/Y" with colour-coded grade and a
+            // muted progress chip.
+            let short_grade = if has_evals {
+                // When global was taken, show the after-global grade
+                let display_grade = if let Some(after) = grade_result.grade_after_global {
+                    after
                 } else {
-                    " -".to_string()
+                    grade_result.grade
                 };
-                let mut spans = vec![
-                    accent,
-                    Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
-                    Span::styled(short_grade, Style::default().fg(true_color)),
-                ];
-                if total_count > 0 {
-                    spans.push(Span::styled(
-                        format!(" {}/{}", graded_count, total_count),
-                        Style::default().fg(t.text_muted),
-                    ));
-                }
-                ListItem::new(Line::from(spans))
+                let rounded = Course::round_grade(display_grade);
+                format!(" {:.0}", rounded)
             } else {
-                // Weight validation indicator (only in normal mode)
-                // When weights are valid but the course has academic issues
-                // (needs_global, rule overrides, failed minimums), show the
-                // academic status icon instead so the user is not misled.
-                let recoverable_global = grade_result.needs_global
-                    && !global_impossible
-                    && !global_taken_passing
-                    && !global_taken_failing;
-                let simply_failing = has_evals
-                    && !c.is_passing_grade(grade_result.grade)
-                    && !grade_result.needs_global;
-                let no_evals_yet = !has_evals;
-                let effectively_failed = global_taken_failing
-                    || global_impossible
-                    || simply_failing
-                    || (has_rule_issues && !recoverable_global && !global_taken_passing);
-
-                let weight_status = if global_taken_passing
-                    && matches!(c.validate_weights(), WeightValidation::Valid)
-                {
-                    Span::styled(
-                        format!(" [{}]", ic.weight_ok),
-                        Style::default().fg(t.status_pass),
-                    )
-                } else if recoverable_global
-                    && matches!(c.validate_weights(), WeightValidation::Valid)
-                {
-                    Span::styled(
-                        format!(" [{}]", ic.warning),
-                        Style::default().fg(t.status_override),
-                    )
-                } else if effectively_failed
-                    && matches!(c.validate_weights(), WeightValidation::Valid)
-                {
-                    Span::styled(
-                        format!(" [{}]", ic.failed.trim()),
-                        Style::default().fg(t.status_fail),
-                    )
-                } else if no_evals_yet && matches!(c.validate_weights(), WeightValidation::Valid) {
-                    Span::styled(
-                        format!(" [{}]", ic.weight_ok),
-                        Style::default().fg(t.text_muted),
-                    )
-                } else {
-                    match c.validate_weights() {
-                        WeightValidation::Valid => Span::styled(
-                            format!(" [{}]", ic.weight_ok),
-                            Style::default().fg(t.status_pass),
-                        ),
-                        WeightValidation::Under(w) => Span::styled(
-                            format!(" [{}{:.0}%]", ic.weight_warn, w),
-                            Style::default().fg(t.status_warn),
-                        ),
-                        WeightValidation::Over(w) => Span::styled(
-                            format!(" [{}{:.0}%]", ic.weight_error, w),
-                            Style::default().fg(t.status_fail),
-                        ),
-                        WeightValidation::Empty => Span::styled(
-                            format!(" [{}]", m.no_categories),
-                            Style::default().fg(t.text_muted),
-                        ),
-                    }
-                };
-
-                // Normal: two lines with full status info (rule-aware)
-                let status = if has_evals {
-                    if let Some(after) = grade_result.grade_after_global {
-                        // Global was taken — show the final (after-global) grade
-                        let rounded = Course::round_grade(after);
-                        let label = if c.is_passing_grade(after) {
-                            m.passed
-                        } else {
-                            m.failed
-                        };
-                        format!("{}: {:.0} ({})", m.current, rounded, label)
-                    } else {
-                        let rounded = Course::round_grade(grade_result.grade);
-                        let is_truly_passing =
-                            c.is_passing_grade(grade_result.grade) && !has_rule_issues;
-                        let label = if is_truly_passing { m.passed } else { m.failed };
-                        if let Some(ref cat_name) = grade_result.overridden_by {
-                            format!("{}: {:.0} ({}) [{}]", m.current, rounded, label, cat_name)
-                        } else {
-                            format!("{}: {:.0} ({})", m.current, rounded, label)
-                        }
-                    }
-                } else {
-                    m.no_evaluations.to_string()
-                };
-                let mut status_spans = vec![Span::styled(
-                    format!("    {}", status),
-                    Style::default().fg(true_color),
-                )];
-                if total_count > 0 {
-                    status_spans.push(Span::styled(
-                        format!(" \u{00b7} {}/{}", graded_count, total_count),
-                        Style::default().fg(t.text_muted),
-                    ));
-                }
-                ListItem::new(vec![
-                    Line::from(vec![
-                        accent,
-                        Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
-                        weight_status,
-                    ]),
-                    Line::from(status_spans),
-                ])
+                " -".to_string()
+            };
+            let mut spans = vec![
+                accent,
+                Span::styled(&c.name, Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(short_grade, Style::default().fg(true_color)),
+            ];
+            if total_count > 0 {
+                spans.push(Span::styled(
+                    format!(" {}/{}", graded_count, total_count),
+                    Style::default().fg(t.text_muted),
+                ));
             }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -535,7 +323,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     // and only the value portion turns red/green.  The title is forced to the
     // primary text colour so it doesn't inherit the accent from the paragraph.
     let grade_result = course.compute_grade();
-    let (avg_line, avg_color) = format_course_average(course, &grade_result, m);
+    let (avg_line, avg_color) = format_course_average(course, &grade_result, m, app.use_nerd_fonts);
     let avg_title = Line::from(Span::styled(
         format!(" {} ", m.course_average),
         Style::default().fg(t.text_primary),

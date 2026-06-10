@@ -267,13 +267,6 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
             }
         }
 
-        // Toggle compact courses view (only when focused on Courses)
-        KeyCode::Char('c') => {
-            if app.focus == Focus::Courses {
-                app.toggle_compact_courses();
-            }
-        }
-
         // Enter global exam grade
         KeyCode::Char('g') => {
             if app.focus == Focus::Courses && app.current_course().is_some() {

@@ -481,9 +481,10 @@ pub fn format_course_average(
     course: &Course,
     grade_result: &CourseGradeResult,
     m: &Messages,
+    use_nerd_fonts: bool,
 ) -> (Line<'static>, Color) {
     let t = theme();
-    let (text, color) = format_course_average_raw(course, grade_result, m);
+    let (text, color) = format_course_average_raw(course, grade_result, m, use_nerd_fonts);
 
     // Split on the first "{label}: " prefix so the descriptive label stays in
     // neutral text and only the value carries the status colour.
@@ -508,8 +509,10 @@ fn format_course_average_raw(
     course: &Course,
     grade_result: &CourseGradeResult,
     m: &Messages,
+    use_nerd_fonts: bool,
 ) -> (String, Color) {
     let t = theme();
+    let ic = icons(use_nerd_fonts);
 
     // No evaluations at all → show "no grades yet" regardless of rules/global
     if !course.has_evaluations() {
@@ -518,14 +521,15 @@ fn format_course_average_raw(
 
     if let Some(ref cat_name) = grade_result.overridden_by {
         // FailCourse overrides produce grade 0 which is never passing —
-        // show as FAILED in red instead of "capped by" in magenta.
+        // show as failed (red ✗ glyph) plus the offending category, instead of
+        // "capped by" in magenta.
         if !course.is_passing_grade(grade_result.grade) {
             let text = format!(
-                "{}: {} -> {:.0} ({}) [{}]",
+                "{}: {} -> {:.0} {}{}",
                 m.current,
                 fmt_grade(grade_result.grade),
                 Course::round_grade(grade_result.grade),
-                m.failed,
+                ic.failed,
                 cat_name
             );
             (text, t.status_fail)
@@ -544,12 +548,12 @@ fn format_course_average_raw(
             // Global exam has been taken — show result
             let rounded = Course::round_grade(after);
             let status = if course.is_passing_grade(after) {
-                m.passed
+                ic.passed
             } else {
-                m.failed
+                ic.failed
             };
             let text = format!(
-                "{}: {} | {}: {} -> {:.0} ({})",
+                "{}: {} | {}: {} -> {:.0} {}",
                 m.current,
                 fmt_grade(grade_result.grade),
                 m.global_result,
@@ -572,11 +576,11 @@ fn format_course_average_raw(
                 // Cannot pass even with a perfect global — show as failed
                 let rounded = Course::round_grade(grade_result.grade);
                 let text = format!(
-                    "{}: {} -> {:.0} ({})",
+                    "{}: {} -> {:.0} {}",
                     m.current,
                     fmt_grade(grade_result.grade),
                     rounded,
-                    m.failed
+                    ic.failed
                 );
                 (text, t.status_fail)
             } else {
@@ -605,12 +609,12 @@ fn format_course_average_raw(
             Some(grade) => {
                 let rounded = Course::round_grade(grade);
                 let status = if course.is_passing_grade(grade) {
-                    m.passed
+                    ic.passed
                 } else {
-                    m.failed
+                    ic.failed
                 };
                 let text = format!(
-                    "{}: {} -> {:.0} ({})",
+                    "{}: {} -> {:.0} {}",
                     m.current,
                     fmt_grade(grade),
                     rounded,
@@ -629,21 +633,22 @@ fn format_course_average_raw(
 }
 
 /// Format course status message (used in the courses panel list items).
-pub fn format_course_status(course: &Course, m: &Messages) -> String {
+pub fn format_course_status(course: &Course, m: &Messages, use_nerd_fonts: bool) -> String {
     if !course.has_evaluations() {
         return m.no_evaluations.to_string();
     }
+    let ic = icons(use_nerd_fonts);
 
     match course.current_grade() {
         Some(grade) => {
             let rounded = Course::round_grade(grade);
             let status = if course.is_passing_grade(grade) {
-                m.passed
+                ic.passed
             } else {
-                m.failed
+                ic.failed
             };
             format!(
-                "{}: {} -> {:.0} ({})",
+                "{}: {} -> {:.0} {}",
                 m.current,
                 fmt_grade(grade),
                 rounded,

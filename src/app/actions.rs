@@ -186,7 +186,6 @@ impl App {
             let config = persistence::Config {
                 language: new_lang,
                 use_nerd_fonts: self.use_nerd_fonts,
-                compact_courses: self.compact_courses,
             };
             if persistence::save_config(&config).is_err() {
                 let msg = self.messages().config_save_error.to_string();
@@ -207,7 +206,7 @@ impl App {
     // =========================================================================
 
     /// Number of settings entries in the settings popup.
-    const SETTINGS_COUNT: usize = 3;
+    const SETTINGS_COUNT: usize = 2;
 
     /// Show the settings popup.
     pub fn show_settings(&mut self) {
@@ -242,8 +241,6 @@ impl App {
                 self.language = langs[next];
                 self.built_in_templates = crate::templates::built_in_templates(self.language);
             }
-            // 2: Compact courses
-            2 => self.compact_courses = !self.compact_courses,
             _ => {}
         }
     }
@@ -259,7 +256,6 @@ impl App {
                 self.language = langs[prev];
                 self.built_in_templates = crate::templates::built_in_templates(self.language);
             }
-            2 => self.compact_courses = !self.compact_courses,
             _ => {}
         }
     }
@@ -269,7 +265,6 @@ impl App {
         let config = persistence::Config {
             language: self.language,
             use_nerd_fonts: self.use_nerd_fonts,
-            compact_courses: self.compact_courses,
         };
         if persistence::save_config(&config).is_err() {
             let msg = self.messages().config_save_error.to_string();
@@ -282,30 +277,11 @@ impl App {
     pub fn cancel_settings(&mut self) {
         let (config, _) = persistence::load_config();
         self.use_nerd_fonts = config.use_nerd_fonts;
-        self.compact_courses = config.compact_courses;
         if self.language != config.language {
             self.language = config.language;
             self.built_in_templates = crate::templates::built_in_templates(self.language);
         }
         self.screen = Screen::Main;
-    }
-
-    // =========================================================================
-    // Compact Courses Toggle
-    // =========================================================================
-
-    /// Toggle compact courses view and persist immediately.
-    pub fn toggle_compact_courses(&mut self) {
-        self.compact_courses = !self.compact_courses;
-        let config = persistence::Config {
-            language: self.language,
-            use_nerd_fonts: self.use_nerd_fonts,
-            compact_courses: self.compact_courses,
-        };
-        if let Err(e) = persistence::save_config(&config) {
-            let m = self.messages();
-            self.set_error(format!("{}: {}", m.config_save_error, e));
-        }
     }
 
     // =========================================================================
