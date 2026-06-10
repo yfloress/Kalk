@@ -693,6 +693,24 @@ impl Course {
             .fold(None, |acc, v| Some(acc.map_or(v, |a: f64| a.max(v))))
     }
 
+    /// Whether the course passes when evaluation `(cat_idx, eval_idx)` is set to
+    /// `grade`, leaving every other grade untouched. Used by the needed-grade
+    /// solver to detect when nothing is required of this evaluation — for
+    /// instance a `drop_lowest` category where it would be discarded anyway, so
+    /// the course already passes on the strength of the others.
+    fn passes_with_eval(&self, cat_idx: usize, eval_idx: usize, grade: f64) -> bool {
+        let mut probe = self.clone();
+        if let Some(e) = probe
+            .categories
+            .get_mut(cat_idx)
+            .and_then(|c| c.evaluations.get_mut(eval_idx))
+        {
+            e.grade = Some(grade);
+        }
+        let result = probe.compute_grade();
+        probe.is_passing_grade(result.grade) && !result.needs_global
+    }
+
     /// Calculate the grade needed in a specific evaluation to pass the course.
     ///
     /// When `ignore_current_grade` is true, the current eval's grade is treated
@@ -733,6 +751,13 @@ impl Course {
         // For now, only support arithmetic mean in needed-grade calculation.
         if category.rules.averaging_method == AveragingMethod::Geometric {
             return NeededGrade::info();
+        }
+
+        // If the course already passes with this evaluation contributing 0
+        // (e.g. a drop_lowest category where it would be discarded), nothing is
+        // required here regardless of what the linear solve would suggest.
+        if self.passes_with_eval(category_idx, eval_idx, 0.0) {
+            return NeededGrade::success(0.0);
         }
 
         // Floors imposed by category rules whose failure blocks passing

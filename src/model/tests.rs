@@ -553,10 +553,58 @@ fn test_needed_grade_with_drop_lowest() {
     course.categories.push(cat);
 
     let result = course.needed_grade_for_evaluation(0, 2, true);
-    // With drop lowest: the 20 gets dropped, so we need avg of (80 + X) / 2 >= 54.5
-    // X >= 109 - 80 = 29
+    // The solved eval survives drop_lowest (a passing grade isn't the discarded
+    // one), so the 20 is dropped: avg of (80 + X) / 2 >= 54.5  =>  X >= 29.
+    // (A grade below ~29 would itself be dropped and never lift the course.)
     assert_eq!(result.status, NeededGradeStatus::Warning);
-    assert!(result.value.unwrap() < 35.0); // Should be around 29
+    let value = result.value.unwrap();
+    assert!(
+        (28.0..=30.0).contains(&value),
+        "expected needed grade around 29, got {value}"
+    );
+}
+
+#[test]
+fn test_needed_grade_drop_lowest_already_passing() {
+    // Two strong grades already pass once the target is dropped, so the target
+    // is not needed at all — needed grade is 0 (success), not a positive value.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.drop_lowest = 1;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 90.0));
+    cat.evaluations
+        .push(Evaluation::with_grade("T2".to_string(), 90.0));
+    cat.evaluations.push(Evaluation::new("T3".to_string()));
+    course.categories.push(cat);
+
+    // With T3 = 0 it gets dropped, leaving 90 & 90 -> course already passes.
+    let result = course.needed_grade_for_evaluation(0, 2, true);
+    assert_eq!(result.status, NeededGradeStatus::Success);
+}
+
+#[test]
+fn test_minimum_one_eval_not_judged_before_any_grade() {
+    // "At least one eval >= 80" must NOT fail the course while every evaluation
+    // is still ungraded — the student hasn't had the chance to meet it yet.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_one_eval = Some(80.0);
+    cat.rules.on_min_one_eval_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations.push(Evaluation::new("T1".to_string()));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    assert_eq!(course.categories[0].any_eval_meets_minimum(), None);
+    let result = course.compute_grade();
+    assert!(
+        result.overridden_by.is_none(),
+        "one-eval rule should not override the grade before any eval is graded"
+    );
+
+    // Once a grade exists and none meets the threshold, the rule does apply.
+    course.categories[0].evaluations[0].grade = Some(40.0);
+    assert_eq!(course.categories[0].any_eval_meets_minimum(), Some(false));
 }
 
 #[test]
@@ -917,7 +965,7 @@ fn test_needed_grade_multiple_categories() {
 
     // Solving for C2 (category 0, eval 1):
     // Controles contribution = 80 * 30 / 100 = 24
-    // Certamenes: effective_grades_excluding(1) → [60, 0] with eval_idx=1 set to 0
+    // Certamenes: effective_grades_excluding(1) → others [60] + target slot
     //   other_sum = 60, effective_count = 2
     //   contribution from others = 60 * 70 / (100 * 2) = 21
     // eval_weight = 70 / (100 * 2) = 0.35
@@ -1397,15 +1445,14 @@ fn test_effective_grades_excluding_with_drop_lowest() {
         .push(Evaluation::with_grade("T1".to_string(), 80.0));
     cat.evaluations
         .push(Evaluation::with_grade("T2".to_string(), 20.0));
-    cat.evaluations.push(Evaluation::new("T3".to_string())); // eval_idx=2, treated as 0
+    cat.evaluations.push(Evaluation::new("T3".to_string())); // eval_idx=2, the target
 
-    // Excluding eval 2 (set to 0): grades = [80, 20, 0]
-    // After drop_lowest=1: drop the 0, left with [20, 80]
+    // Solving for eval 2: the others are [80, 20]; the target is assumed to
+    // survive drop_lowest, so the lowest *other* (20) is dropped, leaving [80].
+    // count includes the target's own slot (1 + 1 = 2).
     let (grades, count) = cat.effective_grades_excluding(2);
     assert_eq!(count, 2);
-    assert_eq!(grades.len(), 2);
-    let sum: f64 = grades.iter().sum();
-    assert!((sum - 100.0).abs() < 0.01); // 20 + 80
+    assert_eq!(grades, vec![80.0]);
 }
 
 #[test]
@@ -1420,12 +1467,11 @@ fn test_effective_grades_excluding_target_not_dropped() {
     cat.evaluations
         .push(Evaluation::with_grade("T3".to_string(), 80.0));
 
-    // Excluding eval 0 (set to 0): grades = [0, 70, 80]
-    // After drop_lowest=1: drop 0, left with [70, 80]
+    // Solving for eval 0: the others are [70, 80]; dropping their lowest (70)
+    // leaves [80], plus the target's own slot -> count 2.
     let (grades, count) = cat.effective_grades_excluding(0);
     assert_eq!(count, 2);
-    let sum: f64 = grades.iter().sum();
-    assert!((sum - 150.0).abs() < 0.01); // 70 + 80
+    assert_eq!(grades, vec![80.0]);
 }
 
 // =========================================================================
@@ -2476,9 +2522,11 @@ fn test_any_eval_meets_minimum_failing() {
 fn test_any_eval_meets_minimum_ungraded_ignored() {
     let mut cat = Category::new("Certs".to_string(), 80.0);
     cat.rules.minimum_one_eval = Some(50.0);
-    cat.evaluations.push(Evaluation::new("C1".to_string())); // ungraded
-    cat.evaluations.push(Evaluation::new("C2".to_string())); // ungraded
-    // No graded evals at all → none meets threshold → false
+    cat.evaluations
+        .push(Evaluation::with_grade("C1".to_string(), 40.0)); // graded, below
+    cat.evaluations.push(Evaluation::new("C2".to_string())); // ungraded, ignored
+    // One eval is graded (below the threshold); the ungraded one is ignored, so
+    // the requirement is judged failed on the strength of the graded eval alone.
     assert_eq!(cat.any_eval_meets_minimum(), Some(false));
 }
 

@@ -240,42 +240,38 @@ impl Category {
         }
     }
 
-    /// Get effective grades but with a specific evaluation excluded or set to 0.
-    /// Used by `needed_grade_for_evaluation` to solve for a specific eval.
+    /// Grades of every evaluation EXCEPT `eval_idx`, after dropping the lowest
+    /// `drop_lowest` of *those others*, paired with the effective evaluation
+    /// count that INCLUDES a slot for `eval_idx` itself.
+    ///
+    /// Used by the needed-grade solvers, which assume the evaluation being
+    /// solved for will survive `drop_lowest` — a grade high enough to pass is
+    /// not the one discarded — so the dropped grades come from the other
+    /// evaluations. The caller reconstructs the average as
+    /// `(sum(returned) + X) / count`. Ungraded evaluations count as 0.
     pub(crate) fn effective_grades_excluding(&self, eval_idx: usize) -> (Vec<f64>, usize) {
-        if self.evaluations.is_empty() {
-            return (Vec::new(), 0);
-        }
-
-        let mut indexed_grades: Vec<(usize, f64)> = self
+        let mut others: Vec<f64> = self
             .evaluations
             .iter()
             .enumerate()
-            .map(|(i, e)| {
-                if i == eval_idx {
-                    (i, 0.0)
-                } else {
-                    (i, e.grade.unwrap_or(0.0))
-                }
-            })
+            .filter(|(i, _)| *i != eval_idx)
+            .map(|(_, e)| e.grade.unwrap_or(0.0))
             .collect();
 
-        // Apply drop_lowest (incompatible with weighted evaluations)
-        let effective_count;
+        // Drop the lowest `drop_lowest` of the OTHER evaluations (incompatible
+        // with weighted evaluations). Mirror `effective_grades`: only drop when
+        // fewer than the total evaluation count would be dropped.
         if !self.rules.weighted_evaluations
             && self.rules.drop_lowest > 0
-            && self.rules.drop_lowest < indexed_grades.len()
+            && self.rules.drop_lowest < self.evaluations.len()
         {
-            indexed_grades
-                .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-            indexed_grades = indexed_grades[self.rules.drop_lowest..].to_vec();
-            effective_count = indexed_grades.len();
-        } else {
-            effective_count = indexed_grades.len();
+            let n = self.rules.drop_lowest.min(others.len());
+            others.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            others.drain(0..n);
         }
 
-        let grades = indexed_grades.iter().map(|(_, g)| *g).collect();
-        (grades, effective_count)
+        let effective_count = others.len() + 1; // +1 for the target evaluation
+        (others, effective_count)
     }
 
     /// Grade needed in evaluation `eval_idx` for this category's own average to
@@ -455,10 +451,13 @@ impl Category {
     /// threshold.  Returns `None` if there is no such requirement.
     /// Returns `Some(true)` if at least one graded eval >= threshold,
     /// `Some(false)` if all graded evals are below.
-    /// Returns `None` if there is no requirement or no evaluations.
+    ///
+    /// Returns `None` until at least one evaluation is graded: the requirement
+    /// "at least one eval >= X" cannot be judged failed before any grade exists
+    /// (the student simply hasn't had the chance to meet it yet).
     pub fn any_eval_meets_minimum(&self) -> Option<bool> {
         let min = self.rules.minimum_one_eval?;
-        if self.evaluations.is_empty() {
+        if self.graded_count() == 0 {
             return None;
         }
         let any_passes = self
