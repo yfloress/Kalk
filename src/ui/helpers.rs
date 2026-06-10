@@ -48,7 +48,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap},
 };
 
 use super::icons::icons;
@@ -78,26 +78,27 @@ pub fn render_delete_confirmation(
     // Build the formatted title with icon
     let title_str = format!(" {}{} ", ic.delete, title);
 
-    // Calculate the minimum width needed to avoid truncation:
-    // - title (with border chars)
-    // - question line: 2 (indent) + icon + question
-    // - warning line: 2 (indent) + icon + warning_text
-    // - hints line: 2 (indent) + "Enter/y: " + confirm + "  " + "Esc/n: " + cancel
-    let question_icon_w = if use_nerd_fonts { 2 } else { 0 };
+    // Calculate the minimum content width needed to avoid truncation. The
+    // block's padding (added below) handles the left margin, so these are the
+    // bare content widths:
+    // - title sits on the border line
+    // - warning line: icon + space + text
+    // - hints line: "Enter/y: " + confirm + gap + "Esc/n: " + cancel
     let warning_icon_w = ic.warning.chars().count();
     let content_widths = [
         title_str.chars().count() + 2, // +2 for border chars
-        2 + question_icon_w + question.chars().count(),
-        2 + warning_icon_w + warning_text.chars().count(),
-        2 + 9 + confirm_label.chars().count() + 2 + 6 + cancel_label.chars().count(),
+        question.chars().count(),
+        warning_icon_w + 1 + warning_text.chars().count(),
+        9 + confirm_label.chars().count() + 2 + 6 + cancel_label.chars().count(),
     ];
     let max_content = content_widths.iter().copied().max().unwrap_or(40);
-    // Add 2 for left+right border, clamp to reasonable bounds
-    let ideal_w = (max_content + 4) as u16;
+    // +2 for the borders, +4 for the horizontal padding (2 each side).
+    let ideal_w = (max_content + 6) as u16;
     let popup_w = ideal_w.clamp(36, 72).min(term.width);
 
-    // Height: title(1) + question(2) + sep(1) + warning(2) + spacer(1) + hints(1) + border(2)
-    let popup_h = 11u16.min(term.height);
+    // Height: top pad(1) + question(2) + sep(1) + warning(2) + spacer + hints(1)
+    // + border(2).
+    let popup_h = 12u16.min(term.height);
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w, popup_h);
@@ -107,7 +108,9 @@ pub fn render_delete_confirmation(
         .title(title_str)
         .borders(Borders::ALL)
         .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border_danger));
+        .border_style(Style::default().fg(t.popup_border_danger))
+        // Uniform breathing room: 2 cols each side, 1 row on top.
+        .padding(Padding::new(2, 2, 1, 0));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -123,18 +126,16 @@ pub fn render_delete_confirmation(
         ])
         .split(inner);
 
-    // Question line with optional icon
-    let mut q_spans = vec![Span::styled("  ", Style::default())];
-    if use_nerd_fonts {
-        q_spans.push(Span::styled(ic.info, Style::default().fg(t.text_primary)));
-    }
-    q_spans.push(Span::styled(
+    // Question line — kept icon-free so the only glyphs in the modal are the
+    // title (delete) and warning icons, avoiding a stack of icons on
+    // consecutive lines.
+    let q = Paragraph::new(Line::from(Span::styled(
         question,
         Style::default()
             .fg(t.text_primary)
             .add_modifier(Modifier::BOLD),
-    ));
-    let q = Paragraph::new(Line::from(q_spans)).wrap(Wrap { trim: true });
+    )))
+    .wrap(Wrap { trim: true });
     frame.render_widget(q, chunks[0]);
 
     // Dynamic separator that fills available width
@@ -146,13 +147,13 @@ pub fn render_delete_confirmation(
     )));
     frame.render_widget(sep, chunks[1]);
 
-    // Warning line with icon and wrapping
+    // Warning line — danger-red icon draws the eye; the consequence text stays
+    // in a calm secondary tone so the modal reads cohesively (red border =
+    // destructive, neutral text = what you'll lose) instead of competing
+    // yellow-and-red alarms.
     let warn = Paragraph::new(Line::from(vec![
-        Span::styled(
-            format!("  {}", ic.warning),
-            Style::default().fg(t.status_warn),
-        ),
-        Span::styled(warning_text, Style::default().fg(t.status_warn)),
+        Span::styled(format!("{} ", ic.warning), Style::default().fg(t.status_fail)),
+        Span::styled(warning_text, Style::default().fg(t.text_secondary)),
     ]))
     .wrap(Wrap { trim: true });
     frame.render_widget(warn, chunks[2]);
@@ -160,7 +161,7 @@ pub fn render_delete_confirmation(
     // Keybinding hints
     let hints = Paragraph::new(Line::from(vec![
         Span::styled(
-            format!("  Enter/y: {}  ", confirm_label),
+            format!("Enter/y: {}  ", confirm_label),
             Style::default().fg(t.status_fail),
         ),
         Span::styled(
