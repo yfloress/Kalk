@@ -302,7 +302,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     let validation_msg = format_weight_validation(&validation, m);
     let total_w = course.total_weight().abs();
     let header_text = format!(
-        "{:.0} | {:.0}% | {}",
+        "{:.0} · {:.0}% · {}",
         course.passing_grade, total_w, validation_msg
     );
 
@@ -436,7 +436,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Span::raw(format!("    {}: ", m.avg)),
                 Span::styled(avg, Style::default().fg(avg_color)),
                 Span::styled(
-                    format!(" | {}", progress),
+                    format!(" · {}", progress),
                     Style::default().fg(t.text_muted),
                 ),
             ];
@@ -501,20 +501,20 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
             match needed.status {
                 NeededGradeStatus::Warning => needed
                     .value
-                    .map(|v| format!(" | {}: {:.0}", m.global_needed, v.ceil()))
+                    .map(|v| format!(" · {}: {:.0}", m.global_needed, v.ceil()))
                     .unwrap_or_default(),
                 NeededGradeStatus::Failure => needed
                     .value
                     .filter(|&v| v > MAX_GRADE)
                     .map(|v| {
                         format!(
-                            " | {}: {} ({})",
+                            " · {}: {} ({})",
                             m.global_needed,
                             v.ceil() as i32,
                             m.need_grade_impossible
                         )
                     })
-                    .unwrap_or_else(|| format!(" | {}: {}", m.global_needed, m.cannot_pass)),
+                    .unwrap_or_else(|| format!(" · {}: {}", m.global_needed, m.cannot_pass)),
                 _ => String::new(),
             }
         } else {
@@ -554,7 +554,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
             Span::raw(format!("    {}: ", m.grade)),
             Span::styled(global_grade_text, Style::default().fg(global_color)),
             Span::styled(
-                format!(" | {}{}", progress, needed_hint),
+                format!(" · {}{}", progress, needed_hint),
                 Style::default().fg(t.text_muted),
             ),
         ];

@@ -118,14 +118,14 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     let eval_weight_hint = if category.rules.weighted_evaluations {
         let total = category.total_eval_weight();
         if (total - 100.0).abs() < 0.01 {
-            Some((" | W:100%".to_string(), t.status_pass))
+            Some((" · W:100%".to_string(), t.status_pass))
         } else {
             let color = if total < 100.0 {
                 t.status_warn
             } else {
                 t.status_fail
             };
-            Some((format!(" | W:{:.0}%", total), color))
+            Some((format!(" · W:{:.0}%", total), color))
         }
     } else {
         None
@@ -136,7 +136,7 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(avg, Style::default().fg(avg_color)),
         Span::styled(
             format!(
-                " | {}/{}{}",
+                " · {}/{}{}",
                 category.graded_count(),
                 category.evaluations.len(),
                 if drop_hint.is_empty() {
@@ -154,7 +154,7 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
 
     let header_title = if let Some(ev) = &eval_violation {
         format!(
-            " {} ({:.0}%) | {}>={:.0} ",
+            " {} ({:.0}%) · {}≥{:.0} ",
             ev.category_name, category.weight, m.eval_below_min, ev.required
         )
     } else {

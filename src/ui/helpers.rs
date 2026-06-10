@@ -553,7 +553,7 @@ fn format_course_average_raw(
                 ic.failed
             };
             let text = format!(
-                "{}: {} | {}: {} -> {:.0} {}",
+                "{}: {} · {}: {} -> {:.0} {}",
                 m.current,
                 fmt_grade(grade_result.grade),
                 m.global_result,
@@ -587,7 +587,7 @@ fn format_course_average_raw(
                 let needed_hint = match needed.status {
                     NeededGradeStatus::Warning => {
                         if let Some(v) = needed.value {
-                            format!(" | {}: {:.0}", m.global_needed, v.ceil())
+                            format!(" · {}: {:.0}", m.global_needed, v.ceil())
                         } else {
                             String::new()
                         }
@@ -595,7 +595,7 @@ fn format_course_average_raw(
                     _ => String::new(),
                 };
                 let text = format!(
-                    "{}: {} | {}{}",
+                    "{}: {} · {}{}",
                     m.current,
                     fmt_grade(grade_result.grade),
                     m.needs_global,
