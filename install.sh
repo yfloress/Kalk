@@ -10,6 +10,7 @@ set -euo pipefail
 #   ./install.sh --user --uninstall   # remove user-local install
 #   sudo ./install.sh --uninstall     # remove system-wide install
 #   PREFIX=/usr sudo ./install.sh     # custom prefix
+#   ./install.sh --help               # show usage
 #
 # Platforms:
 #   Linux  — installs the binary, desktop entry, and icon.
@@ -21,7 +22,7 @@ DESTDIR="${DESTDIR:-}"
 APP_NAME="kalk"
 BINARY="target/release/${APP_NAME}"
 DESKTOP_FILE="packaging/linux/${APP_NAME}.desktop"
-ICON_FILE="packaging/linux/${APP_NAME}.svg"
+ICON_FILE="packaging/linux/${APP_NAME}.png"
 
 # --- pretty output ---
 
@@ -81,10 +82,34 @@ install_desktop() {
 }
 
 install_icon() {
-    local icondir="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
-    mkdir -p "${icondir}"
-    install -m644 "${ICON_FILE}" "${icondir}/${APP_NAME}.svg"
-    info "${icondir}/${APP_NAME}.svg"
+    # Install the raster PNG to the legacy pixmaps directory. The previous
+    # "icon.svg" actually embedded a WebP image, which the GTK/librsvg icon
+    # loader cannot decode — so no icon ever showed. pixmaps has no size
+    # requirement and is searched by name, so Icon=kalk resolves to this PNG
+    # across GNOME/KDE/XFCE without needing a perfectly-sized hicolor set.
+    local pixmaps="${DESTDIR}${PREFIX}/share/pixmaps"
+    mkdir -p "${pixmaps}"
+    install -m644 "${ICON_FILE}" "${pixmaps}/${APP_NAME}.png"
+    info "${pixmaps}/${APP_NAME}.png"
+
+    # Remove any previously-installed broken SVG: the themed scalable dir is
+    # searched before pixmaps, so a leftover unrenderable SVG would shadow the
+    # PNG and still show no icon.
+    rm -f "${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps/${APP_NAME}.svg"
+}
+
+# Refresh the icon cache and desktop database so the entry and icon appear
+# without a re-login. Best-effort: missing tools or non-zero exits are ignored
+# (the install itself already succeeded).
+update_caches() {
+    local appdir="${DESTDIR}${PREFIX}/share/applications"
+    local hicolor="${DESTDIR}${PREFIX}/share/icons/hicolor"
+    if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d "${hicolor}" ]; then
+        gtk-update-icon-cache -q -f -t "${hicolor}" >/dev/null 2>&1 || true
+    fi
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "${appdir}" >/dev/null 2>&1 || true
+    fi
 }
 
 # --- uninstall ---
@@ -97,15 +122,55 @@ uninstall_files() {
     # Desktop entry and icon only exist on Linux installs.
     if [ "$IS_MACOS" -eq 0 ]; then
         local appdir="${DESTDIR}${PREFIX}/share/applications"
-        local icondir="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
+        local pixmaps="${DESTDIR}${PREFIX}/share/pixmaps"
+        local scalable="${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps"
         rm -f "${appdir}/${APP_NAME}.desktop"
-        rm -f "${icondir}/${APP_NAME}.svg"
+        rm -f "${pixmaps}/${APP_NAME}.png"
+        rm -f "${scalable}/${APP_NAME}.svg" # legacy: clean up the old broken SVG
         info "Removed ${appdir}/${APP_NAME}.desktop"
-        info "Removed ${icondir}/${APP_NAME}.svg"
+        info "Removed ${pixmaps}/${APP_NAME}.png"
+        update_caches
     fi
 }
 
+# --- usage ---
+
+usage() {
+    cat <<EOF
+Kalk installer — installs the binary, plus a desktop entry and icon on Linux.
+
+Usage:
+  sudo ./install.sh                 Install system-wide (PREFIX=/usr/local)
+  ./install.sh --user               Install for the current user (~/.local)
+  sudo ./install.sh --uninstall     Remove a system-wide install
+  ./install.sh --user --uninstall   Remove a user-local install
+
+Options:
+  --user        Install/uninstall under ~/.local instead of system-wide
+  --uninstall   Remove a previous install (user data is left untouched)
+  -h, --help    Show this help and exit
+
+Environment:
+  PREFIX        Install prefix (default: /usr/local; ignored with --user)
+  DESTDIR       Staging root prepended to every path (for packaging)
+
+Platforms:
+  Linux   binary + desktop entry + icon
+  macOS   binary only (desktop entry and icon are Linux-only)
+EOF
+}
+
 # --- main ---
+
+# Handle help first, in any position — works without root or a supported OS.
+for arg in "$@"; do
+    case "$arg" in
+        -h | --help)
+            usage
+            exit 0
+            ;;
+    esac
+done
 
 IS_USER=0
 
@@ -160,6 +225,7 @@ install_binary
 if [ "$IS_MACOS" -eq 0 ]; then
     install_desktop
     install_icon
+    update_caches
 fi
 
 log "Kalk installed successfully."

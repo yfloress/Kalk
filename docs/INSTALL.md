@@ -173,12 +173,14 @@ Artifacts installed on **Linux**:
 |----------|----------------------|----------------------|
 | Binary | `/usr/local/bin/kalk` | `~/.local/bin/kalk` |
 | Desktop entry | `/usr/local/share/applications/kalk.desktop` | `~/.local/share/applications/kalk.desktop` |
-| Icon | `/usr/local/share/icons/hicolor/scalable/apps/kalk.svg` | `~/.local/share/icons/hicolor/scalable/apps/kalk.svg` |
+| Icon | `/usr/local/share/pixmaps/kalk.png` | `~/.local/share/pixmaps/kalk.png` |
 
 The desktop entry uses `Terminal=true`, so launching Kalk from your application
-menu opens a terminal, runs the app, and closes on exit.
+menu opens a terminal, runs the app, and closes on exit. The installer also
+refreshes the icon cache and desktop database so the entry appears without a
+re-login.
 
-**Custom icon:** replace `packaging/linux/kalk.svg` with your own SVG (same file
+**Custom icon:** replace `packaging/linux/kalk.png` with your own PNG (same file
 name) before running the script.
 
 ---

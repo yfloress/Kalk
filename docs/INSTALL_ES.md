@@ -173,12 +173,14 @@ Artefactos instalados en **Linux**:
 |-----------|--------------------------|----------------------------|
 | Binario | `/usr/local/bin/kalk` | `~/.local/bin/kalk` |
 | Acceso directo | `/usr/local/share/applications/kalk.desktop` | `~/.local/share/applications/kalk.desktop` |
-| Icono | `/usr/local/share/icons/hicolor/scalable/apps/kalk.svg` | `~/.local/share/icons/hicolor/scalable/apps/kalk.svg` |
+| Icono | `/usr/local/share/pixmaps/kalk.png` | `~/.local/share/pixmaps/kalk.png` |
 
 El acceso directo usa `Terminal=true`, así que abrir Kalk desde el menú de
-aplicaciones abre una terminal, ejecuta la app y la cierra al salir.
+aplicaciones abre una terminal, ejecuta la app y la cierra al salir. El
+instalador también refresca la caché de iconos y la base de datos de escritorio
+para que la entrada aparezca sin volver a iniciar sesión.
 
-**Icono personalizado:** reemplaza `packaging/linux/kalk.svg` con tu propio SVG
+**Icono personalizado:** reemplaza `packaging/linux/kalk.png` con tu propio PNG
 (mismo nombre de archivo) antes de ejecutar el script.
 
 ---
