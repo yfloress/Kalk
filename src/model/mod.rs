@@ -648,16 +648,60 @@ impl Course {
         binds.then_some(min)
     }
 
+    /// The lowest grade this evaluation must reach so that no category rule
+    /// whose failure blocks passing is broken. Returns the highest such floor,
+    /// or `None` when no rule constrains this evaluation.
+    ///
+    /// Covered rules:
+    /// - `minimum_average`: via [`Self::binding_category_minimum`] (all three
+    ///   not-met actions, with the appropriate gating).
+    /// - `minimum_per_evaluation` with `FailCourse`: every evaluation must reach
+    ///   the threshold, so this one must too.
+    /// - `minimum_one_eval` with `FailCourse`: at least one evaluation must reach
+    ///   the threshold — binding here only when no *other* evaluation already
+    ///   does.
+    ///
+    /// The per-eval and one-eval rules are only floored for `FailCourse`, where
+    /// the consequence is unconditional. The `FinalEqualsAverage` /
+    /// `RequiresGlobal` actions cap the grade at the (grade-dependent) category
+    /// average, which is not soundly expressible as a fixed per-eval floor, so
+    /// they are intentionally left out rather than risk a wrong estimate.
+    fn pass_blocking_floor(&self, category: &Category, eval_idx: usize) -> Option<f64> {
+        let mut floors: Vec<f64> = Vec::new();
+
+        if let Some(min) = self.binding_category_minimum(category)
+            && let Some(need) = category.needed_in_eval_for_average(eval_idx, min)
+        {
+            floors.push(need);
+        }
+
+        if category.rules.on_min_per_eval_not_met == MinimumNotMetAction::FailCourse
+            && let Some(min) = category.rules.minimum_per_evaluation
+        {
+            floors.push(min);
+        }
+
+        if category.rules.on_min_one_eval_not_met == MinimumNotMetAction::FailCourse
+            && let Some(min) = category.rules.minimum_one_eval
+            && !category.other_eval_meets(eval_idx, min)
+        {
+            floors.push(min);
+        }
+
+        floors
+            .into_iter()
+            .fold(None, |acc, v| Some(acc.map_or(v, |a: f64| a.max(v))))
+    }
+
     /// Calculate the grade needed in a specific evaluation to pass the course.
     ///
     /// When `ignore_current_grade` is true, the current eval's grade is treated
     /// as 0 (used when editing to show what's needed regardless of existing grade).
     ///
-    /// The result accounts for both the weighted course total *and* the
-    /// category's own `minimum_average` rule when that rule blocks passing
-    /// (see [`Self::binding_category_minimum`]): the needed grade is the larger
-    /// of the two, so a category whose minimum would fail the course is never
-    /// under-reported.
+    /// The result accounts for both the weighted course total *and* any
+    /// category rule whose failure would block passing (see
+    /// [`Self::pass_blocking_floor`]): the needed grade is the larger of the
+    /// two, so a hurdle that would fail the course is never under-reported.
     pub fn needed_grade_for_evaluation(
         &self,
         category_idx: usize,
@@ -691,16 +735,18 @@ impl Course {
             return NeededGrade::info();
         }
 
-        // A binding `minimum_average` rule (one whose failure blocks passing)
-        // raises the needed grade beyond what the weighted total alone requires.
-        let min_target = self.binding_category_minimum(category);
+        // Floors imposed by category rules whose failure blocks passing
+        // (minimum_average, plus FailCourse per-eval / one-eval minimums).
+        let floor = self.pass_blocking_floor(category, eval_idx);
 
         // Categories with zero weight don't move the weighted total, but a
-        // binding minimum can still force a needed grade (e.g. a 0%-weight
+        // pass-blocking rule can still force a needed grade (e.g. a 0%-weight
         // hurdle category that fails the course on its own).
         if category.weight.abs() < f64::EPSILON {
-            let needed = Self::apply_min_floor(category, eval_idx, f64::NEG_INFINITY, min_target);
-            return Self::classify_needed(needed);
+            return match floor {
+                Some(f) => Self::classify_needed(f),
+                None => NeededGrade::failure(None),
+            };
         }
 
         // Weighted evaluations mode: each eval has its own weight fraction
@@ -743,7 +789,7 @@ impl Course {
 
             let effective_passing = self.passing_grade - 0.5;
             let needed = (effective_passing - total_contribution) / final_eval_weight;
-            let needed = Self::apply_min_floor(category, eval_idx, needed, min_target);
+            let needed = Self::floored(needed, floor);
             return Self::classify_needed(needed);
         }
 
@@ -779,22 +825,16 @@ impl Course {
         // Because 0.5+ rounds up (54.5 rounds to 55)
         let effective_passing = self.passing_grade - 0.5;
         let needed = (effective_passing - total_contribution) / eval_weight;
-        let needed = Self::apply_min_floor(category, eval_idx, needed, min_target);
+        let needed = Self::floored(needed, floor);
         Self::classify_needed(needed)
     }
 
-    /// Raise `needed` so it also satisfies a binding category `minimum_average`.
-    /// `min_target` is the binding minimum (if any); the floor is the grade this
-    /// evaluation needs for the category average to reach it. Returns `needed`
-    /// unchanged when there is no binding minimum or the eval can't move it.
-    fn apply_min_floor(
-        category: &Category,
-        eval_idx: usize,
-        needed: f64,
-        min_target: Option<f64>,
-    ) -> f64 {
-        match min_target.and_then(|min| category.needed_in_eval_for_average(eval_idx, min)) {
-            Some(floor) => needed.max(floor),
+    /// Raise `needed` to `floor` when a pass-blocking category rule requires a
+    /// higher grade than the weighted total alone. Returns `needed` unchanged
+    /// when there is no such floor.
+    fn floored(needed: f64, floor: Option<f64>) -> f64 {
+        match floor {
+            Some(f) => needed.max(f),
             None => needed,
         }
     }

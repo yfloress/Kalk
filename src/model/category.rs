@@ -313,6 +313,16 @@ impl Category {
         }
     }
 
+    /// Whether some evaluation *other than* `eval_idx` already has a graded
+    /// value at or above `min`. Used to tell whether a `minimum_one_eval`
+    /// requirement is already satisfied without this evaluation's help.
+    pub(crate) fn other_eval_meets(&self, eval_idx: usize, min: f64) -> bool {
+        self.evaluations
+            .iter()
+            .enumerate()
+            .any(|(i, e)| i != eval_idx && matches!(e.grade, Some(g) if g >= min))
+    }
+
     /// Calculate the average grade of all evaluations in this category,
     /// respecting rules (drop_lowest, averaging_method, round_before_weighting,
     /// weighted_evaluations).

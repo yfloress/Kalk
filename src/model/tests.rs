@@ -656,6 +656,71 @@ fn test_needed_grade_minimum_above_passing_not_binding() {
     );
 }
 
+#[test]
+fn test_needed_grade_respects_per_eval_minimum_failcourse() {
+    // Each evaluation must be >= 50 or the course is failed. The weighted total
+    // needs only 49, but the per-evaluation floor lifts it to 50.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_per_evaluation = Some(50.0);
+    cat.rules.on_min_per_eval_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 60.0));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    let value = result.value.unwrap();
+    assert!(
+        (49.5..=51.0).contains(&value),
+        "expected per-eval floor of 50, got {value}"
+    );
+}
+
+#[test]
+fn test_needed_grade_one_eval_minimum_binding_when_none_meets() {
+    // At least one evaluation must reach 80 (FailCourse). No other eval does,
+    // so this one must — even though the weighted total needs far less.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_one_eval = Some(80.0);
+    cat.rules.on_min_one_eval_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 40.0));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    let value = result.value.unwrap();
+    assert!(
+        (79.0..=81.0).contains(&value),
+        "expected one-eval floor of 80, got {value}"
+    );
+}
+
+#[test]
+fn test_needed_grade_one_eval_minimum_not_binding_when_other_meets() {
+    // Same rule, but another evaluation already reaches 80, so the requirement
+    // is satisfied and must NOT inflate this evaluation's needed grade.
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Tests".to_string(), 100.0);
+    cat.rules.minimum_one_eval = Some(80.0);
+    cat.rules.on_min_one_eval_not_met = MinimumNotMetAction::FailCourse;
+    cat.evaluations
+        .push(Evaluation::with_grade("T1".to_string(), 90.0));
+    cat.evaluations.push(Evaluation::new("T2".to_string()));
+    course.categories.push(cat);
+
+    let result = course.needed_grade_for_evaluation(0, 1, true);
+    assert_eq!(result.status, NeededGradeStatus::Warning);
+    assert!(
+        result.value.unwrap() < 50.0,
+        "an already-satisfied one-eval rule must not inflate the needed grade"
+    );
+}
+
 // =========================================================================
 // CategoryRules default tests
 // =========================================================================
