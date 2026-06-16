@@ -741,9 +741,8 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
             Span::styled(desc.to_string(), desc_style),
         ])
     };
-    let group = |title: &str| -> Line<'static> {
-        Line::from(Span::styled(title.to_string(), group_style))
-    };
+    let group =
+        |title: &str| -> Line<'static> { Line::from(Span::styled(title.to_string(), group_style)) };
     let blank = || Line::from("");
 
     let undo_redo = format!("{} / {}", m.undo, m.redo);

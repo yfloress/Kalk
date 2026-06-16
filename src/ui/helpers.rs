@@ -152,7 +152,10 @@ pub fn render_delete_confirmation(
     // destructive, neutral text = what you'll lose) instead of competing
     // yellow-and-red alarms.
     let warn = Paragraph::new(Line::from(vec![
-        Span::styled(format!("{} ", ic.warning), Style::default().fg(t.status_fail)),
+        Span::styled(
+            format!("{} ", ic.warning),
+            Style::default().fg(t.status_fail),
+        ),
         Span::styled(warning_text, Style::default().fg(t.text_secondary)),
     ]))
     .wrap(Wrap { trim: true });

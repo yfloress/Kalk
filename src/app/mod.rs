@@ -58,9 +58,15 @@ pub enum Focus {
 pub enum Screen {
     Main,
     SelectingTemplate,
-    EditingCourse { is_new: bool },
-    EditingCategory { is_new: bool },
-    EditingEvaluation { is_new: bool },
+    EditingCourse {
+        is_new: bool,
+    },
+    EditingCategory {
+        is_new: bool,
+    },
+    EditingEvaluation {
+        is_new: bool,
+    },
     ConfirmDelete,
     ConfirmDeleteTemplate,
     SavingTemplate,

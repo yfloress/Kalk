@@ -720,12 +720,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             ic,
             available_width,
         ),
-        Screen::Help => styled_keybindings(
-            &[("Esc/Enter/?", m.cancel)],
-            t,
-            ic,
-            available_width,
-        ),
+        Screen::Help => styled_keybindings(&[("Esc/Enter/?", m.cancel)], t, ic, available_width),
         Screen::ImportPrompt => styled_keybindings(
             &[
                 ("c", m.import_step1_copied),
@@ -743,11 +738,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             available_width,
         ),
         Screen::ImportPreview => styled_keybindings(
-            &[
-                ("Enter", m.confirm),
-                ("b", m.cancel),
-                ("Esc", m.cancel),
-            ],
+            &[("Enter", m.confirm), ("b", m.cancel), ("Esc", m.cancel)],
             t,
             ic,
             available_width,

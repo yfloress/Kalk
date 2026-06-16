@@ -56,7 +56,9 @@ pub fn draw_import_prompt(frame: &mut Frame, app: &App) {
     let block = Block::default()
         .title(Line::from(Span::styled(
             format!(" {} ", m.import_step1_title),
-            Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(t.text_primary)
+                .add_modifier(Modifier::BOLD),
         )))
         .borders(Borders::ALL)
         .border_type(t.border_type)
@@ -95,7 +97,9 @@ pub fn draw_import_prompt(frame: &mut Frame, app: &App) {
     if app.import_copied {
         spans.push(Span::styled(
             format!("✓ {}  ", m.import_step1_copied),
-            Style::default().fg(t.status_pass).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(t.status_pass)
+                .add_modifier(Modifier::BOLD),
         ));
     }
     spans.push(Span::styled(
@@ -158,7 +162,9 @@ pub fn draw_import_paste(frame: &mut Frame, app: &App) {
     let block = Block::default()
         .title(Line::from(Span::styled(
             format!(" {} ", m.import_step2_title),
-            Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(t.text_primary)
+                .add_modifier(Modifier::BOLD),
         )))
         .borders(Borders::ALL)
         .border_type(t.border_type)
@@ -196,9 +202,10 @@ pub fn draw_import_paste(frame: &mut Frame, app: &App) {
     frame.render_widget(paste_box, chunks[1]);
     frame.render_widget(body, paste_inner);
 
-    let footer = Paragraph::new(Line::from(vec![
-        Span::styled(m.import_step2_back, Style::default().fg(t.footer_key)),
-    ]));
+    let footer = Paragraph::new(Line::from(vec![Span::styled(
+        m.import_step2_back,
+        Style::default().fg(t.footer_key),
+    )]));
     frame.render_widget(footer, chunks[2]);
 }
 
@@ -215,7 +222,9 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
     let block = Block::default()
         .title(Line::from(Span::styled(
             format!(" {} ", m.import_step3_title),
-            Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(t.text_primary)
+                .add_modifier(Modifier::BOLD),
         )))
         .borders(Borders::ALL)
         .border_type(t.border_type)
@@ -240,7 +249,9 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         ),
         Span::styled(
             course.name.clone(),
-            Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(t.text_primary)
+                .add_modifier(Modifier::BOLD),
         ),
     ]));
     if let Some(from) = &app.import_renamed_from {
@@ -273,10 +284,15 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         ),
         Span::styled(
             format!("{:.0}%", app.import_total_weight),
-            Style::default().fg(weight_color).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(weight_color)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("   ·   {} {}", app.import_total_evals, m.import_step3_evaluations),
+            format!(
+                "   ·   {} {}",
+                app.import_total_evals, m.import_step3_evaluations
+            ),
             Style::default().fg(t.text_muted),
         ),
     ]));
@@ -293,13 +309,12 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
     // Categories listing.
     for cat in &course.categories {
         let mut header_spans = vec![
-            Span::styled(
-                "▎ ",
-                Style::default().fg(t.popup_border),
-            ),
+            Span::styled("▎ ", Style::default().fg(t.popup_border)),
             Span::styled(
                 cat.name.clone(),
-                Style::default().fg(t.text_primary).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(t.text_primary)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!("  ({:.0}%)", cat.weight),
@@ -341,9 +356,10 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         Span::styled("   ", Style::default()),
         Span::styled(
             m.import_step3_confirm,
-            Style::default().fg(t.status_pass).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(t.status_pass)
+                .add_modifier(Modifier::BOLD),
         ),
     ]));
     frame.render_widget(footer, chunks[1]);
 }
-

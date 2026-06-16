@@ -196,18 +196,13 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
 
             // Coloured accent bar shown before each course so the user can
             // scan the list and see pass/fail/no-data status at a glance.
-            let accent = Span::styled(
-                "\u{258E} ",
-                Style::default().fg(true_color),
-            );
+            let accent = Span::styled("\u{258E} ", Style::default().fg(true_color));
 
             // Progress chip — "graded/total" across every category of the
             // course.  Lets the user see how far through the semester each
             // course is without having to open it.
-            let graded_count: usize =
-                c.categories.iter().map(|cat| cat.graded_count()).sum();
-            let total_count: usize =
-                c.categories.iter().map(|cat| cat.evaluations.len()).sum();
+            let graded_count: usize = c.categories.iter().map(|cat| cat.graded_count()).sum();
+            let total_count: usize = c.categories.iter().map(|cat| cat.evaluations.len()).sum();
 
             // Single line — "NAME GRADE X/Y" with colour-coded grade and a
             // muted progress chip.
@@ -396,10 +391,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
 
             // Coloured accent bar mirrors the one on the courses panel — it
             // reflects this category's pass/fail/override status at a glance.
-            let accent = Span::styled(
-                "\u{258E} ",
-                Style::default().fg(avg_color),
-            );
+            let accent = Span::styled("\u{258E} ", Style::default().fg(avg_color));
 
             // Build name line with optional rules indicator
             let mut name_spans = vec![
@@ -536,10 +528,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
 
         // Same accent treatment as regular categories — keeps the visual
         // language consistent for the virtual global row.
-        let accent = Span::styled(
-            "\u{258E} ",
-            Style::default().fg(global_color),
-        );
+        let accent = Span::styled("\u{258E} ", Style::default().fg(global_color));
         let name_spans = vec![
             accent,
             Span::styled(

@@ -644,13 +644,9 @@ impl App {
         let m = self.messages();
         match crate::app::import::parse(&raw) {
             Ok(schema) => {
-                let existing: Vec<&str> =
-                    self.courses.iter().map(|c| c.name.as_str()).collect();
-                let course = crate::app::import::to_course(
-                    &schema,
-                    &existing,
-                    m.import_copy_suffix,
-                );
+                let existing: Vec<&str> = self.courses.iter().map(|c| c.name.as_str()).collect();
+                let course =
+                    crate::app::import::to_course(&schema, &existing, m.import_copy_suffix);
                 let renamed_from = if course.name != schema.name.trim() {
                     Some(schema.name.trim().to_string())
                 } else {

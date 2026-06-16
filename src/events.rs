@@ -39,7 +39,7 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             if app.screen == Screen::ImportPaste {
                 app.import_handle_paste(s);
             }
-            return Ok(app.should_quit);
+            Ok(app.should_quit)
         }
         Event::Key(key) => {
             // Only handle key press events, not release
@@ -57,7 +57,6 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
 /// screen.  Returns `Ok(true)` when the application should quit.
 fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyre::Result<bool> {
     {
-
         // Global: Ctrl+Z / Ctrl+Y for undo / redo (Main screen only — popups
         // and forms have their own Esc-based cancel semantics).
         if app.screen == Screen::Main && key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -247,45 +246,34 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
         },
 
         // Delete selected item (no-op on virtual global category)
-        KeyCode::Char('d') => {
-            if !app.is_on_virtual_global() {
-                app.request_delete();
-            }
+        // Delete selected item (no-op on virtual global category)
+        KeyCode::Char('d') if !app.is_on_virtual_global() => {
+            app.request_delete();
         }
 
         // Auto-balance weights for current course
-        KeyCode::Char('b') => {
-            if app.current_course().is_some() {
-                app.auto_balance_weights();
-            }
+        KeyCode::Char('b') if app.current_course().is_some() => {
+            app.auto_balance_weights();
         }
 
         // Save current course as template
-        KeyCode::Char('t') => {
-            if app.current_course().is_some() {
-                app.start_save_as_template();
-            }
+        KeyCode::Char('t') if app.current_course().is_some() => {
+            app.start_save_as_template();
         }
 
         // Enter global exam grade
-        KeyCode::Char('g') => {
-            if app.focus == Focus::Courses && app.current_course().is_some() {
-                app.start_global_grade_entry();
-            }
+        KeyCode::Char('g') if app.focus == Focus::Courses && app.current_course().is_some() => {
+            app.start_global_grade_entry();
         }
 
         // Yank (copy) the current evaluation
-        KeyCode::Char('y') => {
-            if app.focus == Focus::Evaluations && !app.is_on_virtual_global() {
-                app.yank_evaluation();
-            }
+        KeyCode::Char('y') if app.focus == Focus::Evaluations && !app.is_on_virtual_global() => {
+            app.yank_evaluation();
         }
 
         // Paste the yanked evaluation into the current category
-        KeyCode::Char('p') => {
-            if app.focus == Focus::Evaluations && !app.is_on_virtual_global() {
-                app.paste_evaluation();
-            }
+        KeyCode::Char('p') if app.focus == Focus::Evaluations && !app.is_on_virtual_global() => {
+            app.paste_evaluation();
         }
 
         _ => {}
@@ -452,7 +440,6 @@ fn handle_global_grade_keys(app: &mut App, key: KeyCode) {
     }
 }
 
-
 /// Step 1 of the AI import wizard — copy the prompt to the clipboard, scroll
 /// it, enter the full-screen view, or advance to the paste step.
 fn handle_import_prompt_keys(app: &mut App, key: KeyCode) {
@@ -460,10 +447,9 @@ fn handle_import_prompt_keys(app: &mut App, key: KeyCode) {
     // active keys so the terminal's selection isn't interrupted.
     if app.import_prompt_fullscreen {
         match key {
-            KeyCode::Esc
-            | KeyCode::Char('q')
-            | KeyCode::Char('f')
-            | KeyCode::Char('F') => app.import_toggle_fullscreen(),
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('f') | KeyCode::Char('F') => {
+                app.import_toggle_fullscreen()
+            }
             KeyCode::Down | KeyCode::Char('j') => app.import_scroll_prompt(1),
             KeyCode::Up | KeyCode::Char('k') => app.import_scroll_prompt(-1),
             KeyCode::PageDown | KeyCode::Char(' ') => app.import_scroll_prompt(10),

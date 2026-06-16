@@ -123,7 +123,10 @@ impl ImportError {
                 format!("{}: {}", m.import_err_invalid_json, e)
             }
             ImportError::UnsupportedSchema(v) => {
-                format!("{} {} (expected {})", m.import_err_schema_version, v, IMPORT_SCHEMA_VERSION)
+                format!(
+                    "{} {} (expected {})",
+                    m.import_err_schema_version, v, IMPORT_SCHEMA_VERSION
+                )
             }
             ImportError::EmptyName => m.import_err_empty_name.to_string(),
             ImportError::NoCategories => m.import_err_no_categories.to_string(),
@@ -166,8 +169,7 @@ pub fn sanitize_json_input(raw: &str) -> String {
 /// Parse raw clipboard text into a validated [`ImportSchema`].
 pub fn parse(raw: &str) -> Result<ImportSchema, ImportError> {
     let cleaned = sanitize_json_input(raw);
-    let schema: ImportSchema =
-        serde_json::from_str(&cleaned).map_err(ImportError::InvalidJson)?;
+    let schema: ImportSchema = serde_json::from_str(&cleaned).map_err(ImportError::InvalidJson)?;
 
     if schema.schema_version != IMPORT_SCHEMA_VERSION {
         return Err(ImportError::UnsupportedSchema(schema.schema_version));
@@ -262,11 +264,11 @@ pub fn total_evaluations(schema: &ImportSchema) -> usize {
 }
 
 fn unique_name(name: &str, existing: &[&str], copy_suffix: &str) -> String {
-    if !existing.iter().any(|n| *n == name) {
+    if !existing.contains(&name) {
         return name.to_string();
     }
     let first = format!("{} ({})", name, copy_suffix);
-    if !existing.iter().any(|n| *n == first) {
+    if !existing.contains(&first.as_str()) {
         return first;
     }
     let mut i = 2;
@@ -303,7 +305,10 @@ mod tests {
     #[test]
     fn parse_rejects_wrong_schema_version() {
         let raw = r#"{"schema_version":99,"name":"x","categories":[{"name":"c","weight":100}]}"#;
-        assert!(matches!(parse(raw), Err(ImportError::UnsupportedSchema(99))));
+        assert!(matches!(
+            parse(raw),
+            Err(ImportError::UnsupportedSchema(99))
+        ));
     }
 
     #[test]
@@ -321,7 +326,10 @@ mod tests {
     #[test]
     fn unique_name_appends_copy_when_taken() {
         let existing = vec!["Algebra"];
-        assert_eq!(unique_name("Algebra", &existing, "copia"), "Algebra (copia)");
+        assert_eq!(
+            unique_name("Algebra", &existing, "copia"),
+            "Algebra (copia)"
+        );
     }
 
     #[test]
