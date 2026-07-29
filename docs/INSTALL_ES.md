@@ -10,7 +10,7 @@ cualquier otra distribución con un toolchain de Rust reciente).
 
 > **Resumen rápido** — instala Rust y luego:
 > ```bash
-> git clone https://codeberg.org/Kyronix/Kalk.git
+> git clone https://github.com/yfloress/Kalk.git
 > cd Kalk
 > sudo ./install.sh        # o bien: ./install.sh --user  (sin sudo)
 > ```
@@ -101,7 +101,7 @@ O gestiona toolchains con rustup: `sudo pacman -S rustup && rustup default stabl
 ## Paso 2 — Obtener el código fuente
 
 ```bash
-git clone https://codeberg.org/Kyronix/Kalk.git
+git clone https://github.com/yfloress/Kalk.git
 cd Kalk
 ```
 

@@ -69,7 +69,7 @@ src/
 Every `.rs` source file (including test files) must start with this exact AGPL header:
 ```rust
 // Kalk — your academic dashboard in the terminal.
-// Copyright (C) 2026  Kyronix
+// Copyright (C) 2026  yfloress
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as

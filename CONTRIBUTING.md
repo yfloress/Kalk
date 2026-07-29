@@ -8,7 +8,7 @@ The following is a set of guidelines for contributing to this repository. These 
 
 We follow the standard **Fork & Pull** workflow combined with a simplified **Gitflow** branching strategy.
 
-1.  **Fork** the repository on Codeberg.
+1.  **Fork** the repository on GitHub.
 2.  **Clone** your fork locally.
 3.  **Create a Branch** for your specific task (do not work directly on `main`).
 4.  **Commit** your changes following the conventions.

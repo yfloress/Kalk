@@ -2,10 +2,10 @@
 name = "kalk"
 version = "0.1.0"
 edition = "2024"
-authors = ["Kyronix"]
+authors = ["yfloress"]
 description = "Manage courses, track grades, and automatically calculate the exact threshold needed to pass, all without touching the mouse."
 license = "AGPL-3.0-or-later"
-repository = "https://codeberg.org/Kyronix/Kalk"
+repository = "https://github.com/yfloress/Kalk"
 readme = "README.md"
 keywords = ["tui", "academic", "productivity", "grades", "ratatui"]
 categories = ["command-line-utilities", "visualization"]
