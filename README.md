@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./packaging/linux/kalk.svg" alt="Sanctum" width="120" height="120" />
+<img src="./packaging/linux/kalk.svg" alt="Kalk" width="120" height="120" />
 
 <h1>KALK</h1>
 
@@ -84,7 +84,7 @@ Press `?` inside the category editor for a full help overlay.
 ### Using Cargo
 
 ```bash
-git clone https://codeberg.org/Kyronix/Kalk.git
+git clone https://github.com/yfloress/Kalk.git
 cd Kalk
 cargo run --release
 ```
