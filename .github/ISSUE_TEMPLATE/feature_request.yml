@@ -1,0 +1,59 @@
+name: Feature Request
+description: Propose a new feature for the App
+title: "[FEAT] "
+labels: ["feat"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before requesting
+      options:
+        - label: I searched the existing issues and this has not been requested.
+          required: true
+
+  - type: textarea
+    id: story
+    attributes:
+      label: User Story
+      value: "As a [user type], I want to [GOAL], so that [BENEFIT]."
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that Kalk makes hard or impossible today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance Criteria
+      value: |
+        - [ ] **Criteria 1:** Description...
+        - [ ] **Criteria 2:** Description...
+        - [ ] **Criteria 3:** Description...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Design constraints
+      description: Kalk is a keyboard-driven, offline TUI. Confirm the proposal fits.
+      options:
+        - label: This feature is reachable without a mouse.
+        - label: This feature does not require network access.
+        - label: Any user-facing text can be translated into both English and Spanish.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, links, or prior art.
+    validations:
+      required: false

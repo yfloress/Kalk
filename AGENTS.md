@@ -1,10 +1,11 @@
 # Repository Guidelines
 
 ## Branching Strategy
-- **`main`** is the stable/production branch. NEVER push or commit directly to `main`.
-- **`dev`** is the active development branch. All feature branches are created from `dev` and merged back into `dev`.
-- Feature branches follow the naming convention: `feature/`, `fix/`, `docs/`, `chore/` (e.g., `feature/export-pdf`).
-- Always merge with `--no-ff` and delete the feature branch after merging.
+- **`main`** is the only long-lived branch. Verified work lands there directly.
+- Branch only for work that is large or risky enough to be broken half-way
+  through. Naming convention: `feature/`, `fix/`, `docs/`, `chore/`
+  (e.g., `feature/export-pdf`).
+- Merge those with `--no-ff` and delete the branch afterwards.
 
 ## Project Intent & Mindset
 Kalk is an academic dashboard TUI for Universidad Federico Santa Maria (Chile).
@@ -115,7 +116,8 @@ Always ask the user to run them. Use `nix develop -c` prefix for all Cargo comma
 
 ## Commit Guidelines
 - **NEVER create commits unless the user explicitly asks.**
-- Follow **git-flow**: work on `feature/`, `fix/`, `docs/`, `chore/` branches off `dev`, merge with `--no-ff`, then delete the feature branch.
+- See **Branching Strategy**: verified work goes to `main`; only large or risky
+  work gets its own branch.
 - Use **Conventional Commits**:
   - `feat:` new features
   - `fix:` bug fixes

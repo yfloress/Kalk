@@ -37,6 +37,7 @@
             rustToolchain
             pkgs.just
             pkgs.cargo-audit
+            pkgs.cargo-deny
             pkgs.cargo-edit
           ];
 

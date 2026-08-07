@@ -1,0 +1,106 @@
+name: Bug Report
+description: Report a bug or error
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report.
+
+        Kalk keeps everything on your machine, so screenshots and `data.json`
+        carry your real courses and grades. Redact anything you would rather
+        not publish before attaching them.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before reporting
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I am on the latest commit of `main`, or I state below which build I am on.
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Include the exact keys you pressed, in order.
+      value: |
+        1. Open Kalk on '...'
+        2. Press '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - macOS
+        - Windows (WSL)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal
+      description: Emulator and multiplexer, if any. Rendering bugs usually depend on it.
+      placeholder: "e.g. kitty 0.42, or alacritty inside tmux 3.5"
+    validations:
+      required: false
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      placeholder: "e.g. Fedora 44, macOS 15.2"
+    validations:
+      required: false
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App Version
+      placeholder: "e.g. 0.1.0, or the commit hash you built from"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Relevant output, if any. Redact anything sensitive.
+      render: text
+    validations:
+      required: false
+
+  - type: upload
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Optional. Images that help explain the problem.
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4"
