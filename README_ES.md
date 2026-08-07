@@ -7,156 +7,96 @@
 **Tu dashboard académico en la terminal.**
 
 [![English](https://img.shields.io/badge/README-English-blue?style=flat-square)](README.md)
-
-Gestiona ramos, registra notas por categorías y calcula automáticamente la nota que necesitas para aprobar — todo sin tocar el mouse.
-
-[![Rust](https://img.shields.io/badge/Hecho_con-Rust-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
-[![TUI](https://img.shields.io/badge/Interfaz-Ratatui-green?style=for-the-badge)](https://github.com/ratatui-org/ratatui)
-[![License](https://img.shields.io/badge/Licencia-AGPL_v3-blue?style=for-the-badge)](LICENSE)
+[![Rust](https://img.shields.io/badge/Hecho_con-Rust-orange?style=flat-square&logo=rust)](https://www.rust-lang.org/)
+[![Licencia](https://img.shields.io/badge/Licencia-AGPL_v3-blue?style=flat-square)](LICENSE)
 
 </div>
 
-![IMG](.img/img.png)
+![Kalk](assets/screenshot.png)
 
 ---
 
-## Características
+## Qué es
 
-| Característica | Descripción |
-|----------------|-------------|
-| **Semestres** | Agrupa ramos por semestre y conserva los anteriores — no borres un ramo para empezar de nuevo |
-| **Dashboard** | Pantalla Home con promedio del semestre, aprobados/reprobados, créditos en riesgo y el ramo más crítico |
-| **Créditos** | Créditos opcionales por ramo (SCT, ECTS, ...) — los promedios se ponderan cuando están |
-| **Sistema jerárquico de notas** | Estructura Ramo → Categorías → Evaluaciones con ponderaciones |
-| **Evaluaciones ponderadas** | Asigna pesos individuales a las evaluaciones dentro de una categoría (ej. 20%/40%/40%) |
-| **Cálculo en tiempo real** | Muestra exactamente qué nota necesitas en cada evaluación para aprobar |
-| **Examen global** | Configura políticas de examen global: promedio ponderado con semestre, o reemplazar peor categoría |
-| **Reglas avanzadas por categoría** | Eliminar peores notas, media geométrica, promedios mínimos, mínimo por evaluación, evaluaciones ponderadas, redondeo por categoría |
-| **Plantillas de ramos** | Plantillas predefinidas + crea tus propias plantillas reutilizables con `t` |
-| **Validación de pesos** | Indicadores visuales cuando los pesos no suman 100% |
-| **Auto-balance** | Distribuye automáticamente los pesos equitativamente entre categorías |
-| **Copiar y Pegar** | Copia evaluaciones entre categorías con `y`/`p` |
-| **Agregar en lote** | Agrega múltiples evaluaciones de una vez con `Ctrl+N` |
-| **Vista compacta** | Alterna la vista compacta del panel de ramos con `c` para más espacio |
-| **Iconos Nerd Font** | Iconos elegantes con Nerd Fonts (activados por defecto), con fallback Unicode |
-| **UI con temas** | Bordes redondeados, colores semánticos y atajos estilizados |
-| **Ajustes** | Activar/desactivar iconos Nerd Font, cambiar idioma — todo persistido en disco |
-| **Bilingüe** | Soporte completo en inglés y español (`L` para cambiar) |
-| **Persistencia automática** | Los datos se guardan localmente (`XDG_DATA_HOME/kalk`) y persisten entre sesiones |
-| **Solo teclado** | TUI rápido y ligero — no se necesita mouse |
+Kalk responde la pregunta que una planilla nunca termina de contestar:
+**¿voy a aprobar, y qué tengo que hacer al respecto?**
 
----
+Le describes cómo se evalúa un ramo — sus categorías, sus ponderaciones, las
+reglas enterradas en el programa — y Kalk te va diciendo dónde estás parado. No
+es una estimación: lo que no tiene nota cuenta como cero, así que el número que
+ves es el piso, y al lado tienes el techo al que todavía puedes llegar.
 
-## Cálculo de Notas
+Corre en la terminal, todo con el teclado, y guarda tus datos como JSON plano
+en tu propia máquina.
 
-- **Escala**: 0-100 puntos (la única admitida por ahora)
-- **Nota de aprobación por defecto**: 55 (configurable por ramo)
-- **Redondeo**: 0.5+ redondea hacia arriba (entonces 54.5 → 55 = aprobado)
-- **Indicadores por evaluación**: Muestra "Necesitas X+ en esta eval para aprobar" al editar
+## Qué hace
 
----
+**Sigue un ramo como se evalúa de verdad.** Categorías con peso, evaluaciones
+dentro de ellas, y las reglas que traen los programas reales: descartar las N
+peores, medias geométricas, promedios mínimos, mínimos por evaluación, topes de
+nota, exigencias de asistencia y exámenes globales.
 
-## Reglas Avanzadas por Categoría
+**Te dice qué necesitas.** Para cualquier evaluación sin nota calcula la marca
+exacta que te haría pasar — y te avisa cuando ninguna nota alcanza, porque
+alguna regla ya dejó la aprobación fuera de alcance.
 
-Cada categoría soporta reglas avanzadas opcionales (`Shift+A` al editar):
+**Conserva tus semestres.** Los anteriores se quedan, con un dashboard encima:
+promedio y techo alcanzable, cuánto de la nota sigue en juego, créditos en
+riesgo, y qué ramo necesita atención primero.
 
-| Regla | Descripción |
-|-------|-------------|
-| **Eliminar Peores** | Descarta las N peores notas antes de promediar (0–5) |
-| **Método de Promedio** | Aritmético (por defecto) o Media Geométrica |
-| **Evaluaciones Ponderadas** | Asigna pesos porcentuales individuales a las evaluaciones en vez de promediar equitativamente |
-| **Promedio Mínimo** | Exigir un promedio mínimo en esta categoría para aprobar |
-| **Min. Por Eval** | Nota mínima requerida en cada evaluación individual |
-| **Min. Una Eval** | Al menos una evaluación debe alcanzar una nota mínima |
-| **Si No Se Cumple** | Cuando no se alcanza el mínimo: final = prom. categoría, requiere global, o reprueba ramo |
-| **Redondear Categoría** | Redondea el promedio de la categoría antes de ponderar |
+**Lee un programa por ti.** El asistente de importación te entrega un prompt
+para pegar en cualquier IA junto al PDF del programa; pegas la respuesta de
+vuelta y revisas cada regla antes de aplicarla.
 
-Presiona `?` dentro del editor de categoría para ver la ayuda completa.
+**Habla español e inglés**, completos, intercambiables en cualquier momento.
 
----
+## Sobre las notas
+
+Las notas van de 0 a 100, se aprueba con 55 por defecto y es configurable por
+ramo. El redondeo sigue la regla habitual: 54.5 pasa a 55, y aprueba.
+
+Las evaluaciones sin nota siempre cuentan como cero. Es a propósito: hace que
+la nota mostrada sea tu situación real y no un pronóstico optimista.
 
 ## Instalación
-
-> Para instrucciones detalladas por plataforma (macOS, Fedora, Debian/Ubuntu, Arch Linux), consulta la [Guía de Instalación](docs/INSTALL_ES.md).
-
-### Requisitos
-
-- [Rust & Cargo](https://rustup.rs/) (>= 1.85) o [Nix](https://nixos.org/)
-- Se recomienda una [Nerd Font](https://www.nerdfonts.com/) (iconos activados por defecto — se pueden desactivar en Ajustes)
-
-### Usando Cargo
 
 ```bash
 git clone https://github.com/yfloress/Kalk.git
 cd Kalk
-cargo run --release
+./install.sh --user      # en ~/.local
 ```
 
-### Instalacion Rapida (Linux)
+O `sudo ./install.sh` para instalarlo en el sistema. El script compila Kalk si
+hace falta y deja en su lugar el binario, la entrada de escritorio y el icono;
+con `--uninstall` los quita.
 
-```bash
-sudo ./install.sh        # todo el sistema
-./install.sh --user      # solo tu usuario (~/.local)
-```
+Necesitas [Rust](https://rustup.rs/) 1.85+, y una
+[Nerd Font](https://www.nerdfonts.com/) si quieres los iconos — Kalk te
+pregunta en el primer arranque y usa Unicode simple si dices que no.
 
-Instala el binario, acceso directo de escritorio e icono (solo el binario en macOS). Ver [El script de instalación](docs/INSTALL_ES.md#el-script-de-instalación).
+¿Vas a trabajar en Kalk en vez de instalarlo? `nix run` lo levanta directo
+desde el código. Para las notas de macOS, Fedora, Debian y Arch, mira la
+[guía de instalación](docs/INSTALL_ES.md).
 
-### Usando Nix
+## Cómo moverse
 
-```bash
-nix develop
-cargo run
-```
+Presiona `?` en cualquier momento para ver el mapa completo de teclas. Todo se
+alcanza sin tocar el mouse.
 
-El entorno Nix incluye `cargo-audit` para análisis de seguridad.
+Tus datos viven en `XDG_DATA_HOME/kalk` como JSON legible — respáldalos,
+sincronízalos o edítalos a mano si quieres.
 
----
- 
-## Atajos de Teclado
- 
-Presiona `?` dentro de la app para ver la referencia completa.
- 
----
+## Contribuir
 
-## Stack Tecnológico
-
-| Herramienta | Propósito |
-|-------------|-----------|
-| [Ratatui](https://github.com/ratatui-org/ratatui) | Renderizado TUI |
-| [Crossterm](https://github.com/crossterm-rs/crossterm) | Backend de terminal |
-| [Serde](https://serde.rs/) | Serialización JSON |
-| [color-eyre](https://github.com/yaahc/color-eyre) | Manejo de errores |
-
----
-
-## Desarrollo
-
-```bash
-# Entrar al entorno de desarrollo
-nix develop
-
-# Ejecutar tests
-cargo test
-
-# Lint
-cargo clippy
-
-# Auditoría de seguridad
-cargo audit
-```
-
----
+[`AGENTS.md`](AGENTS.md) documenta la arquitectura y las convenciones que el
+código se exige a sí mismo. `nix develop` te deja el entorno completo.
 
 ## Licencia
 
-**GNU Affero General Public License v3.0 (AGPL-3.0)**
-
-Ver [LICENSE](LICENSE) para más detalles.
-
----
+**GNU Affero General Public License v3.0 o posterior.** Ver [LICENSE](LICENSE).
 
 <div align="center">
 
-Hecho con ❤️, 🦀 Rust y ❄️ Nix
+Hecho con 🦀 Rust y ❄️ Nix
 
 </div>

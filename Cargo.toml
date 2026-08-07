@@ -11,7 +11,7 @@ keywords = ["tui", "academic", "productivity", "grades", "ratatui"]
 categories = ["command-line-utilities", "visualization"]
 
 exclude = [
-    ".img/*",
+    "assets/*",
     ".envrc"
 ]
 
