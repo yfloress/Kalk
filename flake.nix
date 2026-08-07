@@ -30,8 +30,19 @@
             "clippy"
           ];
         };
+
+        # `nix run` levanta el arbol de trabajo, no un release pinneado:
+        # sirve para probar lo que se esta editando.
+        runScript = pkgs.writeShellScriptBin "kalk-dev" ''
+          exec ${rustToolchain}/bin/cargo run "$@"
+        '';
       in
       {
+        apps.default = {
+          type = "app";
+          program = "${runScript}/bin/kalk-dev";
+        };
+
         devShells.default = pkgs.mkShell {
           buildInputs = [
             rustToolchain
@@ -39,6 +50,7 @@
             pkgs.cargo-audit
             pkgs.cargo-deny
             pkgs.cargo-edit
+            pkgs.cargo-machete
           ];
 
           shellHook = ''
