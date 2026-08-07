@@ -3665,3 +3665,20 @@ fn test_every_typed_field_has_a_buffer() {
         );
     }
 }
+
+#[test]
+fn test_margin_is_silent_until_something_is_graded() {
+    // A fresh course would otherwise report -55 on day one, which is true and
+    // useless: every course in every new semester says the same thing.
+    let untouched = course_partially_graded(4, 0, 0.0);
+    assert!(untouched.margin().is_none());
+    assert!(!untouched.has_any_grade());
+
+    // The ceiling still has something to say: everything is still reachable.
+    assert!((untouched.best_case_grade().unwrap() - 100.0).abs() < 0.01);
+
+    let started = course_partially_graded(4, 1, 40.0);
+    assert!(started.has_any_grade());
+    // 40/4 = 10 → 10 - 55.
+    assert!((started.margin().unwrap() + 45.0).abs() < 0.01);
+}

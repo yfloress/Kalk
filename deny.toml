@@ -11,7 +11,7 @@ ignore = []
 
 [licenses]
 # Kalk ships under AGPL-3.0-or-later, so every dependency has to be compatible
-# with distributing it. Permissive licences only.
+# with distributing it. Permissive licences, plus MPL-2.0 (see below).
 allow = [
     "AGPL-3.0-or-later",
     "MIT",
@@ -25,6 +25,14 @@ allow = [
     "CC0-1.0",
     "Zlib",
     "BSL-1.0",
+    # MPL-2.0 is file-level copyleft, not permissive, and is allowed on
+    # purpose: its own section 1.12 names AGPL-3.0 a "Secondary License", and
+    # section 3.3 permits distributing a Larger Work that combines the two.
+    # That only holds while the crate is not marked "Incompatible With
+    # Secondary Licenses" (Exhibit B) — option-ext, the crate that brings this
+    # in through directories -> dirs-sys, carries no such notice.
+    # Re-check the notice if another MPL crate ever appears here.
+    "MPL-2.0",
 ]
 confidence-threshold = 0.8
 

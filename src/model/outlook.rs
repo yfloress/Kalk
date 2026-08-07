@@ -63,8 +63,22 @@ impl Course {
     ///
     /// Uses the rounded grade, so it agrees with the pass/fail verdict.
     pub fn margin(&self) -> Option<f64> {
+        // Before the first grade the shown grade is 0, so the distance would
+        // read -55 on every course in a fresh semester: arithmetically true,
+        // and worth nothing. The gap only means something once something has
+        // actually been graded.
+        if !self.has_any_grade() {
+            return None;
+        }
         self.final_grade()
             .map(|grade| Self::round_grade(grade) - self.passing_grade)
+    }
+
+    /// Whether any evaluation in the course carries a grade yet.
+    pub fn has_any_grade(&self) -> bool {
+        self.categories
+            .iter()
+            .any(|c| c.evaluations.iter().any(|e| e.grade.is_some()))
     }
 
     /// Share of the final grade (0-100) that no evaluation has settled yet.
