@@ -352,6 +352,12 @@ Ejemplo:
 
     // Semesters
     semester_name_prefix: "Semestre",
+    metric_in_play: "En juego",
+    metric_minimums_unmet: "Mínimos incumplidos",
+    metric_unrecoverable: "Irrecuperables",
+    metric_needs: "necesita",
+    metric_in: "en",
+    metric_lost: "perdido",
     semester_manage: "Nuevo / Renombrar / Eliminar",
     home_open: "Semestres (desde Ramos)",
     metric_status: "Estado",

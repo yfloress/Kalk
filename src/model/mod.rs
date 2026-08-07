@@ -30,6 +30,7 @@
 
 mod category;
 mod global;
+mod outlook;
 mod semester;
 
 #[cfg(test)]

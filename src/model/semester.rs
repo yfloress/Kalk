@@ -60,6 +60,10 @@ impl Semester {
         let mut counts = OutcomeCounts::default();
         let mut credits_at_risk: u32 = 0;
         let mut any_credits = false;
+        let mut unrecoverable = 0usize;
+        let mut failed_minimums = 0usize;
+        let mut best_cases: Vec<(&Course, f64)> = Vec::new();
+        let mut pending_weights: Vec<f64> = Vec::new();
 
         // Courses that carry a grade — the basis for averages.
         let mut graded: Vec<(&Course, f64)> = Vec::new();
@@ -87,29 +91,23 @@ impl Semester {
             if let Some(grade) = course.final_grade() {
                 graded.push((course, grade));
             }
+            if let Some(best) = course.best_case_grade() {
+                best_cases.push((course, best));
+            }
+            if course.is_unrecoverable() {
+                unrecoverable += 1;
+            }
+            failed_minimums += course.compute_grade().failed_minimums.len();
+            if !course.categories.is_empty() {
+                pending_weights.push(course.pending_weight());
+            }
         }
 
         // A partial set of credits would silently distort the average, so
         // weight only when every graded course declares them.
         let weighted = !graded.is_empty() && graded.iter().all(|(c, _)| c.credits.is_some());
 
-        let average = if graded.is_empty() {
-            None
-        } else if weighted {
-            let total: u32 = graded.iter().map(|(c, _)| c.credits.unwrap_or(0)).sum();
-            if total == 0 {
-                None
-            } else {
-                let sum: f64 = graded
-                    .iter()
-                    .map(|(c, g)| g * f64::from(c.credits.unwrap_or(0)))
-                    .sum();
-                Some(sum / f64::from(total))
-            }
-        } else {
-            let sum: f64 = graded.iter().map(|(_, g)| g).sum();
-            Some(sum / graded.len() as f64)
-        };
+        let average = mean(&graded, weighted);
 
         // Lowest grade among the courses not yet secured.
         let critical = self
@@ -141,8 +139,16 @@ impl Semester {
 
         SemesterMetrics {
             average,
+            best_case: mean(&best_cases, weighted),
             weighted,
             counts,
+            unrecoverable,
+            failed_minimums,
+            pending_weight: if pending_weights.is_empty() {
+                None
+            } else {
+                Some(pending_weights.iter().sum::<f64>() / pending_weights.len() as f64)
+            },
             graded_evaluations,
             total_evaluations,
             total_courses: self.courses.len(),
@@ -165,11 +171,22 @@ pub struct OutcomeCounts {
 /// Aggregate view of one semester, for the dashboard.
 #[derive(Debug, Clone)]
 pub struct SemesterMetrics {
-    /// Average across courses that have a grade.
+    /// Average across courses that have a grade. This is the floor: ungraded
+    /// evaluations count as zero.
     pub average: Option<f64>,
+    /// The same average if every remaining evaluation were aced — the ceiling.
+    pub best_case: Option<f64>,
     /// True when `average` is credit-weighted rather than a plain mean.
     pub weighted: bool,
     pub counts: OutcomeCounts,
+    /// Courses that can no longer reach their passing grade.
+    pub unrecoverable: usize,
+    /// Categories sitting below a minimum they are required to meet.
+    pub failed_minimums: usize,
+    /// Mean share of each course's final grade that no evaluation has settled.
+    /// Distinct from the evaluation count: a course can be most of the way
+    /// through its evaluations while the heavy ones are still ahead.
+    pub pending_weight: Option<f64>,
     /// Evaluations already graded, across every course.
     pub graded_evaluations: usize,
     pub total_evaluations: usize,
@@ -193,17 +210,28 @@ pub fn cumulative_average(semesters: &[Semester]) -> Option<f64> {
         return None;
     }
 
-    if graded.iter().all(|(c, _)| c.credits.is_some()) {
-        let total: u32 = graded.iter().map(|(c, _)| c.credits.unwrap_or(0)).sum();
+    let weighted = graded.iter().all(|(c, _)| c.credits.is_some());
+    mean(&graded, weighted)
+}
+
+/// Mean of `(course, value)` pairs, weighted by credits when asked for.
+/// Falls back to an unweighted mean if the credits add up to nothing.
+fn mean(values: &[(&Course, f64)], weighted: bool) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+
+    if weighted {
+        let total: u32 = values.iter().map(|(c, _)| c.credits.unwrap_or(0)).sum();
         if total > 0 {
-            let sum: f64 = graded
+            let sum: f64 = values
                 .iter()
-                .map(|(c, g)| g * f64::from(c.credits.unwrap_or(0)))
+                .map(|(c, v)| v * f64::from(c.credits.unwrap_or(0)))
                 .sum();
             return Some(sum / f64::from(total));
         }
     }
 
-    let sum: f64 = graded.iter().map(|(_, g)| g).sum();
-    Some(sum / graded.len() as f64)
+    let sum: f64 = values.iter().map(|(_, v)| v).sum();
+    Some(sum / values.len() as f64)
 }

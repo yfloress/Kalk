@@ -35,6 +35,7 @@ src/
 │   ├── mod.rs       # Evaluation, Course, CourseOutcome, NeededGrade, WeightValidation, templates
 │   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
 │   ├── semester.rs  # Semester, SemesterMetrics, cumulative_average
+│   ├── outlook.rs   # Best case, margin, pending weight, next ungraded
 │   ├── global.rs    # Global exam grade computation
 │   └── tests.rs     # All model unit tests (cfg(test) only)
 ├── ui/
@@ -65,6 +66,9 @@ src/
   `app.courses()` / `app.courses_mut()`, never a bare field.
 - **`Course::outcome()` is the single pass/fail verdict.** `ui/` renders it and
   must not re-derive it from `compute_grade()`.
+- **The displayed grade is the floor, not an estimate** — ungraded evaluations
+  count as zero. `Course::best_case_grade()` is the matching ceiling; never add
+  a "worst case" metric, it is the number already on screen.
 - **`data.json` is versioned.** Changing the on-disk shape means bumping
   `DATA_SCHEMA_VERSION` and extending `migrate()` in `persistence.rs`.
 - **Domain logic lives in `model/`** — grade calculations, averages, weight validation, needed-grade formulas. Never put math in `ui/`.

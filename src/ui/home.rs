@@ -28,13 +28,15 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::model::{Course, CourseOutcome, MAX_GRADE, SemesterMetrics, cumulative_average};
+use crate::model::{
+    Course, CourseOutcome, MAX_GRADE, NeededGradeStatus, SemesterMetrics, cumulative_average,
+};
 
 use super::helpers::{
     centered_rect, focused_border_style, render_delete_confirmation, render_input_field,
 };
 use super::icons::icons;
-use super::theme::theme;
+use super::theme::{Theme, theme};
 
 /// Wordmark shown when there is nothing to report yet.
 const WORDMARK: &str = r#" ___  __    ________  ___       ___  __
@@ -134,7 +136,7 @@ fn draw_metrics(frame: &mut Frame, app: &App, area: Rect) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .horizontal_margin(2)
-        .constraints([Constraint::Length(13), Constraint::Min(0)])
+        .constraints([Constraint::Length(17), Constraint::Min(0)])
         .split(inner);
 
     frame.render_widget(
@@ -155,12 +157,9 @@ fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'
 
     let mut lines = Vec::new();
 
-    let average = match metrics.average {
-        Some(avg) if metrics.weighted => format!("{:.1}  ({})", avg, m.metric_average_weighted),
-        Some(avg) => format!("{:.1}", avg),
-        None => m.metric_no_data.to_string(),
-    };
-    lines.push(metric_row(m.metric_average, average, t.text_primary));
+    // Ungraded evaluations count as zero, so `average` is the floor. Pairing
+    // it with the ceiling turns a bare number into the range still in reach.
+    lines.push(average_row(m, t, metrics));
 
     if let Some(avg) = cumulative_average(&app.semesters) {
         lines.push(metric_row(
@@ -227,6 +226,16 @@ fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'
         ));
     }
 
+    if let Some(pending) = metrics.pending_weight {
+        lines.push(metric_row(
+            m.metric_in_play,
+            format!("{:.0}%", pending),
+            t.text_secondary,
+        ));
+    }
+
+    lines.push(Line::from(""));
+
     if counts.pending_global > 0 {
         lines.push(metric_row(
             m.metric_pending_global,
@@ -235,13 +244,29 @@ fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'
         ));
     }
 
-    // The single course furthest from safety — the one to act on first.
+    if metrics.failed_minimums > 0 {
+        lines.push(metric_row(
+            m.metric_minimums_unmet,
+            metrics.failed_minimums.to_string(),
+            t.status_override,
+        ));
+    }
+
+    if metrics.unrecoverable > 0 {
+        lines.push(metric_row(
+            m.metric_unrecoverable,
+            metrics.unrecoverable.to_string(),
+            t.status_fail,
+        ));
+    }
+
+    // The single course furthest from safety, and what would fix it.
     if let Some(course) = metrics.critical.and_then(|i| app.courses().get(i)) {
-        let detail = match course.final_grade() {
-            Some(g) => format!("{}  ({:.0})", course.name, Course::round_grade(g)),
-            None => course.name.clone(),
-        };
-        lines.push(metric_row(m.metric_critical, detail, t.status_fail));
+        lines.push(metric_row(
+            m.metric_critical,
+            critical_detail(course, m),
+            t.status_fail,
+        ));
     }
 
     // Trend only says something once there is more than one semester.
@@ -251,6 +276,79 @@ fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'
     }
 
     lines
+}
+
+/// The current grade and the best grade still reachable, as a range.
+/// Collapses to a single figure once nothing is left to play for.
+fn average_row(m: &crate::i18n::Messages, t: &Theme, metrics: &SemesterMetrics) -> Line<'static> {
+    let Some(avg) = metrics.average else {
+        return metric_row(m.metric_average, m.metric_no_data.to_string(), t.text_muted);
+    };
+
+    let mut spans = vec![
+        Span::styled(
+            format!("{:<width$}", m.metric_average, width = LABEL_W),
+            Style::default().fg(t.text_muted),
+        ),
+        Span::styled(format!("{:.1}", avg), Style::default().fg(t.text_primary)),
+    ];
+
+    if let Some(best) = metrics.best_case.filter(|b| *b - avg > 0.05) {
+        spans.push(Span::styled(
+            " \u{2192} ",
+            Style::default().fg(t.text_muted),
+        ));
+        spans.push(Span::styled(
+            format!("{:.1}", best),
+            Style::default().fg(t.status_info),
+        ));
+    }
+
+    if metrics.weighted {
+        spans.push(Span::styled(
+            format!("  ({})", m.metric_average_weighted),
+            Style::default().fg(t.text_muted),
+        ));
+    }
+
+    Line::from(spans)
+}
+
+/// "Physics (41) \u{b7} needs 72 in C3", or a plain note when it is already lost.
+fn critical_detail(course: &Course, m: &crate::i18n::Messages) -> String {
+    let grade = match course.final_grade() {
+        Some(g) => format!("{}  ({:.0})", course.name, Course::round_grade(g)),
+        None => course.name.clone(),
+    };
+
+    if course.is_unrecoverable() {
+        return format!("{}  \u{b7}  {}", grade, m.metric_lost);
+    }
+
+    // What the next untaken evaluation would have to score.
+    let Some((ci, ei)) = course.next_ungraded() else {
+        return grade;
+    };
+    let needed = course.needed_grade_for_evaluation(ci, ei, true);
+    let (Some(value), Some(name)) = (
+        needed.value,
+        course
+            .categories
+            .get(ci)
+            .and_then(|c| c.evaluations.get(ei))
+            .map(|e| e.name.as_str()),
+    ) else {
+        return grade;
+    };
+
+    if matches!(needed.status, NeededGradeStatus::Failure) {
+        return format!("{}  \u{b7}  {}", grade, m.metric_lost);
+    }
+
+    format!(
+        "{}  \u{b7}  {} {:.0} {} {}",
+        grade, m.metric_needs, value, m.metric_in, name
+    )
 }
 
 /// A label, a partially filled bar, and a caption.
@@ -329,7 +427,7 @@ fn draw_course_breakdown(frame: &mut Frame, app: &App, area: Rect) {
         .max()
         .unwrap_or(4)
         .clamp(4, 20);
-    let bar_w = area.width.saturating_sub(name_w as u16 + 12).clamp(6, 28) as usize;
+    let bar_w = area.width.saturating_sub(name_w as u16 + 24).clamp(6, 24) as usize;
 
     let mut lines = vec![Line::from(Span::styled(
         m.metric_courses_breakdown,
@@ -360,10 +458,27 @@ fn draw_course_breakdown(frame: &mut Frame, app: &App, area: Rect) {
                 },
                 Style::default().fg(color),
             ),
+            // Signed distance from passing: the grade alone does not say
+            // much when each course sets its own bar.
+            Span::styled(
+                match course.margin() {
+                    Some(margin) => format!("{:>+4.0} ", margin),
+                    None => "     ".to_string(),
+                },
+                Style::default().fg(t.text_muted),
+            ),
             Span::styled(BAR_FULL.repeat(filled), Style::default().fg(color)),
             Span::styled(
                 BAR_EMPTY.repeat(bar_w.saturating_sub(filled)),
                 Style::default().fg(t.text_muted),
+            ),
+            Span::styled(
+                if course.is_unrecoverable() {
+                    format!("  {}", m.metric_lost)
+                } else {
+                    String::new()
+                },
+                Style::default().fg(t.status_fail),
             ),
         ]));
     }

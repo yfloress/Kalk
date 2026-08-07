@@ -3303,3 +3303,152 @@ fn test_semester_counts_evaluation_progress() {
     assert_eq!(m.graded_evaluations, 1);
     assert_eq!(m.total_evaluations, 2);
 }
+
+// =============================================================================
+// Outlook: ceiling, margin, pending weight
+// =============================================================================
+
+/// Course with one category of `total` evaluations, the first `graded` of
+/// them scored at `grade`.
+fn course_partially_graded(total: usize, graded: usize, grade: f64) -> Course {
+    let mut course = Course::new("C".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Cat".to_string(), 100.0);
+    for i in 0..total {
+        if i < graded {
+            cat.evaluations
+                .push(Evaluation::with_grade(format!("E{i}"), grade));
+        } else {
+            cat.evaluations.push(Evaluation::new(format!("E{i}")));
+        }
+    }
+    course.categories.push(cat);
+    course
+}
+
+#[test]
+fn test_best_case_fills_ungraded_with_full_marks() {
+    // Two of four graded at 40: floor is 20, ceiling is 70.
+    let course = course_partially_graded(4, 2, 40.0);
+    assert!((course.final_grade().unwrap() - 20.0).abs() < 0.01);
+    assert!((course.best_case_grade().unwrap() - 70.0).abs() < 0.01);
+}
+
+#[test]
+fn test_best_case_equals_current_grade_when_everything_is_graded() {
+    let course = course_partially_graded(3, 3, 60.0);
+    let current = course.final_grade().unwrap();
+    assert!((course.best_case_grade().unwrap() - current).abs() < 0.01);
+}
+
+#[test]
+fn test_best_case_is_none_without_evaluations() {
+    let course = Course::new("Empty".to_string(), DEFAULT_PASSING_GRADE);
+    assert!(course.best_case_grade().is_none());
+}
+
+#[test]
+fn test_unrecoverable_when_full_marks_still_fall_short() {
+    // Three of four zeroed: the ceiling is 25, below the 55 needed.
+    let course = course_partially_graded(4, 3, 0.0);
+    assert!(course.is_unrecoverable());
+
+    // One of four zeroed: the ceiling is 75, still winnable.
+    let winnable = course_partially_graded(4, 1, 0.0);
+    assert!(!winnable.is_unrecoverable());
+}
+
+#[test]
+fn test_unrecoverable_accounts_for_the_global_exam() {
+    // Semester grade is stuck at 40, but a 30%-weighted global can lift it.
+    let mut course = course_partially_graded(2, 2, 40.0);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    // 40 * 0.7 + 100 * 0.3 = 58, which passes.
+    assert!(!course.is_unrecoverable());
+}
+
+#[test]
+fn test_margin_is_signed_distance_from_passing() {
+    let passing = course_partially_graded(1, 1, 72.0);
+    assert!((passing.margin().unwrap() - 17.0).abs() < 0.01);
+
+    let failing = course_partially_graded(1, 1, 41.0);
+    assert!((failing.margin().unwrap() + 14.0).abs() < 0.01);
+}
+
+#[test]
+fn test_pending_weight_tracks_what_is_still_in_play() {
+    let untouched = course_partially_graded(4, 0, 0.0);
+    assert!((untouched.pending_weight() - 100.0).abs() < 0.01);
+
+    let half = course_partially_graded(4, 2, 50.0);
+    assert!((half.pending_weight() - 50.0).abs() < 0.01);
+
+    let done = course_partially_graded(4, 4, 50.0);
+    assert!(done.pending_weight().abs() < 0.01);
+}
+
+#[test]
+fn test_pending_weight_uses_eval_weights_when_the_category_does() {
+    let mut course = Course::new("C".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Cat".to_string(), 100.0);
+    cat.rules.weighted_evaluations = true;
+    cat.evaluations
+        .push(Evaluation::with_weight("Done".to_string(), 60.0, 80.0));
+    let mut pending = Evaluation::new("Pending".to_string());
+    pending.weight = Some(20.0);
+    cat.evaluations.push(pending);
+    course.categories.push(cat);
+
+    // The ungraded evaluation carries 20 of the 100 weight in the category.
+    assert!((course.pending_weight() - 20.0).abs() < 0.01);
+}
+
+#[test]
+fn test_empty_category_counts_as_fully_pending() {
+    let mut course = Course::new("C".to_string(), DEFAULT_PASSING_GRADE);
+    course
+        .categories
+        .push(Category::new("Nothing yet".to_string(), 40.0));
+    let mut graded = Category::new("Done".to_string(), 60.0);
+    graded
+        .evaluations
+        .push(Evaluation::with_grade("E".to_string(), 70.0));
+    course.categories.push(graded);
+
+    assert!((course.pending_weight() - 40.0).abs() < 0.01);
+}
+
+#[test]
+fn test_next_ungraded_finds_the_first_gap() {
+    let course = course_partially_graded(3, 1, 50.0);
+    assert_eq!(course.next_ungraded(), Some((0, 1)));
+
+    let complete = course_partially_graded(3, 3, 50.0);
+    assert!(complete.next_ungraded().is_none());
+}
+
+#[test]
+fn test_semester_reports_ceiling_and_unrecoverable_courses() {
+    let m = semester_with(vec![
+        course_partially_graded(4, 2, 40.0), // floor 20, ceiling 70
+        course_partially_graded(4, 3, 0.0),  // ceiling 25 — lost
+    ])
+    .metrics();
+
+    assert_eq!(m.unrecoverable, 1);
+    // Ceilings 70 and 25 average to 47.5.
+    assert!((m.best_case.unwrap() - 47.5).abs() < 0.01);
+}
+
+#[test]
+fn test_semester_pending_weight_averages_across_courses() {
+    let m = semester_with(vec![
+        course_partially_graded(4, 2, 50.0), // 50% pending
+        course_partially_graded(4, 4, 50.0), // 0% pending
+    ])
+    .metrics();
+    assert!((m.pending_weight.unwrap() - 25.0).abs() < 0.01);
+}

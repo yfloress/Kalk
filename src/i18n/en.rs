@@ -353,6 +353,12 @@ Example:
 
     // Semesters
     semester_name_prefix: "Semester",
+    metric_in_play: "In play",
+    metric_minimums_unmet: "Minimums unmet",
+    metric_unrecoverable: "Beyond saving",
+    metric_needs: "needs",
+    metric_in: "in",
+    metric_lost: "lost",
     semester_manage: "New / Rename / Delete",
     home_open: "Semesters (from Courses)",
     metric_status: "Status",
