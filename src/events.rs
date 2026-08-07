@@ -129,6 +129,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             Screen::Welcome => handle_welcome_keys(app, key.code),
             Screen::WelcomeFonts => handle_welcome_fonts_keys(app, key.code),
             Screen::EditingSemester { .. } => handle_edit_semester_keys(app, key.code),
+            Screen::EditingAttendance => handle_attendance_keys(app, key.code),
             Screen::ConfirmDeleteSemester => handle_confirm_delete_semester_keys(app, key.code),
             Screen::SelectingTemplate => handle_template_keys(app, key.code),
             Screen::EditingCourse { .. } => handle_edit_course_keys(app, key.code),
@@ -217,6 +218,9 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
         // Jump to first / last item in current focus
         KeyCode::Home => app.goto_first(),
         KeyCode::End | KeyCode::Char('G') => app.goto_last(),
+
+        // Attendance belongs to the course, so it opens from the courses panel.
+        KeyCode::Char('a') if app.focus == Focus::Courses => app.start_edit_attendance(),
 
         // Create new item
         KeyCode::Char('n') => match app.focus {
@@ -578,4 +582,9 @@ fn handle_welcome_fonts_keys(app: &mut App, key: KeyCode) {
         KeyCode::Esc => app.welcome_back(),
         _ => {}
     }
+}
+
+/// Attendance popup: three numbers and one toggle.
+fn handle_attendance_keys(app: &mut App, key: KeyCode) {
+    handle_form_keys(app, key, App::confirm_attendance, App::cancel_edit);
 }

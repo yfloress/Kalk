@@ -19,7 +19,7 @@
 //! and how toggle fields cycle.
 
 use super::{App, Screen};
-use crate::model::{AveragingMethod, GlobalExamPolicy, MinimumNotMetAction};
+use crate::model::{AttendanceAction, AveragingMethod, GlobalExamPolicy};
 
 /// Maximum value for the "drop lowest" toggle cycle (0..=MAX_DROP_LOWEST).
 const MAX_DROP_LOWEST: usize = 5;
@@ -48,6 +48,11 @@ pub enum InputField {
     RoundBeforeWeight,
     /// Toggle: whether evaluations in this category have individual weights.
     WeightedEvals,
+    // Attendance popup
+    ClassesTotal,
+    ClassesMissed,
+    AttendanceRequired,
+    AttendanceAction,
     // Global exam fields (course form)
     GlobalPolicy,
     GlobalSemesterWeight,
@@ -67,6 +72,7 @@ impl InputField {
                 | InputField::OnMinOneEvalNotMet
                 | InputField::RoundBeforeWeight
                 | InputField::WeightedEvals
+                | InputField::AttendanceAction
                 | InputField::GlobalPolicy
         )
     }
@@ -83,6 +89,9 @@ impl InputField {
                 | InputField::MinimumAverage
                 | InputField::MinPerEval
                 | InputField::MinOneEval
+                | InputField::ClassesTotal
+                | InputField::ClassesMissed
+                | InputField::AttendanceRequired
                 | InputField::GlobalSemesterWeight
                 | InputField::GlobalExamWeight
                 | InputField::GlobalMinGrade
@@ -166,6 +175,14 @@ impl App {
                 }
             }
             (Screen::EditingEvaluation { .. }, InputField::EvalWeight) => InputField::Grade,
+            (Screen::EditingAttendance, InputField::ClassesTotal) => InputField::ClassesMissed,
+            (Screen::EditingAttendance, InputField::ClassesMissed) => {
+                InputField::AttendanceRequired
+            }
+            (Screen::EditingAttendance, InputField::AttendanceRequired) => {
+                InputField::AttendanceAction
+            }
+            (Screen::EditingAttendance, InputField::AttendanceAction) => InputField::ClassesTotal,
             (Screen::SavingTemplate, InputField::Name) => InputField::Description,
             (Screen::SavingTemplate, InputField::Description) => InputField::Name,
             _ => self.input_field,
@@ -177,6 +194,9 @@ impl App {
             InputField::Name => &mut self.edit_name,
             InputField::PassingGrade => &mut self.edit_passing_grade,
             InputField::Credits => &mut self.edit_credits,
+            InputField::ClassesTotal => &mut self.edit_classes_total,
+            InputField::ClassesMissed => &mut self.edit_classes_missed,
+            InputField::AttendanceRequired => &mut self.edit_attendance_required,
             InputField::Weight => &mut self.edit_weight,
             InputField::Grade => &mut self.edit_grade,
             InputField::Description => &mut self.edit_description,
@@ -196,6 +216,7 @@ impl App {
             | InputField::OnMinOneEvalNotMet
             | InputField::RoundBeforeWeight
             | InputField::WeightedEvals
+            | InputField::AttendanceAction
             | InputField::GlobalPolicy => {
                 debug_assert!(
                     false,
@@ -220,31 +241,25 @@ impl App {
                 };
             }
             InputField::OnMinNotMet => {
-                self.edit_on_min_not_met = match self.edit_on_min_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
-                };
+                self.edit_on_min_not_met = self.edit_on_min_not_met.next();
             }
             InputField::OnMinPerEvalNotMet => {
-                self.edit_on_min_per_eval_not_met = match self.edit_on_min_per_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
-                };
+                self.edit_on_min_per_eval_not_met = self.edit_on_min_per_eval_not_met.next();
             }
             InputField::OnMinOneEvalNotMet => {
-                self.edit_on_min_one_eval_not_met = match self.edit_on_min_one_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
-                };
+                self.edit_on_min_one_eval_not_met = self.edit_on_min_one_eval_not_met.next();
             }
             InputField::RoundBeforeWeight => {
                 self.edit_round_before_weighting = !self.edit_round_before_weighting;
             }
             InputField::WeightedEvals => {
                 self.edit_weighted_evaluations = !self.edit_weighted_evaluations;
+            }
+            InputField::AttendanceAction => {
+                self.edit_attendance_action = match self.edit_attendance_action {
+                    AttendanceAction::WarnOnly => AttendanceAction::FailCourse,
+                    AttendanceAction::FailCourse => AttendanceAction::WarnOnly,
+                };
             }
             InputField::GlobalPolicy => {
                 self.edit_global_policy = match self.edit_global_policy {
@@ -276,25 +291,13 @@ impl App {
             }
             // Three-state toggle: reverse cycle
             InputField::OnMinNotMet => {
-                self.edit_on_min_not_met = match self.edit_on_min_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
-                };
+                self.edit_on_min_not_met = self.edit_on_min_not_met.previous();
             }
             InputField::OnMinPerEvalNotMet => {
-                self.edit_on_min_per_eval_not_met = match self.edit_on_min_per_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
-                };
+                self.edit_on_min_per_eval_not_met = self.edit_on_min_per_eval_not_met.previous();
             }
             InputField::OnMinOneEvalNotMet => {
-                self.edit_on_min_one_eval_not_met = match self.edit_on_min_one_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
-                };
+                self.edit_on_min_one_eval_not_met = self.edit_on_min_one_eval_not_met.previous();
             }
             // Three-state toggle: reverse cycle
             InputField::GlobalPolicy => {

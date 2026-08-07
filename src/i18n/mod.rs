@@ -316,6 +316,18 @@ pub struct Messages {
     // Semesters
     /// Prefix for auto-generated semester names ("Semester 1", "Semester 2").
     pub semester_name_prefix: &'static str,
+    pub import_requires_first: &'static str,
+    pub attendance_title: &'static str,
+    pub attendance_total: &'static str,
+    pub attendance_missed: &'static str,
+    pub attendance_required: &'static str,
+    pub attendance_if_not_met: &'static str,
+    pub attendance_warn_only: &'static str,
+    pub attendance_fails_course: &'static str,
+    pub attendance_untracked: &'static str,
+    pub attendance_can_still_miss: &'static str,
+    pub attendance_open: &'static str,
+    pub action_cap_final_grade: &'static str,
     pub metric_ceiling: &'static str,
     pub metric_margin: &'static str,
     pub welcome_language_title: &'static str,

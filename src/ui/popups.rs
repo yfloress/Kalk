@@ -322,6 +322,7 @@ fn render_action_toggle(
         MinimumNotMetAction::FinalEqualsAverage => m.action_final_equals_avg,
         MinimumNotMetAction::RequiresGlobal => m.action_requires_global,
         MinimumNotMetAction::FailCourse => m.action_fail_course,
+        MinimumNotMetAction::CapFinalGrade => m.action_cap_final_grade,
     };
     render_toggle_field(
         frame,

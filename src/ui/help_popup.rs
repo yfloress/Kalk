@@ -102,6 +102,7 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
         blank(),
         group(m.help_group_actions),
         row("g", m.enter_global),
+        row("a", m.attendance_open),
         row("t", m.save_as_template),
         row("b", m.balance),
         row("y / p", &copy_paste),

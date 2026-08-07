@@ -28,6 +28,7 @@ src/
 │   ├── actions.rs   # Secondary actions: templates, language, settings, global grade, yank/paste, bulk-add
 │   ├── semesters.rs # Semester navigation/CRUD, session persistence (config())
 │   ├── welcome.rs   # First-run wizard: language, then Nerd Font check
+│   ├── attendance.rs # Attendance popup state
 │   ├── input.rs     # InputField enum and form-field focus/toggle cycling
 │   ├── status.rs    # StatusSeverity and the status-message setters
 │   ├── history.rs   # Undo/redo snapshots (captures all semesters)
@@ -37,12 +38,14 @@ src/
 │   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
 │   ├── semester.rs  # Semester, SemesterMetrics, cumulative_average
 │   ├── outlook.rs   # Best case, margin, pending weight, next ungraded
+│   ├── attendance.rs # Attendance record, percentage and consequence
 │   ├── global.rs    # Global exam grade computation
 │   └── tests.rs     # All model unit tests (cfg(test) only)
 ├── ui/
 │   ├── mod.rs       # Main draw, panel rendering (courses, categories)
 │   ├── home.rs      # Home screen: semester list, dashboard metrics, semester popups
 │   ├── welcome.rs   # First-run wizard rendering
+│   ├── attendance_popup.rs # Attendance popup rendering
 │   ├── panels.rs    # Evaluations panel and footer rendering
 │   ├── popups.rs    # Popup dialogs (template, course, category, delete, language, save-template)
 │   ├── eval_popups.rs # Evaluation popup, global grade entry, bulk-add evaluations
@@ -71,6 +74,12 @@ src/
 - **The displayed grade is the floor, not an estimate** — ungraded evaluations
   count as zero. `Course::best_case_grade()` is the matching ceiling; never add
   a "worst case" metric, it is the number already on screen.
+- **Ceilings are applied in one place.** `Course::apply_ceilings` lowers the
+  grade for `CapFinalGrade` rules, global-exam caps and attendance shortfalls,
+  wrapping `compute_grade` so every path through it is covered.
+- **`needed_grade_for_evaluation` must never promise a rescue a ceiling
+  forbids.** It wraps the solver and downgrades an achievable answer to
+  `Failure` when even full marks could not pass.
 - **`data.json` is versioned.** Changing the on-disk shape means bumping
   `DATA_SCHEMA_VERSION` and extending `migrate()` in `persistence.rs`.
 - **Domain logic lives in `model/`** — grade calculations, averages, weight validation, needed-grade formulas. Never put math in `ui/`.

@@ -292,11 +292,18 @@ Respond with ONLY a JSON object — no prose, no markdown code fences, nothing b
   "name": "<course name>",
   "passing_grade": <number, default 55>,
   "credits": <integer or null>,
+  "attendance": {
+    "required_percent": <number or null>,
+    "if_not_met": "<warn_only | fails_course>"
+  },
   "global_exam": {
     "policy": "<none | weighted | replaces_worst>",
     "semester_weight": <0..1 if policy is weighted, else null>,
     "global_weight":   <0..1 if policy is weighted, else null>,
-    "min_grade":       <number or null>
+    "min_grade":       <number or null>,
+    "only_if_category_below": { "category": "<category name>", "below_average": <number> } | null,
+    "cap_if_passed": <number or null>,
+    "cap_if_failed": <number or null>
   },
   "categories": [
     {
@@ -308,7 +315,9 @@ Respond with ONLY a JSON object — no prose, no markdown code fences, nothing b
       "minimum_one_eval": <number or null>,
       "on_minimum_not_met":          "<final_equals_average | requires_global | fail_course>",
       "on_min_per_eval_not_met":     "<final_equals_average | requires_global | fail_course>",
-      "on_min_one_eval_not_met":     "<final_equals_average | requires_global | fail_course>",
+      "on_min_one_eval_not_met":     "<final_equals_average | requires_global | fail_course | cap_final_grade>",
+      "cap_final_grade": <number or null>,
+      "requires_categories": ["<category name>", ...],
       "weighted_evaluations": <true | false>,
       "averaging_method": "<arithmetic | geometric>",
       "round_before_weighting": <true | false>,
@@ -331,6 +340,16 @@ Rules:
 - Do not invent grades — leave "grade" as null unless the syllabus literally provides it.
 - Generate evaluation names like "C1", "C2", "Quiz 1", "Lab 1", "Tarea 1", based on what the syllabus describes.
 - If the syllabus lists "drop the lowest N", set drop_lowest accordingly; otherwise 0.
+- "attendance.required_percent" is the minimum attendance the syllabus demands.
+  Use "fails_course" when falling short means failing regardless of grades,
+  "warn_only" when the syllabus only mentions it.
+- "global_exam.only_if_category_below" is for recovery exams reserved for
+  students who did badly, e.g. "only those whose reports average under 60".
+- "global_exam.cap_if_passed" / "cap_if_failed" are ceilings the recovery exam
+  imposes, e.g. "passing the retake caps the course at 55".
+- "requires_categories" lists categories that must be completed before this one
+  may be sat, e.g. "you may only sit the test after the 4 quizzes and 4
+  assignments".  It changes no grade — Kalk only warns.
 - "credits" is the course's credit value (SCT, ECTS, or whatever the institution
   uses).  Use null when the syllabus does not state it — do not guess.
 - Minimum rules, and what happens when one is not met:
@@ -341,6 +360,10 @@ Rules:
   * "final_equals_average" — the final grade becomes that category's average.
   * "requires_global"      — the student must sit the global exam.
   * "fail_course"          — the course is failed outright.
+  * "cap_final_grade"     — the course can no longer exceed "cap_final_grade".
+    Use this for wording like "if the tests average 50 or less, the final
+    grade is capped at 54": the student is not failed outright, they simply
+    cannot climb past the ceiling.  Always set "cap_final_grade" with it.
   Set the action only when the syllabus states a minimum; otherwise use
   "final_equals_average".  Read the wording carefully: "must average 50 to pass
   the course" is fail_course, while "must average 50 or go to the global" is
@@ -348,11 +371,23 @@ Rules:
   passed.
 
 Example:
-{"schema_version":1,"name":"Calculus 1","passing_grade":55,"credits":5,"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null},"categories":[{"name":"Tests","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Labs","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
+{"schema_version":1,"name":"Calculus 1","passing_grade":55,"credits":5,"attendance":{"required_percent":null,"if_not_met":"warn_only"},"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null,"only_if_category_below":null,"cap_if_passed":null,"cap_if_failed":null},"categories":[{"name":"Tests","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","cap_final_grade":null,"requires_categories":[],"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Labs","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","cap_final_grade":null,"requires_categories":[],"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
 "#,
 
     // Semesters
     semester_name_prefix: "Semester",
+    import_requires_first: "Requires other categories first",
+    attendance_title: "Attendance",
+    attendance_total: "Classes held",
+    attendance_missed: "Classes missed",
+    attendance_required: "Minimum required %",
+    attendance_if_not_met: "If not met",
+    attendance_warn_only: "Warn only",
+    attendance_fails_course: "Fails the course",
+    attendance_untracked: "Not tracked",
+    attendance_can_still_miss: "left to spare",
+    attendance_open: "Attendance",
+    action_cap_final_grade: "Caps the final grade",
     metric_ceiling: "Ceiling",
     metric_margin: "Margin",
     welcome_language_title: "Choose your language",

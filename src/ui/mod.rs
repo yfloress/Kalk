@@ -23,6 +23,7 @@
 //! Icon sets live in `icons`, colour themes in `theme`.
 //! All calculation logic lives in `model/` — this module only formats and renders.
 
+mod attendance_popup;
 mod eval_popups;
 mod help_popup;
 pub(crate) mod helpers;
@@ -40,6 +41,7 @@ use crate::app::{App, Focus, Screen};
 use crate::model::{
     Course, CourseOutcome, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation,
 };
+use attendance_popup::draw_attendance_popup;
 use eval_popups::{draw_bulk_add_popup, draw_evaluation_popup, draw_global_grade_popup};
 use help_popup::draw_help_popup;
 use helpers::{focused_border_style, format_course_average, format_weight_validation};
@@ -154,6 +156,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::Settings => draw_settings_popup(frame, app),
         Screen::BulkAddEvaluations => draw_bulk_add_popup(frame, app),
         Screen::EnteringGlobalGrade => draw_global_grade_popup(frame, app),
+        Screen::EditingAttendance => draw_attendance_popup(frame, app),
         Screen::Help => draw_help_popup(frame, app),
         Screen::ImportPrompt => draw_import_prompt(frame, app),
         Screen::ImportPaste => draw_import_paste(frame, app),
@@ -226,6 +229,22 @@ fn outlook_line(course: &Course, m: &crate::i18n::Messages) -> Line<'static> {
             m.metric_in_play,
             format!("{:.0}%", course.pending_weight()),
             t.text_secondary,
+        );
+    }
+
+    if course.attendance.is_tracked()
+        && let Some(percent) = course.attendance.percent()
+    {
+        let color = if course.attendance.is_below_requirement() {
+            t.status_fail
+        } else {
+            t.text_secondary
+        };
+        push(
+            &mut spans,
+            m.attendance_title,
+            format!("{:.0}%", percent),
+            color,
         );
     }
 

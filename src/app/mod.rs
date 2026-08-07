@@ -24,6 +24,7 @@
 //! bulk-add) live in `actions`.
 
 mod actions;
+mod attendance;
 mod forms;
 mod history;
 pub mod import;
@@ -37,8 +38,8 @@ pub use status::StatusSeverity;
 
 use crate::i18n::{Language, Messages};
 use crate::model::{
-    AveragingMethod, Category, Course, CourseTemplate, Evaluation, GlobalExamPolicy,
-    MinimumNotMetAction, NeededGradeStatus, Semester,
+    AttendanceAction, AveragingMethod, Category, Course, CourseTemplate, Evaluation,
+    GlobalExamPolicy, MinimumNotMetAction, NeededGradeStatus, Semester,
 };
 use crate::persistence;
 use crate::templates;
@@ -102,6 +103,9 @@ pub enum Screen {
         is_new: bool,
     },
     ConfirmDeleteSemester,
+    /// Attendance for the selected course. Its own popup rather than four more
+    /// rows in a course form that already fills a short terminal.
+    EditingAttendance,
 }
 
 // =============================================================================
@@ -170,6 +174,8 @@ pub struct App {
     pub edit_on_min_per_eval_not_met: MinimumNotMetAction,
     pub edit_on_min_one_eval_not_met: MinimumNotMetAction,
     pub edit_round_before_weighting: bool,
+    /// Ceiling used by the CapFinalGrade action, as typed.
+    pub edit_cap_final_grade: String,
     /// Whether the category uses individually weighted evaluations.
     pub edit_weighted_evaluations: bool,
 
@@ -188,6 +194,12 @@ pub struct App {
 
     /// Temporary buffer for the bulk-add evaluation count popup.
     pub edit_bulk_count: String,
+
+    // Attendance editing state (course form)
+    pub edit_classes_total: String,
+    pub edit_classes_missed: String,
+    pub edit_attendance_required: String,
+    pub edit_attendance_action: AttendanceAction,
 
     /// Whether to use Nerd Font icons (persisted in config).
     pub use_nerd_fonts: bool,
@@ -268,6 +280,7 @@ impl Default for App {
             edit_on_min_per_eval_not_met: MinimumNotMetAction::default(),
             edit_on_min_one_eval_not_met: MinimumNotMetAction::default(),
             edit_round_before_weighting: false,
+            edit_cap_final_grade: String::new(),
             edit_weighted_evaluations: false,
             edit_global_policy: GlobalExamPolicy::default(),
             edit_global_semester_weight: String::new(),
@@ -275,6 +288,10 @@ impl Default for App {
             edit_global_min_grade: String::new(),
             edit_global_grade: String::new(),
             edit_bulk_count: String::new(),
+            edit_classes_total: String::new(),
+            edit_classes_missed: String::new(),
+            edit_attendance_required: String::new(),
+            edit_attendance_action: AttendanceAction::default(),
             show_advanced_rules: false,
             show_field_help: false,
             use_nerd_fonts: true,

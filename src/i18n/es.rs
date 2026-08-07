@@ -292,11 +292,18 @@ Responde EXCLUSIVAMENTE con un objeto JSON — sin texto adicional, sin code fen
   "name": "<nombre del ramo>",
   "passing_grade": <número, default 55>,
   "credits": <entero o null>,
+  "attendance": {
+    "required_percent": <número o null>,
+    "if_not_met": "<warn_only | fails_course>"
+  },
   "global_exam": {
     "policy": "<none | weighted | replaces_worst>",
     "semester_weight": <0..1 si policy es weighted, sino null>,
     "global_weight":   <0..1 si policy es weighted, sino null>,
-    "min_grade":       <número o null>
+    "min_grade":       <número o null>,
+    "only_if_category_below": { "category": "<nombre categoría>", "below_average": <número> } | null,
+    "cap_if_passed": <número o null>,
+    "cap_if_failed": <número o null>
   },
   "categories": [
     {
@@ -308,7 +315,9 @@ Responde EXCLUSIVAMENTE con un objeto JSON — sin texto adicional, sin code fen
       "minimum_one_eval": <número o null>,
       "on_minimum_not_met":          "<final_equals_average | requires_global | fail_course>",
       "on_min_per_eval_not_met":     "<final_equals_average | requires_global | fail_course>",
-      "on_min_one_eval_not_met":     "<final_equals_average | requires_global | fail_course>",
+      "on_min_one_eval_not_met":     "<final_equals_average | requires_global | fail_course | cap_final_grade>",
+      "cap_final_grade": <número o null>,
+      "requires_categories": ["<nombre categoría>", ...],
       "weighted_evaluations": <true | false>,
       "averaging_method": "<arithmetic | geometric>",
       "round_before_weighting": <true | false>,
@@ -331,6 +340,16 @@ Reglas:
 - No inventes notas — deja "grade" en null salvo que el programa las dé explícitamente.
 - Genera nombres de evaluación tipo "C1", "C2", "Tarea 1", "Lab 1", "Quiz 1" según lo que indique el programa.
 - Si el programa permite descartar las N peores notas, pon drop_lowest acorde; sino 0.
+- "attendance.required_percent" es la asistencia mínima que exige el programa.
+  Usa "fails_course" cuando no cumplirla reprueba sin importar las notas, y
+  "warn_only" cuando el programa sólo la menciona.
+- "global_exam.only_if_category_below" es para recuperativos reservados a quien
+  le fue mal, por ejemplo "sólo quienes promedien bajo 60 en informes".
+- "global_exam.cap_if_passed" / "cap_if_failed" son topes que impone el
+  recuperativo, por ejemplo "aprobar el recuperativo topa el ramo en 55".
+- "requires_categories" lista categorías que hay que completar antes de rendir
+  ésta, por ejemplo "sólo puedes rendir el certamen tras los 4 controles y las
+  4 tareas".  No cambia ninguna nota — Kalk sólo avisa.
 - "credits" son los créditos del ramo (SCT, ECTS, o lo que use la institución).
   Usa null si el programa no los indica — no los inventes.
 - Reglas de mínimos, y qué pasa cuando no se cumplen:
@@ -341,17 +360,33 @@ Reglas:
   * "final_equals_average" — la nota final pasa a ser el promedio de esa categoría.
   * "requires_global"      — el estudiante debe rendir el examen global.
   * "fail_course"          — el ramo se reprueba directamente.
+  * "cap_final_grade"     — la nota final no puede superar "cap_final_grade".
+    Úsalo para redacciones como "si el promedio de controles es 50 o menos, la
+    nota final se topa en 54": no se reprueba de inmediato, simplemente no se
+    puede subir del techo.  Siempre acompáñalo de "cap_final_grade".
   Pon la acción sólo cuando el programa declare un mínimo; si no, usa
   "final_equals_average".  Lee con cuidado: "debe promediar 50 para aprobar el
   ramo" es fail_course, mientras que "debe promediar 50 o va a global" es
   requires_global.  Equivocarse acá cambia si al estudiante se le dice que aprobó.
 
 Ejemplo:
-{"schema_version":1,"name":"Calculo 1","passing_grade":55,"credits":5,"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null},"categories":[{"name":"Controles","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Laboratorios","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
+{"schema_version":1,"name":"Calculo 1","passing_grade":55,"credits":5,"attendance":{"required_percent":null,"if_not_met":"warn_only"},"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null,"only_if_category_below":null,"cap_if_passed":null,"cap_if_failed":null},"categories":[{"name":"Controles","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","cap_final_grade":null,"requires_categories":[],"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Laboratorios","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","cap_final_grade":null,"requires_categories":[],"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}
 "#,
 
     // Semesters
     semester_name_prefix: "Semestre",
+    import_requires_first: "Requiere otras categorías antes",
+    attendance_title: "Asistencia",
+    attendance_total: "Clases realizadas",
+    attendance_missed: "Clases faltadas",
+    attendance_required: "Mínimo exigido %",
+    attendance_if_not_met: "Si no se cumple",
+    attendance_warn_only: "Sólo avisar",
+    attendance_fails_course: "Reprueba el ramo",
+    attendance_untracked: "Sin seguimiento",
+    attendance_can_still_miss: "de margen",
+    attendance_open: "Asistencia",
+    action_cap_final_grade: "Topa la nota final",
     metric_ceiling: "Techo",
     metric_margin: "Margen",
     welcome_language_title: "Elige tu idioma",

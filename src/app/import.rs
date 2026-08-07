@@ -28,8 +28,8 @@ use serde::Deserialize;
 
 use crate::i18n::Messages;
 use crate::model::{
-    AveragingMethod, Category, CategoryRules, Course, Evaluation, GlobalEligibility,
-    GlobalExamPolicy, MinimumNotMetAction,
+    Attendance, AttendanceAction, AveragingMethod, Category, CategoryRules, CategoryThreshold,
+    Course, Evaluation, GlobalEligibility, GlobalExamPolicy, GlobalOutcome, MinimumNotMetAction,
 };
 
 /// Version of the import schema this build understands.  Bump when making
@@ -50,6 +50,8 @@ pub struct ImportSchema {
     pub passing_grade: f64,
     #[serde(default)]
     pub credits: Option<u32>,
+    #[serde(default)]
+    pub attendance: Option<ImportAttendance>,
     #[serde(default)]
     pub global_exam: Option<ImportGlobal>,
     #[serde(default)]
@@ -73,6 +75,28 @@ pub struct ImportGlobal {
     pub global_weight: Option<f64>,
     #[serde(default)]
     pub min_grade: Option<f64>,
+    /// Only eligible while this category averages below `below_average`.
+    #[serde(default)]
+    pub only_if_category_below: Option<ImportCategoryThreshold>,
+    #[serde(default)]
+    pub cap_if_passed: Option<f64>,
+    #[serde(default)]
+    pub cap_if_failed: Option<f64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImportAttendance {
+    #[serde(default)]
+    pub required_percent: Option<f64>,
+    /// `"warn_only"` or `"fails_course"`.
+    #[serde(default)]
+    pub if_not_met: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ImportCategoryThreshold {
+    pub category: String,
+    pub below_average: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -101,6 +125,12 @@ pub struct ImportCategory {
     pub averaging_method: Option<String>,
     #[serde(default)]
     pub round_before_weighting: Option<bool>,
+    /// Ceiling used when an action is `cap_final_grade`.
+    #[serde(default)]
+    pub cap_final_grade: Option<f64>,
+    /// Names of categories that must be completed before this one.
+    #[serde(default)]
+    pub requires_categories: Vec<String>,
     #[serde(default)]
     pub evaluations: Vec<ImportEvaluation>,
 }
@@ -210,6 +240,20 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
     let mut course = Course::new(final_name, schema.passing_grade);
     course.credits = schema.credits.filter(|c| *c > 0);
 
+    if let Some(a) = &schema.attendance
+        && let Some(required) = a.required_percent
+    {
+        course.attendance = Attendance {
+            total_classes: None,
+            missed: 0,
+            required_percent: Some(required.clamp(0.0, 100.0)),
+            action: match a.if_not_met.as_deref() {
+                Some("fails_course") => AttendanceAction::FailCourse,
+                _ => AttendanceAction::WarnOnly,
+            },
+        };
+    }
+
     if let Some(g) = &schema.global_exam {
         course.global_policy = match g.policy.as_str() {
             "weighted" => GlobalExamPolicy::Weighted {
@@ -221,6 +265,20 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
         };
         course.global_eligibility = GlobalEligibility {
             min_grade: g.min_grade,
+            only_if_category_below: g.only_if_category_below.as_ref().and_then(|c| {
+                schema
+                    .categories
+                    .iter()
+                    .position(|ic| ic.name == c.category)
+                    .map(|idx| CategoryThreshold {
+                        category_idx: idx,
+                        average: c.below_average,
+                    })
+            }),
+        };
+        course.global_outcome = GlobalOutcome {
+            cap_if_passed: g.cap_if_passed,
+            cap_if_failed: g.cap_if_failed,
         };
     }
 
@@ -255,6 +313,12 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
                 on_min_one_eval_not_met: parse_action(ic.on_min_one_eval_not_met.as_deref()),
                 round_before_weighting: ic.round_before_weighting.unwrap_or(false),
                 weighted_evaluations: ic.weighted_evaluations.unwrap_or(false),
+                cap_final_grade: ic.cap_final_grade,
+                requires_categories: ic
+                    .requires_categories
+                    .iter()
+                    .filter_map(|name| schema.categories.iter().position(|c| &c.name == name))
+                    .collect(),
             };
 
             Category::with_rules(ic.name.clone(), ic.weight, evaluations, rules)
@@ -270,6 +334,7 @@ fn parse_action(raw: Option<&str>) -> MinimumNotMetAction {
     match raw {
         Some("requires_global") => MinimumNotMetAction::RequiresGlobal,
         Some("fail_course") => MinimumNotMetAction::FailCourse,
+        Some("cap_final_grade") => MinimumNotMetAction::CapFinalGrade,
         _ => MinimumNotMetAction::FinalEqualsAverage,
     }
 }
@@ -432,6 +497,49 @@ mod tests {
     }
 
     #[test]
+    fn to_course_reads_caps_attendance_and_prerequisites() {
+        let raw = r#"{"schema_version":1,"name":"LabCom",
+            "attendance":{"required_percent":85,"if_not_met":"fails_course"},
+            "global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,
+                "only_if_category_below":{"category":"Informes","below_average":60},
+                "cap_if_passed":55,"cap_if_failed":54},
+            "categories":[
+              {"name":"Informes","weight":60},
+              {"name":"Controles","weight":40,"minimum_average":51,
+               "on_minimum_not_met":"cap_final_grade","cap_final_grade":54,
+               "requires_categories":["Informes"]}
+            ]}"#;
+        let schema = parse(raw).unwrap();
+        let course = to_course(&schema, &[], "copy");
+
+        assert_eq!(course.attendance.required_percent, Some(85.0));
+        assert_eq!(course.attendance.action, AttendanceAction::FailCourse);
+
+        assert_eq!(course.global_outcome.cap_if_passed, Some(55.0));
+        assert_eq!(course.global_outcome.cap_if_failed, Some(54.0));
+        let threshold = course.global_eligibility.only_if_category_below.unwrap();
+        assert_eq!(threshold.category_idx, 0, "resolved by category name");
+        assert!((threshold.average - 60.0).abs() < 0.01);
+
+        let controls = &course.categories[1];
+        assert_eq!(
+            controls.rules.on_minimum_not_met,
+            MinimumNotMetAction::CapFinalGrade
+        );
+        assert_eq!(controls.rules.cap_final_grade, Some(54.0));
+        assert_eq!(controls.rules.requires_categories, vec![0]);
+    }
+
+    #[test]
+    fn unknown_category_names_in_prerequisites_are_dropped() {
+        let raw = r#"{"schema_version":1,"name":"X","categories":[
+            {"name":"A","weight":100,"requires_categories":["Ghost"]}]}"#;
+        let schema = parse(raw).unwrap();
+        let course = to_course(&schema, &[], "copy");
+        assert!(course.categories[0].rules.requires_categories.is_empty());
+    }
+
+    #[test]
     fn prompt_documents_every_importable_field() {
         // The prompt is the only thing that makes the AI emit these, so a new
         // schema field that never reaches the prompt is a silent dead end.
@@ -452,6 +560,12 @@ mod tests {
                 "semester_weight",
                 "global_weight",
                 "min_grade",
+                "cap_final_grade",
+                "requires_categories",
+                "only_if_category_below",
+                "cap_if_passed",
+                "cap_if_failed",
+                "required_percent",
             ] {
                 assert!(prompt.contains(field), "prompt is missing {field}");
             }

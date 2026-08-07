@@ -28,6 +28,7 @@
 //!
 //! Grade scale: 0-100, with 55 as passing grade by default.
 
+mod attendance;
 mod category;
 mod global;
 mod outlook;
@@ -36,6 +37,7 @@ mod semester;
 #[cfg(test)]
 mod tests;
 
+pub use attendance::{Attendance, AttendanceAction};
 pub use category::{AveragingMethod, Category, CategoryRules, MinimumNotMetAction};
 pub use semester::{Semester, SemesterMetrics, cumulative_average};
 
@@ -201,12 +203,35 @@ pub enum GlobalExamPolicy {
 
 /// Eligibility requirements to take the global exam.
 ///
-/// The field defaults to `None` (no restriction — anyone can take it).
+/// Every field defaults to `None` (no restriction — anyone can take it).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GlobalEligibility {
     /// Minimum semester grade required to be eligible. `None` = no minimum.
     #[serde(default)]
     pub min_grade: Option<f64>,
+    /// Only eligible while this category averages *below* the threshold.
+    /// Recovery exams are often reserved for the students who did badly.
+    #[serde(default)]
+    pub only_if_category_below: Option<CategoryThreshold>,
+}
+
+/// A category referenced by position, with a grade threshold.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CategoryThreshold {
+    pub category_idx: usize,
+    pub average: f64,
+}
+
+/// Ceilings a taken global exam places on the final grade.
+///
+/// Models recovery exams that let you pass but never score well: sitting one
+/// and passing might cap the course at 55, failing it at 54.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct GlobalOutcome {
+    #[serde(default)]
+    pub cap_if_passed: Option<f64>,
+    #[serde(default)]
+    pub cap_if_failed: Option<f64>,
 }
 
 // =============================================================================
@@ -286,6 +311,12 @@ pub struct Course {
     /// Eligibility requirements to take the global exam.
     #[serde(default)]
     pub global_eligibility: GlobalEligibility,
+    /// Ceilings the global exam imposes on the final grade once taken.
+    #[serde(default)]
+    pub global_outcome: GlobalOutcome,
+    /// Attendance requirement, if the course has one.
+    #[serde(default)]
+    pub attendance: Attendance,
     /// Grade obtained in the global exam. `None` = hasn't taken it yet.
     #[serde(default)]
     pub global_exam_grade: Option<f64>,
@@ -305,6 +336,8 @@ impl Course {
             credits: None,
             global_policy: GlobalExamPolicy::None,
             global_eligibility: GlobalEligibility::default(),
+            global_outcome: GlobalOutcome::default(),
+            attendance: Attendance::default(),
             global_exam_grade: None,
             global_target_category: None,
         }
@@ -332,6 +365,8 @@ impl Course {
             credits: None,
             global_policy: template.global_policy.clone(),
             global_eligibility: template.global_eligibility.clone(),
+            global_outcome: GlobalOutcome::default(),
+            attendance: Attendance::default(),
             global_exam_grade: None,
             global_target_category: None,
         }
@@ -355,6 +390,57 @@ impl Course {
 
     /// Compute the full grade result with all rule checks.
     pub fn compute_grade(&self) -> CourseGradeResult {
+        let mut result = self.compute_grade_uncapped();
+        self.apply_ceilings(&mut result);
+        result
+    }
+
+    /// Lower the grade to whatever ceilings apply: attendance shortfalls,
+    /// `CapFinalGrade` rules, and the caps a taken global exam imposes.
+    ///
+    /// Kept apart from the weighting logic so the ceilings apply to every path
+    /// through it, including the early returns for `FailCourse` and
+    /// `FinalEqualsAverage`.
+    fn apply_ceilings(&self, result: &mut CourseGradeResult) {
+        // Attendance is a gate no grade can open.
+        if self.attendance.fails_course() {
+            result.grade = MIN_GRADE;
+            result.grade_after_global = result.grade_after_global.map(|_| MIN_GRADE);
+            result.needs_global = false;
+            return;
+        }
+
+        let mut ceiling: Option<f64> = None;
+        for failure in &result.failed_minimums {
+            if failure.action == MinimumNotMetAction::CapFinalGrade
+                && let Some(cap) = self
+                    .categories
+                    .get(failure.category_idx)
+                    .and_then(|c| c.rules.cap_final_grade)
+            {
+                ceiling = Some(ceiling.map_or(cap, |current: f64| current.min(cap)));
+            }
+        }
+
+        // The global's own ceiling depends on whether it was passed.
+        if let Some(after) = result.grade_after_global {
+            let from_global = if self.is_passing_grade(after) {
+                self.global_outcome.cap_if_passed
+            } else {
+                self.global_outcome.cap_if_failed
+            };
+            if let Some(cap) = from_global {
+                ceiling = Some(ceiling.map_or(cap, |current: f64| current.min(cap)));
+            }
+        }
+
+        if let Some(cap) = ceiling {
+            result.grade = result.grade.min(cap);
+            result.grade_after_global = result.grade_after_global.map(|g| g.min(cap));
+        }
+    }
+
+    fn compute_grade_uncapped(&self) -> CourseGradeResult {
         let mut failed_minimums = Vec::new();
         let mut eval_violations = Vec::new();
         let mut needs_global = false;
@@ -636,7 +722,13 @@ impl Course {
             };
         }
 
-        let has_rule_issues = result.overridden_by.is_some() || !result.failed_minimums.is_empty();
+        // A CapFinalGrade failure is not a verdict of its own: the ceiling is
+        // already baked into the grade, so let the grade speak.
+        let has_rule_issues = result.overridden_by.is_some()
+            || result
+                .failed_minimums
+                .iter()
+                .any(|f| f.action != MinimumNotMetAction::CapFinalGrade);
 
         if has_rule_issues || !self.is_passing_grade(result.grade) {
             CourseOutcome::Failing
@@ -713,8 +805,33 @@ impl Course {
             MinimumNotMetAction::RequiresGlobal => {
                 self.global_policy == GlobalExamPolicy::None && min <= self.passing_grade
             }
+            // Only binding when the ceiling itself sits below passing: a cap
+            // above the passing grade still leaves room to pass.
+            MinimumNotMetAction::CapFinalGrade => category
+                .rules
+                .cap_final_grade
+                .is_some_and(|cap| cap < self.passing_grade),
         };
         binds.then_some(min)
+    }
+
+    /// Whether the course could still pass if this evaluation scored full
+    /// marks and everything else went perfectly, global exam included.
+    fn can_still_pass_with_perfect(&self, category_idx: usize, eval_idx: usize) -> bool {
+        let mut ideal = self.clone();
+        let Some(evaluation) = ideal
+            .categories
+            .get_mut(category_idx)
+            .and_then(|c| c.evaluations.get_mut(eval_idx))
+        else {
+            // Bad indices are the caller's problem; the normal path reports it.
+            return true;
+        };
+        evaluation.grade = Some(MAX_GRADE);
+
+        ideal
+            .best_case_grade()
+            .is_none_or(|best| ideal.is_passing_grade(best))
     }
 
     /// The lowest grade this evaluation must reach so that no category rule
@@ -790,6 +907,29 @@ impl Course {
     /// [`Self::pass_blocking_floor`]): the needed grade is the larger of the
     /// two, so a hurdle that would fail the course is never under-reported.
     pub fn needed_grade_for_evaluation(
+        &self,
+        category_idx: usize,
+        eval_idx: usize,
+        ignore_current_grade: bool,
+    ) -> NeededGrade {
+        let needed =
+            self.needed_grade_ignoring_ceilings(category_idx, eval_idx, ignore_current_grade);
+
+        // A ceiling set elsewhere — a capped category, a failed attendance
+        // requirement — can put passing out of reach no matter what this
+        // evaluation scores. Keep the number, but stop calling it achievable.
+        if matches!(
+            needed.status,
+            NeededGradeStatus::Success | NeededGradeStatus::Warning
+        ) && !self.can_still_pass_with_perfect(category_idx, eval_idx)
+        {
+            return NeededGrade::failure(needed.value);
+        }
+
+        needed
+    }
+
+    fn needed_grade_ignoring_ceilings(
         &self,
         category_idx: usize,
         eval_idx: usize,

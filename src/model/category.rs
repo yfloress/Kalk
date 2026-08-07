@@ -55,6 +55,30 @@ pub enum MinimumNotMetAction {
     RequiresGlobal,
     /// Course is automatically failed (grade capped at 0)
     FailCourse,
+    /// The final grade may not exceed `CategoryRules::cap_final_grade`.
+    /// Models rules like "if the tests average 50 or less, the course caps
+    /// at 54" — failing without pretending the other grades never happened.
+    CapFinalGrade,
+}
+
+impl MinimumNotMetAction {
+    /// Every action, in the order the form cycles through them.
+    pub const ALL: [MinimumNotMetAction; 4] = [
+        MinimumNotMetAction::FinalEqualsAverage,
+        MinimumNotMetAction::RequiresGlobal,
+        MinimumNotMetAction::FailCourse,
+        MinimumNotMetAction::CapFinalGrade,
+    ];
+
+    pub fn next(self) -> Self {
+        let i = Self::ALL.iter().position(|a| *a == self).unwrap_or(0);
+        Self::ALL[(i + 1) % Self::ALL.len()]
+    }
+
+    pub fn previous(self) -> Self {
+        let i = Self::ALL.iter().position(|a| *a == self).unwrap_or(0);
+        Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()]
+    }
 }
 
 // =============================================================================
@@ -113,6 +137,18 @@ pub struct CategoryRules {
     /// (must sum to 100%) instead of being averaged equally.
     #[serde(default)]
     pub weighted_evaluations: bool,
+
+    /// Ceiling applied to the course when one of this category's rules uses
+    /// `CapFinalGrade`. Shared by all three of them: no syllabus so far caps
+    /// at different values per rule. `None` makes the action a no-op.
+    #[serde(default)]
+    pub cap_final_grade: Option<f64>,
+
+    /// Categories that must be fully graded before this one may be sat.
+    /// Purely informational — it changes no grade, it warns that the student
+    /// is not entitled to the evaluation yet.
+    #[serde(default)]
+    pub requires_categories: Vec<usize>,
 }
 
 impl CategoryRules {
@@ -128,6 +164,8 @@ impl CategoryRules {
             && self.on_min_one_eval_not_met == MinimumNotMetAction::FinalEqualsAverage
             && !self.round_before_weighting
             && !self.weighted_evaluations
+            && self.cap_final_grade.is_none()
+            && self.requires_categories.is_empty()
     }
 }
 

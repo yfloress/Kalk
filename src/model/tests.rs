@@ -1745,6 +1745,7 @@ fn test_to_template_roundtrip() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(30.0),
+        ..Default::default()
     };
 
     let rules = CategoryRules {
@@ -2100,6 +2101,7 @@ fn test_global_eligibility_within_range() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
+        ..Default::default()
     };
     // 46 >= 45 → eligible
     assert!(course.is_eligible_for_global());
@@ -2115,6 +2117,7 @@ fn test_global_eligibility_below_minimum() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
+        ..Default::default()
     };
     // 33 < 45 → not eligible
     assert!(!course.is_eligible_for_global());
@@ -2127,6 +2130,7 @@ fn test_global_eligibility_only_min() {
     course.global_policy = GlobalExamPolicy::ReplacesWorstGrade;
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(40.0),
+        ..Default::default()
     };
     // 53 >= 40 → eligible
     assert!(course.is_eligible_for_global());
@@ -2246,6 +2250,7 @@ fn test_needed_global_not_eligible() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
+        ..Default::default()
     };
 
     let needed = course.needed_global_grade();
@@ -2309,6 +2314,7 @@ fn test_global_weighted_serde_roundtrip() {
     };
     course.global_eligibility = GlobalEligibility {
         min_grade: Some(45.0),
+        ..Default::default()
     };
     course.global_exam_grade = Some(75.0);
 
@@ -3451,4 +3457,152 @@ fn test_semester_pending_weight_averages_across_courses() {
     ])
     .metrics();
     assert!((m.pending_weight.unwrap() - 25.0).abs() < 0.01);
+}
+
+// =============================================================================
+// Conditional caps, attendance and prerequisites
+// =============================================================================
+
+/// LabCom: tests averaging 50 or less cap the whole course at 54.
+fn course_with_cap(controls_grade: f64) -> Course {
+    let mut course = Course::new("LabCom".to_string(), DEFAULT_PASSING_GRADE);
+
+    let mut controls = Category::new("Controles".to_string(), 40.0);
+    controls.rules.minimum_average = Some(51.0);
+    controls.rules.on_minimum_not_met = MinimumNotMetAction::CapFinalGrade;
+    controls.rules.cap_final_grade = Some(54.0);
+    controls
+        .evaluations
+        .push(Evaluation::with_grade("Q1".to_string(), controls_grade));
+
+    let mut reports = Category::new("Informes".to_string(), 60.0);
+    reports
+        .evaluations
+        .push(Evaluation::with_grade("I1".to_string(), 90.0));
+
+    course.categories.push(controls);
+    course.categories.push(reports);
+    course
+}
+
+#[test]
+fn test_cap_applies_when_the_minimum_is_missed() {
+    // 50*0.4 + 90*0.6 = 74, but the cap pulls it down to 54.
+    let capped = course_with_cap(50.0);
+    assert!((capped.final_grade().unwrap() - 54.0).abs() < 0.01);
+    assert_eq!(capped.outcome(), CourseOutcome::Failing);
+}
+
+#[test]
+fn test_cap_leaves_the_grade_alone_when_the_minimum_is_met() {
+    // 60*0.4 + 90*0.6 = 78, no cap.
+    let fine = course_with_cap(60.0);
+    assert!((fine.final_grade().unwrap() - 78.0).abs() < 0.01);
+    assert_eq!(fine.outcome(), CourseOutcome::Passing);
+}
+
+#[test]
+fn test_a_capped_course_is_unrecoverable() {
+    // Even acing everything left cannot beat a 54 ceiling with 55 to pass.
+    assert!(course_with_cap(50.0).is_unrecoverable());
+}
+
+#[test]
+fn test_needed_grade_does_not_promise_a_rescue_that_a_cap_forbids() {
+    let mut course = course_with_cap(50.0);
+    course
+        .categories
+        .get_mut(1)
+        .unwrap()
+        .evaluations
+        .push(Evaluation::new("I2".to_string()));
+
+    // The only ungraded evaluation cannot lift a course capped below passing.
+    let needed = course.needed_grade_for_evaluation(1, 1, true);
+    assert_eq!(
+        needed.status,
+        NeededGradeStatus::Failure,
+        "got {needed:?} — the cap makes passing impossible"
+    );
+}
+
+#[test]
+fn test_a_cap_above_passing_does_not_block_anything() {
+    let mut course = course_with_cap(50.0);
+    course.categories[0].rules.cap_final_grade = Some(80.0);
+    assert!(!course.is_unrecoverable());
+    assert_eq!(course.outcome(), CourseOutcome::Passing);
+}
+
+#[test]
+fn test_attendance_percentage_and_margin() {
+    let attendance = Attendance {
+        total_classes: Some(28),
+        missed: 6,
+        required_percent: Some(85.0),
+        action: AttendanceAction::FailCourse,
+    };
+    // 22 of 28 attended.
+    assert!((attendance.percent().unwrap() - 78.571).abs() < 0.01);
+    assert!(attendance.is_below_requirement());
+    // 28 * 15% = 4.2, floored to 4 allowed misses; 6 already used.
+    assert_eq!(attendance.misses_remaining(), Some(0));
+}
+
+#[test]
+fn test_attendance_can_fail_an_otherwise_passing_course() {
+    let mut course = course_partially_graded(1, 1, 90.0);
+    course.attendance = Attendance {
+        total_classes: Some(10),
+        missed: 5,
+        required_percent: Some(85.0),
+        action: AttendanceAction::FailCourse,
+    };
+
+    assert_eq!(course.outcome(), CourseOutcome::Failing);
+    assert!(course.final_grade().unwrap() < 1.0);
+}
+
+#[test]
+fn test_attendance_set_to_warn_only_leaves_the_grade_alone() {
+    let mut course = course_partially_graded(1, 1, 90.0);
+    course.attendance = Attendance {
+        total_classes: Some(10),
+        missed: 5,
+        required_percent: Some(85.0),
+        action: AttendanceAction::WarnOnly,
+    };
+
+    assert!(course.attendance.is_below_requirement());
+    assert_eq!(course.outcome(), CourseOutcome::Passing);
+}
+
+#[test]
+fn test_attendance_is_inert_without_a_requirement() {
+    let attendance = Attendance {
+        total_classes: Some(10),
+        missed: 9,
+        required_percent: None,
+        action: AttendanceAction::FailCourse,
+    };
+    assert!(!attendance.is_below_requirement());
+    assert!(!attendance.fails_course());
+}
+
+#[test]
+fn test_global_outcome_caps_the_final_grade() {
+    // Semester 40, global 100 at 30% weight would give 58, but passing the
+    // recovery exam caps the course at 55.
+    let mut course = course_partially_graded(1, 1, 40.0);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    course.global_outcome = GlobalOutcome {
+        cap_if_passed: Some(55.0),
+        cap_if_failed: Some(54.0),
+    };
+    course.global_exam_grade = Some(100.0);
+
+    assert!((course.final_grade().unwrap() - 55.0).abs() < 0.01);
 }

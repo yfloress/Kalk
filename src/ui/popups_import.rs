@@ -293,6 +293,23 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
     // so it has to be visible before the user confirms.
     lines.push(global_line(course, m, t));
 
+    if let Some(required) = course.attendance.required_percent {
+        let consequence = match course.attendance.action {
+            crate::model::AttendanceAction::FailCourse => m.attendance_fails_course,
+            crate::model::AttendanceAction::WarnOnly => m.attendance_warn_only,
+        };
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{}: ", m.attendance_title),
+                Style::default().fg(t.text_secondary),
+            ),
+            Span::styled(
+                format!("{:.0}%  \u{2192}  {}", required, consequence),
+                Style::default().fg(t.status_override),
+            ),
+        ]));
+    }
+
     // -- Weight summary ------------------------------------------------------
     let weight_color = if (app.import_total_weight - 100.0).abs() < 0.01 {
         t.status_pass
@@ -498,6 +515,7 @@ fn minimum_rules(cat: &Category, m: &Messages) -> Vec<String> {
         MinimumNotMetAction::FinalEqualsAverage => m.action_final_equals_avg,
         MinimumNotMetAction::RequiresGlobal => m.action_requires_global,
         MinimumNotMetAction::FailCourse => m.action_fail_course,
+        MinimumNotMetAction::CapFinalGrade => m.action_cap_final_grade,
     };
 
     let mut rules = Vec::new();
@@ -516,6 +534,16 @@ fn minimum_rules(cat: &Category, m: &Messages) -> Vec<String> {
             v,
             action(cat.rules.on_min_per_eval_not_met)
         ));
+    }
+    if !cat.rules.requires_categories.is_empty() {
+        rules.push(format!(
+            "{}: {}",
+            m.import_requires_first,
+            cat.rules.requires_categories.len()
+        ));
+    }
+    if let Some(cap) = cat.rules.cap_final_grade {
+        rules.push(format!("{}: {:.0}", m.action_cap_final_grade, cap));
     }
     if let Some(v) = cat.rules.minimum_one_eval {
         rules.push(format!(
@@ -546,6 +574,7 @@ mod tests {
             on_min_one_eval_not_met: MinimumNotMetAction::FinalEqualsAverage,
             round_before_weighting: true,
             weighted_evaluations: true,
+            ..Default::default()
         };
         Category::with_rules("Cat".to_string(), 100.0, Vec::new(), rules)
     }

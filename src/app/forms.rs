@@ -230,6 +230,11 @@ impl App {
             min_grade: parse_decimal(&self.edit_global_min_grade)
                 .ok()
                 .map(|g| g.clamp(MIN_GRADE, MAX_GRADE)),
+            // Editing a category-conditional global is not exposed in the
+            // form yet; keep whatever the course already carries.
+            only_if_category_below: self
+                .current_course()
+                .and_then(|c| c.global_eligibility.only_if_category_below.clone()),
         }
     }
 
@@ -341,6 +346,14 @@ impl App {
             on_min_one_eval_not_met: self.edit_on_min_one_eval_not_met,
             round_before_weighting: self.edit_round_before_weighting,
             weighted_evaluations: self.edit_weighted_evaluations,
+            cap_final_grade: parse_decimal(&self.edit_cap_final_grade)
+                .ok()
+                .map(|v| v.clamp(MIN_GRADE, MAX_GRADE)),
+            // Prerequisites are edited nowhere yet; preserve what is stored.
+            requires_categories: self
+                .current_category()
+                .map(|c| c.rules.requires_categories.clone())
+                .unwrap_or_default(),
         }
     }
 

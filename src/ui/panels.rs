@@ -535,6 +535,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("q", m.quit),
                     ("h", m.home_open),
                     ("n", m.new),
+                    ("a", m.attendance_open),
                     ("Enter", m.edit),
                     ("d", m.delete),
                     ("?", m.help_open),
@@ -662,6 +663,15 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         Screen::Home | Screen::Welcome | Screen::WelcomeFonts => {
             styled_keybindings(&[("Esc", m.cancel)], t, available_width)
         }
+        Screen::EditingAttendance => styled_keybindings(
+            &[
+                ("Tab", m.help_cycle_focus),
+                ("Enter", m.confirm),
+                ("Esc", m.cancel),
+            ],
+            t,
+            available_width,
+        ),
         Screen::EditingSemester { .. } => styled_keybindings(
             &[("Enter", m.confirm), ("Esc", m.cancel)],
             t,
