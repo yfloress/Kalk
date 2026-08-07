@@ -546,6 +546,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             Focus::Categories => styled_keybindings(
                 &[
                     ("q", m.quit),
+                    ("a", m.attendance_open),
                     ("n", m.new_category),
                     ("Enter", m.edit),
                     ("d", m.delete),

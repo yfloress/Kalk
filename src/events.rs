@@ -152,21 +152,37 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
 }
 
 /// Shared form input handler (Esc, Tab, Enter, Backspace, Char).
+/// Shared key handling for every form popup.
+///
+/// Toggle fields are handled here too: a form that routed them to the text
+/// path used to type into whatever buffer happened to be returned.
 fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: fn(&mut App)) {
+    if app.input_field.is_toggle() {
+        match key {
+            KeyCode::Esc => cancel(app),
+            KeyCode::Tab => app.next_input_field(),
+            KeyCode::Enter => confirm(app),
+            KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.cycle_toggle_field(),
+            KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
+            _ => {}
+        }
+        return;
+    }
+
     match key {
         KeyCode::Esc => cancel(app),
         KeyCode::Tab => app.next_input_field(),
         KeyCode::Enter => confirm(app),
         KeyCode::Backspace => {
-            app.current_input_buffer().pop();
+            if let Some(buffer) = app.current_input_buffer() {
+                buffer.pop();
+            }
         }
         KeyCode::Char(c) => {
-            if app.input_field.is_numeric() {
-                if c.is_ascii_digit() || c == '.' || c == ',' {
-                    app.current_input_buffer().push(c);
-                }
-            } else {
-                app.current_input_buffer().push(c);
+            let accepted =
+                !app.input_field.is_numeric() || c.is_ascii_digit() || c == '.' || c == ',';
+            if accepted && let Some(buffer) = app.current_input_buffer() {
+                buffer.push(c);
             }
         }
         _ => {}
@@ -220,7 +236,9 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
         KeyCode::End | KeyCode::Char('G') => app.goto_last(),
 
         // Attendance belongs to the course, so it opens from the courses panel.
-        KeyCode::Char('a') if app.focus == Focus::Courses => app.start_edit_attendance(),
+        KeyCode::Char('a') if matches!(app.focus, Focus::Courses | Focus::Categories) => {
+            app.start_edit_attendance()
+        }
 
         // Create new item
         KeyCode::Char('n') => match app.focus {
@@ -321,36 +339,14 @@ fn handle_delete_template_keys(app: &mut App, key: KeyCode) {
 /// Handle keys in the course editing screen.
 /// Toggle fields (GlobalPolicy) cycle on Space/Left/Right; Enter always confirms.
 fn handle_edit_course_keys(app: &mut App, key: KeyCode) {
-    if app.input_field.is_toggle() {
-        match key {
-            KeyCode::Esc => app.cancel_edit(),
-            KeyCode::Tab => app.next_input_field(),
-            KeyCode::Enter => app.confirm_course(),
-            KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.cycle_toggle_field(),
-            KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
-            _ => {}
-        }
-    } else {
-        handle_form_keys(app, key, App::confirm_course, App::cancel_edit);
-    }
+    handle_form_keys(app, key, App::confirm_course, App::cancel_edit);
 }
 
 /// Handle keys in the category editing screen.
 /// Toggle fields (AvgMethod, OnMinNotMet, RoundBeforeWeight) cycle on Space/Left/Right;
 /// Enter always confirms.
 fn handle_edit_category_keys(app: &mut App, key: KeyCode) {
-    if app.input_field.is_toggle() {
-        match key {
-            KeyCode::Esc => app.cancel_edit(),
-            KeyCode::Tab => app.next_input_field(),
-            KeyCode::Enter => app.confirm_category(),
-            KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.cycle_toggle_field(),
-            KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
-            _ => {}
-        }
-    } else {
-        handle_form_keys(app, key, App::confirm_category, App::cancel_edit);
-    }
+    handle_form_keys(app, key, App::confirm_category, App::cancel_edit);
 }
 
 /// Handle keys in the evaluation editing screen.

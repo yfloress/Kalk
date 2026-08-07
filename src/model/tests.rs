@@ -3606,3 +3606,62 @@ fn test_global_outcome_caps_the_final_grade() {
 
     assert!((course.final_grade().unwrap() - 55.0).abs() < 0.01);
 }
+
+#[test]
+fn test_toggle_fields_have_no_text_buffer() {
+    // The crash this guards: a form routed a toggle field to the text path,
+    // which typed into whatever buffer the getter happened to return.
+    use crate::app::{App, InputField};
+
+    let mut app = App::default();
+    for field in [
+        InputField::DropLowest,
+        InputField::AvgMethod,
+        InputField::OnMinNotMet,
+        InputField::OnMinPerEvalNotMet,
+        InputField::OnMinOneEvalNotMet,
+        InputField::RoundBeforeWeight,
+        InputField::WeightedEvals,
+        InputField::AttendanceAction,
+        InputField::GlobalPolicy,
+    ] {
+        assert!(field.is_toggle(), "{field:?} should be a toggle");
+        app.input_field = field;
+        assert!(
+            app.current_input_buffer().is_none(),
+            "{field:?} handed out a text buffer"
+        );
+    }
+}
+
+#[test]
+fn test_every_typed_field_has_a_buffer() {
+    use crate::app::{App, InputField};
+
+    let mut app = App::default();
+    for field in [
+        InputField::Name,
+        InputField::PassingGrade,
+        InputField::Credits,
+        InputField::Weight,
+        InputField::Grade,
+        InputField::Description,
+        InputField::EvalWeight,
+        InputField::MinimumAverage,
+        InputField::MinPerEval,
+        InputField::MinOneEval,
+        InputField::ClassesTotal,
+        InputField::ClassesMissed,
+        InputField::AttendanceRequired,
+        InputField::GlobalSemesterWeight,
+        InputField::GlobalExamWeight,
+        InputField::GlobalMinGrade,
+    ] {
+        assert!(!field.is_toggle(), "{field:?} should not be a toggle");
+        app.input_field = field;
+        assert!(
+            app.current_input_buffer().is_some(),
+            "{field:?} has no buffer to type into"
+        );
+    }
+}

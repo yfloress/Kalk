@@ -189,24 +189,27 @@ impl App {
         };
     }
 
-    pub fn current_input_buffer(&mut self) -> &mut String {
+    /// The text buffer behind the focused field, or `None` when the field is a
+    /// toggle and has no text to edit. Returning an `Option` keeps a caller
+    /// from silently typing into an unrelated buffer.
+    pub fn current_input_buffer(&mut self) -> Option<&mut String> {
         match self.input_field {
-            InputField::Name => &mut self.edit_name,
-            InputField::PassingGrade => &mut self.edit_passing_grade,
-            InputField::Credits => &mut self.edit_credits,
-            InputField::ClassesTotal => &mut self.edit_classes_total,
-            InputField::ClassesMissed => &mut self.edit_classes_missed,
-            InputField::AttendanceRequired => &mut self.edit_attendance_required,
-            InputField::Weight => &mut self.edit_weight,
-            InputField::Grade => &mut self.edit_grade,
-            InputField::Description => &mut self.edit_description,
-            InputField::EvalWeight => &mut self.edit_eval_weight,
-            InputField::MinimumAverage => &mut self.edit_min_average,
-            InputField::MinPerEval => &mut self.edit_min_per_eval,
-            InputField::MinOneEval => &mut self.edit_min_one_eval,
-            InputField::GlobalSemesterWeight => &mut self.edit_global_semester_weight,
-            InputField::GlobalExamWeight => &mut self.edit_global_exam_weight,
-            InputField::GlobalMinGrade => &mut self.edit_global_min_grade,
+            InputField::Name => Some(&mut self.edit_name),
+            InputField::PassingGrade => Some(&mut self.edit_passing_grade),
+            InputField::Credits => Some(&mut self.edit_credits),
+            InputField::ClassesTotal => Some(&mut self.edit_classes_total),
+            InputField::ClassesMissed => Some(&mut self.edit_classes_missed),
+            InputField::AttendanceRequired => Some(&mut self.edit_attendance_required),
+            InputField::Weight => Some(&mut self.edit_weight),
+            InputField::Grade => Some(&mut self.edit_grade),
+            InputField::Description => Some(&mut self.edit_description),
+            InputField::EvalWeight => Some(&mut self.edit_eval_weight),
+            InputField::MinimumAverage => Some(&mut self.edit_min_average),
+            InputField::MinPerEval => Some(&mut self.edit_min_per_eval),
+            InputField::MinOneEval => Some(&mut self.edit_min_one_eval),
+            InputField::GlobalSemesterWeight => Some(&mut self.edit_global_semester_weight),
+            InputField::GlobalExamWeight => Some(&mut self.edit_global_exam_weight),
+            InputField::GlobalMinGrade => Some(&mut self.edit_global_min_grade),
             // Toggle fields don't have text buffers — they are cycled, not typed into.
             // This branch should never be reached in practice.
             InputField::DropLowest
@@ -217,14 +220,7 @@ impl App {
             | InputField::RoundBeforeWeight
             | InputField::WeightedEvals
             | InputField::AttendanceAction
-            | InputField::GlobalPolicy => {
-                debug_assert!(
-                    false,
-                    "current_input_buffer called on toggle field {:?}",
-                    self.input_field
-                );
-                &mut self.edit_description
-            }
+            | InputField::GlobalPolicy => None,
         }
     }
 
