@@ -24,6 +24,9 @@ Gestiona ramos, registra notas por categorías y calcula automáticamente la not
 
 | Característica | Descripción |
 |----------------|-------------|
+| **Semestres** | Agrupa ramos por semestre y conserva los anteriores — no borres un ramo para empezar de nuevo |
+| **Dashboard** | Pantalla Home con promedio del semestre, aprobados/reprobados, créditos en riesgo y el ramo más crítico |
+| **Créditos** | Créditos opcionales por ramo (SCT, ECTS, ...) — los promedios se ponderan cuando están |
 | **Sistema jerárquico de notas** | Estructura Ramo → Categorías → Evaluaciones con ponderaciones |
 | **Evaluaciones ponderadas** | Asigna pesos individuales a las evaluaciones dentro de una categoría (ej. 20%/40%/40%) |
 | **Cálculo en tiempo real** | Muestra exactamente qué nota necesitas en cada evaluación para aprobar |
@@ -113,42 +116,6 @@ El entorno Nix incluye `cargo-audit` para análisis de seguridad.
  
 Presiona `?` dentro de la app para ver la referencia completa.
  
----
-
-## Estructura del Proyecto
-
-```
-src/
-├── main.rs          # Punto de entrada, configuración del terminal, panic hooks
-├── app/
-│   ├── mod.rs       # Struct App, estado, navegación, getters
-│   ├── forms.rs     # Manejo de formularios: ramo/categoría/eval, eliminación, gestión de pesos
-│   └── actions.rs   # Acciones secundarias: plantillas, idioma, ajustes, global, copiar/pegar, lote
-├── model/
-│   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, plantillas
-│   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
-│   ├── global.rs    # Lógica de cálculo de nota con examen global
-│   └── tests.rs     # Todos los tests unitarios del modelo
-├── ui/
-│   ├── mod.rs       # Layout principal, panel de ramos, panel de categorías
-│   ├── panels.rs    # Panel de evaluaciones, renderizado del footer
-│   ├── popups.rs    # Popups (plantilla, ramo, categoría, eliminar, idioma, guardar plantilla)
-│   ├── eval_popups.rs # Popup de evaluación, nota global, agregar en lote
-│   ├── settings_popup.rs # Popup de ajustes
-│   ├── helpers.rs   # Helpers de renderizado compartidos y funciones de formato
-│   ├── icons.rs     # Sets de iconos Nerd Font y fallback Unicode
-│   └── theme.rs     # Tema de colores semántico (bordes redondeados, paleta)
-├── templates.rs     # Plantillas predefinidas (según idioma)
-├── events.rs        # Manejo de eventos de teclado y despacho
-├── i18n.rs          # Traducciones (inglés + español)
-└── persistence.rs   # Almacenamiento JSON (dirs XDG, escritura atómica)
-
-~/.local/share/kalk/
-├── data.json           # Tus datos de ramos
-├── config.json         # Tu configuración (idioma, nerd fonts)
-└── user_templates.json # Tus plantillas personalizadas
-```
-
 ---
 
 ## Stack Tecnológico

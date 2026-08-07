@@ -24,6 +24,9 @@ Manage courses, track grades by categories, and automatically calculate the exac
 
 | Feature | Description |
 |---------|-------------|
+| **Semesters** | Group courses by semester and keep past ones — never delete a course to start fresh |
+| **Dashboard** | Home screen with semester average, pass/fail counts, credits at risk and the most critical course |
+| **Credits** | Optional per-course credits (SCT, ECTS, ...) — averages become credit-weighted when present |
 | **Hierarchical Grade System** | Course → Categories → Evaluations structure with weighted categories |
 | **Weighted Evaluations** | Assign individual weights to evaluations within a category (e.g., 20%/40%/40%) |
 | **Real-time Calculation** | Shows exactly what grade you need in each evaluation to pass |
@@ -113,42 +116,6 @@ The Nix environment includes `cargo-audit` for security scanning.
  
 Press `?` inside the app for the full keybinding reference.
  
----
-
-## Project Structure
-
-```
-src/
-├── main.rs          # Entry point, terminal setup, panic hooks
-├── app/
-│   ├── mod.rs       # App struct, state, navigation, getters
-│   ├── forms.rs     # Form handling: course/category/eval editing, deletion, weight mgmt
-│   └── actions.rs   # Secondary actions: templates, language, settings, global grade, yank/paste, bulk-add
-├── model/
-│   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, templates
-│   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
-│   ├── global.rs    # Global exam grade computation logic
-│   └── tests.rs     # All model unit tests
-├── ui/
-│   ├── mod.rs       # Main layout, courses panel, categories panel
-│   ├── panels.rs    # Evaluations panel, footer rendering
-│   ├── popups.rs    # Popup overlays (template, course, category, delete, language, save-template)
-│   ├── eval_popups.rs # Evaluation popup, global grade entry, bulk-add evaluations
-│   ├── settings_popup.rs # Settings popup
-│   ├── helpers.rs   # Shared rendering helpers and formatting functions
-│   ├── icons.rs     # Nerd Font and Unicode fallback icon sets
-│   └── theme.rs     # Semantic colour theme (rounded borders, palette)
-├── templates.rs     # Built-in course templates (language-aware)
-├── events.rs        # Keyboard event handling and dispatch
-├── i18n.rs          # Translations (English + Spanish)
-└── persistence.rs   # JSON storage (XDG dirs, atomic writes)
-
-~/.local/share/kalk/
-├── data.json           # Your courses data
-├── config.json         # Your configuration (language, nerd fonts)
-└── user_templates.json # Your custom templates
-```
-
 ---
 
 ## Tech Stack

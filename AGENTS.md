@@ -8,10 +8,11 @@
 - Merge those with `--no-ff` and delete the branch afterwards.
 
 ## Project Intent & Mindset
-Kalk is an academic dashboard TUI for Universidad Federico Santa Maria (Chile).
+Kalk is an academic dashboard TUI for any university or grading system.
 It manages courses, tracks grades by categories, and calculates the exact score
 needed to pass — all keyboard-driven in the terminal.
-Grade scale: 0-100, passing grade: 55 by default, rounding: 0.5+ rounds up.
+Defaults (not hard limits — every value is configurable): grade scale 0-100,
+passing grade 55, rounding 0.5+ rounds up.
 Ungraded evaluations always count as 0 (reflects real current standing).
 
 ## Project Structure and Module Organization
@@ -24,29 +25,48 @@ src/
 ├── app/
 │   ├── mod.rs       # App struct, enums, Default, load(), getters, navigation
 │   ├── forms.rs     # Form handling: course/category/eval editing, deletion, weight mgmt
-│   └── actions.rs   # Secondary actions: templates, language, settings, global grade, yank/paste, bulk-add
+│   ├── actions.rs   # Secondary actions: templates, language, settings, global grade, yank/paste, bulk-add
+│   ├── semesters.rs # Semester navigation/CRUD, session persistence (config())
+│   ├── input.rs     # InputField enum and form-field focus/toggle cycling
+│   ├── status.rs    # StatusSeverity and the status-message setters
+│   ├── history.rs   # Undo/redo snapshots (captures all semesters)
+│   └── import.rs    # AI import wizard
 ├── model/
-│   ├── mod.rs       # Evaluation, Course, NeededGrade, WeightValidation, templates
+│   ├── mod.rs       # Evaluation, Course, CourseOutcome, NeededGrade, WeightValidation, templates
 │   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
+│   ├── semester.rs  # Semester, SemesterMetrics, cumulative_average
+│   ├── global.rs    # Global exam grade computation
 │   └── tests.rs     # All model unit tests (cfg(test) only)
 ├── ui/
 │   ├── mod.rs       # Main draw, panel rendering (courses, categories)
+│   ├── home.rs      # Home screen: semester list, dashboard metrics, semester popups
 │   ├── panels.rs    # Evaluations panel and footer rendering
 │   ├── popups.rs    # Popup dialogs (template, course, category, delete, language, save-template)
 │   ├── eval_popups.rs # Evaluation popup, global grade entry, bulk-add evaluations
 │   └── helpers.rs   # Shared rendering helpers (input fields, toggles) and formatting functions
 ├── templates.rs     # Built-in course templates (language-aware)
 ├── events.rs        # Keyboard event handling and dispatch
-├── i18n.rs          # Translations (English + Spanish)
-└── persistence.rs   # JSON storage (XDG dirs, atomic writes)
+├── i18n/
+│   ├── mod.rs       # Language enum and the Messages struct
+│   ├── en.rs        # English translation table
+│   └── es.rs        # Spanish translation table
+└── persistence.rs   # JSON storage (XDG dirs, atomic writes, v1 -> v2 migration)
 
 ~/.local/share/kalk/
-├── data.json           # Course data
-├── config.json         # User configuration (language)
+├── data.json           # Semesters and their courses (schema_version 2)
+├── data.json.v1.bak    # Pre-migration backup, written once
+├── config.json         # User configuration (language, nerd fonts, last session)
 └── user_templates.json # User-created templates
 ```
 
 ## Workflow Rules (Important)
+- **Courses live inside a semester.** `App` holds `semesters` (never empty) and
+  `selected_semester`; reach the active semester's courses through
+  `app.courses()` / `app.courses_mut()`, never a bare field.
+- **`Course::outcome()` is the single pass/fail verdict.** `ui/` renders it and
+  must not re-derive it from `compute_grade()`.
+- **`data.json` is versioned.** Changing the on-disk shape means bumping
+  `DATA_SCHEMA_VERSION` and extending `migrate()` in `persistence.rs`.
 - **Domain logic lives in `model/`** — grade calculations, averages, weight validation, needed-grade formulas. Never put math in `ui/`.
 - **`model/mod.rs`** owns Course, Evaluation, NeededGrade, WeightValidation, and template structs.
 - **`model/category.rs`** owns Category, CategoryRules, and related enums (AveragingMethod, MinimumNotMetAction).
@@ -63,7 +83,7 @@ src/
 - **`events.rs` dispatches** — maps key presses to `App` methods. No business logic here.
 - **`main.rs` is bootstrap only** — terminal setup, panic hooks, main loop. Nothing else.
 - **Errors must be visible to the user** — use `app.set_status(msg)` instead of `eprintln!`. The user cannot see stderr in alternate screen mode.
-- **i18n is mandatory** — all user-facing text must go through `i18n.rs`. Add keys to both `EN` and `ES` constants. Never hardcode display strings in other modules.
+- **i18n is mandatory** — all user-facing text must go through `i18n/`. Add the field to `Messages` in `i18n/mod.rs` and a value to both `i18n/en.rs` and `i18n/es.rs`. Never hardcode display strings in other modules.
 - **`is_passing()` always receives `passing_grade`** as parameter — never use `DEFAULT_PASSING_GRADE` for comparisons outside of initialization.
 
 ## License Header
