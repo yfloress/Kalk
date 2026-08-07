@@ -289,7 +289,7 @@ pub struct Messages {
     pub tpl_ai_desc: &'static str,
     pub import_step1_title: &'static str,
     pub import_step1_hint: &'static str,
-    pub import_step1_copy_key: &'static str,
+    pub import_step1_copy: &'static str,
     pub import_step1_copied: &'static str,
     pub import_step1_next: &'static str,
     pub import_step1_fullscreen: &'static str,
@@ -394,6 +394,38 @@ mod tests {
     fn test_language_display_names() {
         assert_eq!(Language::English.display_name(), "English");
         assert_eq!(Language::Spanish.display_name(), "Español");
+    }
+
+    #[test]
+    fn hint_labels_never_embed_their_own_key() {
+        // The key belongs to the code and the label to the translation. Baking
+        // "Enter: Import" into a message makes it unrenderable as [Enter]
+        // Import, and lets a translator translate the key by accident.
+        for m in [&EN, &ES] {
+            for label in [
+                m.import_step1_copy,
+                m.import_step1_next,
+                m.import_step1_fullscreen,
+                m.import_step1_fullscreen_exit,
+                m.import_step2_back,
+                m.import_step3_save_as_template,
+                m.import_step3_confirm,
+                m.help_close_hint,
+                m.confirm,
+                m.cancel,
+                m.toggle,
+                m.semester_open,
+                m.semester_new,
+                m.semester_delete,
+                m.welcome_next,
+                m.welcome_start,
+            ] {
+                assert!(!label.contains(':'), "`{label}` embeds its key");
+                for key in ["Enter", "Esc", "Ctrl", "Tab", "Space"] {
+                    assert!(!label.starts_with(key), "`{label}` embeds its key");
+                }
+            }
+        }
     }
 
     #[test]

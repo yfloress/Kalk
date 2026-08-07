@@ -22,6 +22,7 @@ use super::helpers::{
     render_delete_confirmation, render_input_field, render_toggle_field,
 };
 use super::icons::icons;
+use super::keyhints::render_hint;
 use super::theme::theme;
 use crate::app::{App, Focus, InputField};
 use crate::i18n::{Language, Messages};
@@ -103,10 +104,25 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
         )
         .highlight_symbol(ic.highlight);
 
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(inner);
+
     let mut state = ListState::default();
     state.select(Some(app.selected_template));
 
-    frame.render_stateful_widget(list, inner, &mut state);
+    frame.render_stateful_widget(list, rows[0], &mut state);
+    render_hint(
+        frame,
+        &[
+            ("j/k", m.help_move_updown),
+            ("Enter", m.confirm),
+            ("d", m.delete),
+            ("Esc", m.cancel),
+        ],
+        rows[1],
+    );
 }
 
 pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
@@ -134,7 +150,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         GlobalExamPolicy::Weighted { .. } => 8 + 4, // weights + eligibility
         GlobalExamPolicy::ReplacesWorstGrade => 4,  // eligibility only
     };
-    let popup_h = (16 + extra + help_lines_needed + 2).min(frame.area().height);
+    let popup_h = (16 + extra + help_lines_needed + 3).min(frame.area().height);
     let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -188,8 +204,9 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         constraints.push(Constraint::Length(3)); // Min Grade
     }
 
-    // Contextual help hint at the bottom (dynamically sized)
+    // Contextual help hint at the bottom (dynamically sized), then the keys.
     constraints.push(Constraint::Length(help_lines_needed));
+    constraints.push(Constraint::Length(1));
 
     let layout = Layout::default()
         .direction(Direction::Vertical)
@@ -267,12 +284,24 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         );
     }
 
-    // -- Contextual help hint (always at bottom of popup) --
-    let help_slot = layout.len() - 1;
+    // -- Contextual help hint, then the keys, at the bottom of the popup --
+    let hint_slot = layout.len() - 1;
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(t.text_muted))
         .wrap(Wrap { trim: true });
-    frame.render_widget(help_widget, layout[help_slot]);
+    frame.render_widget(help_widget, layout[hint_slot - 1]);
+
+    render_hint(
+        frame,
+        &[
+            ("Tab", m.help_cycle_focus),
+            ("h/l", m.toggle),
+            ("?", m.help_open),
+            ("Enter", m.confirm),
+            ("Esc", m.cancel),
+        ],
+        layout[hint_slot],
+    );
 
     // -- Full help overlay (when ? is pressed) --
     if app.show_field_help {
@@ -324,7 +353,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         help_text.len().div_ceil(inner_text_width).max(1) as u16
     };
 
-    let base_height: u16 = 8 + 2 + help_lines_needed + 4;
+    let base_height: u16 = 8 + 2 + help_lines_needed + 5;
     let advanced_height: u16 = if show_advanced {
         // Base: DropLowest + AvgMethod + MinAvg + MinPerEval + MinOneEval + RoundBeforeWeight + WeightedEvals = 7
         let mut fields: u16 = 7;
@@ -392,6 +421,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         constraints.push(Constraint::Length(3)); // Weighted Evaluations
     }
     constraints.push(Constraint::Length(help_lines_needed));
+    constraints.push(Constraint::Length(1));
 
     let inner = Layout::default()
         .direction(Direction::Vertical)
@@ -576,6 +606,20 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
         .style(Style::default().fg(t.text_muted))
         .wrap(Wrap { trim: true });
     frame.render_widget(help_widget, inner[slot]);
+
+    render_hint(
+        frame,
+        &[
+            ("Tab", m.help_cycle_focus),
+            ("h/l", m.toggle),
+            ("Ctrl+R", m.advanced_rules),
+            ("?", m.help_open),
+            ("Enter", m.confirm),
+            ("Esc", m.cancel),
+        ],
+        inner[slot + 1],
+    );
+
     if show_help {
         draw_category_help_overlay(frame, m);
     }
@@ -601,6 +645,7 @@ pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
             Constraint::Length(3), // Description field
             Constraint::Length(1), // Spacing
             Constraint::Length(2), // Info text
+            Constraint::Length(1), // Key hints
         ])
         .split(area);
 
@@ -631,6 +676,16 @@ pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
         let info_widget = Paragraph::new(info).style(Style::default().fg(t.text_muted));
         frame.render_widget(info_widget, inner[4]);
     }
+
+    render_hint(
+        frame,
+        &[
+            ("Tab", m.help_cycle_focus),
+            ("Enter", m.confirm),
+            ("Esc", m.cancel),
+        ],
+        inner[5],
+    );
 }
 
 pub fn draw_delete_template_popup(frame: &mut Frame, app: &App) {
@@ -714,97 +769,6 @@ pub fn draw_delete_popup(frame: &mut Frame, app: &App) {
     );
 }
 
-/// Render the global keyboard cheat-sheet overlay.
-/// Groups shortcuts by purpose so the user can scan instead of read top-down.
-pub fn draw_help_popup(frame: &mut Frame, app: &App) {
-    let m = app.messages();
-    let t = theme();
-    let term = frame.area();
-
-    // Centred popup with breathing room around the content.
-    let popup_w = 62u16.min(term.width.saturating_sub(2));
-    let popup_h = 38u16.min(term.height.saturating_sub(2));
-    let x = term.width.saturating_sub(popup_w) / 2;
-    let y = term.height.saturating_sub(popup_h) / 2;
-    let area = Rect::new(x, y, popup_w, popup_h);
-
-    frame.render_widget(Clear, area);
-    let block = Block::default()
-        .title(format!(" {} ", m.help_title))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let key_style = Style::default()
-        .fg(t.footer_key)
-        .add_modifier(Modifier::BOLD);
-    let desc_style = Style::default().fg(t.text_primary);
-    let group_style = Style::default()
-        .fg(t.status_info)
-        .add_modifier(Modifier::BOLD);
-    let muted_style = Style::default().fg(t.text_muted);
-
-    let row = |key: &str, desc: &str| -> Line<'static> {
-        Line::from(vec![
-            Span::styled(format!("  {:<12} ", key), key_style),
-            Span::styled(desc.to_string(), desc_style),
-        ])
-    };
-    let group =
-        |title: &str| -> Line<'static> { Line::from(Span::styled(title.to_string(), group_style)) };
-    let blank = || Line::from("");
-
-    let undo_redo = format!("{} / {}", m.undo, m.redo);
-    let copy_paste = format!("{} / {}", m.yank, m.paste);
-
-    let lines: Vec<Line> = vec![
-        group(m.help_group_global),
-        row("q", m.quit),
-        row("?", m.help_open),
-        row("Esc", m.help_close_popup),
-        blank(),
-        group(m.semesters),
-        row("h", m.home_open),
-        row("l / Enter", m.semester_open),
-        row("n / r / d", m.semester_manage),
-        row("J / K", m.semester_move),
-        blank(),
-        group(m.help_group_navigation),
-        row("k / j  ↑/↓", m.help_move_updown),
-        row("h / l  ←/→", m.help_focus_lr),
-        row("h", m.home_open),
-        row("Tab", m.help_cycle_focus),
-        row("Home / End", m.jump_first_last),
-        blank(),
-        group(m.help_group_editing),
-        row("n", m.help_new_generic),
-        row("Enter", m.help_edit_selected),
-        row("d", m.help_delete_selected),
-        row("Ctrl+N", m.bulk_add),
-        row("Ctrl+Z / Y", &undo_redo),
-        blank(),
-        group(m.help_group_actions),
-        row("g", m.enter_global),
-        row("t", m.save_as_template),
-        row("b", m.balance),
-        row("y / p", &copy_paste),
-        blank(),
-        group(m.help_group_view),
-        row("S", m.settings),
-        row("L", m.change_language),
-        blank(),
-        Line::from(Span::styled(
-            format!("  {}", m.help_close_hint),
-            muted_style,
-        )),
-    ];
-
-    let para = Paragraph::new(lines).wrap(Wrap { trim: false });
-    frame.render_widget(para, inner);
-}
-
 pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
@@ -852,8 +816,22 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
         )
         .highlight_symbol(ic.highlight);
 
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(inner);
+
     let mut state = ListState::default();
     state.select(Some(app.selected_language));
 
-    frame.render_stateful_widget(list, inner, &mut state);
+    frame.render_stateful_widget(list, rows[0], &mut state);
+    render_hint(
+        frame,
+        &[
+            ("j/k", m.help_move_updown),
+            ("Enter", m.confirm),
+            ("Esc", m.cancel),
+        ],
+        rows[1],
+    );
 }

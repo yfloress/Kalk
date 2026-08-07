@@ -24,9 +24,11 @@
 //! All calculation logic lives in `model/` — this module only formats and renders.
 
 mod eval_popups;
+mod help_popup;
 pub(crate) mod helpers;
 mod home;
 pub(crate) mod icons;
+pub(crate) mod keyhints;
 pub(crate) mod panels;
 mod popups;
 mod popups_import;
@@ -39,13 +41,14 @@ use crate::model::{
     Course, CourseOutcome, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation,
 };
 use eval_popups::{draw_bulk_add_popup, draw_evaluation_popup, draw_global_grade_popup};
+use help_popup::draw_help_popup;
 use helpers::{focused_border_style, format_course_average, format_weight_validation};
 use home::{draw_delete_semester_popup, draw_semester_popup};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
     draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
-    draw_help_popup, draw_language_popup, draw_save_template_popup, draw_template_popup,
+    draw_language_popup, draw_save_template_popup, draw_template_popup,
 };
 use popups_import::{draw_import_paste, draw_import_preview, draw_import_prompt};
 use ratatui::{

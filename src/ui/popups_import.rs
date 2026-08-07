@@ -25,13 +25,14 @@
 //! 3. [`draw_import_preview`] — preview of the parsed course; `Enter` commits.
 
 use super::helpers::centered_rect;
+use super::keyhints::render_hint;
 use super::theme::{Theme, theme};
 use crate::app::App;
 use crate::i18n::Messages;
 use crate::model::{AveragingMethod, Category, Course, GlobalExamPolicy, MinimumNotMetAction};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
@@ -104,22 +105,26 @@ pub fn draw_import_prompt(frame: &mut Frame, app: &App) {
                 .add_modifier(Modifier::BOLD),
         ));
     }
-    spans.push(Span::styled(
-        m.import_step1_copy_key,
-        Style::default().fg(t.footer_key),
-    ));
-    spans.push(Span::raw("   "));
-    spans.push(Span::styled(
-        m.import_step1_fullscreen,
-        Style::default().fg(t.footer_key),
-    ));
-    spans.push(Span::raw("   "));
-    spans.push(Span::styled(
-        m.import_step1_next,
-        Style::default().fg(t.footer_key),
-    ));
-    let footer = Paragraph::new(Line::from(spans));
-    frame.render_widget(footer, chunks[2]);
+    // Two rows: the copy confirmation on top, the keys underneath.
+    let footer = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .split(chunks[2]);
+
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).alignment(Alignment::Center),
+        footer[0],
+    );
+    render_hint(
+        frame,
+        &[
+            ("c", m.import_step1_copy),
+            ("f", m.import_step1_fullscreen),
+            ("Enter", m.import_step1_next),
+            ("Esc", m.cancel),
+        ],
+        footer[1],
+    );
 }
 
 /// Full-screen prompt view: bare text covering the whole terminal so the
@@ -144,11 +149,11 @@ fn draw_import_prompt_fullscreen(frame: &mut Frame, app: &App) {
         .scroll((app.import_prompt_scroll, 0));
     frame.render_widget(prompt, chunks[0]);
 
-    let hint = Paragraph::new(Line::from(Span::styled(
-        m.import_step1_fullscreen_exit,
-        Style::default().fg(t.text_muted),
-    )));
-    frame.render_widget(hint, chunks[1]);
+    render_hint(
+        frame,
+        &[("Esc/f", m.import_step1_fullscreen_exit)],
+        chunks[1],
+    );
 }
 
 // =============================================================================
@@ -204,11 +209,7 @@ pub fn draw_import_paste(frame: &mut Frame, app: &App) {
     frame.render_widget(paste_box, chunks[1]);
     frame.render_widget(body, paste_inner);
 
-    let footer = Paragraph::new(Line::from(vec![Span::styled(
-        m.import_step2_back,
-        Style::default().fg(t.footer_key),
-    )]));
-    frame.render_widget(footer, chunks[2]);
+    render_hint(frame, &[("b/Esc", m.import_step2_back)], chunks[2]);
 }
 
 // =============================================================================
@@ -403,25 +404,16 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         .scroll((app.import_preview_scroll, 0));
     frame.render_widget(body, chunks[0]);
 
-    let footer = Paragraph::new(Line::from(vec![
-        Span::styled(m.import_step2_back, Style::default().fg(t.footer_key)),
-        Span::styled("   ", Style::default()),
-        Span::styled("j/k: ", Style::default().fg(t.footer_key)),
-        Span::styled(m.help_move_updown, Style::default().fg(t.footer_desc)),
-        Span::styled("   ", Style::default()),
-        Span::styled(
-            m.import_step3_save_as_template,
-            Style::default().fg(t.footer_key),
-        ),
-        Span::styled("   ", Style::default()),
-        Span::styled(
-            m.import_step3_confirm,
-            Style::default()
-                .fg(t.status_pass)
-                .add_modifier(Modifier::BOLD),
-        ),
-    ]));
-    frame.render_widget(footer, chunks[1]);
+    render_hint(
+        frame,
+        &[
+            ("b/Esc", m.import_step2_back),
+            ("j/k", m.help_move_updown),
+            ("t", m.import_step3_save_as_template),
+            ("Enter", m.import_step3_confirm),
+        ],
+        chunks[1],
+    );
 }
 
 /// One line describing the global exam, which moves the final grade as much as

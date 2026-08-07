@@ -29,6 +29,7 @@ use ratatui::{
 };
 
 use super::icons::icons;
+use super::keyhints::render_hint;
 use super::theme::theme;
 
 // =============================================================================
@@ -142,38 +143,13 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
     .wrap(Wrap { trim: true });
     frame.render_widget(desc, chunks[4]);
 
-    // --- Bottom hint ---
-    let hint = Line::from(vec![
-        Span::styled(
-            "  Space/\u{2190}\u{2192}",
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(": {}  ", m.toggle),
-            Style::default().fg(t.footer_desc),
-        ),
-        Span::styled(
-            "Enter",
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(": {}  ", m.confirm),
-            Style::default().fg(t.footer_desc),
-        ),
-        Span::styled(
-            "Esc",
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(": {}", m.cancel),
-            Style::default().fg(t.footer_desc),
-        ),
-    ]);
-    frame.render_widget(Paragraph::new(hint), chunks[6]);
+    render_hint(
+        frame,
+        &[
+            ("Space/\u{2190}\u{2192}", m.toggle),
+            ("Enter", m.confirm),
+            ("Esc", m.cancel),
+        ],
+        chunks[6],
+    );
 }

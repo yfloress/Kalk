@@ -82,6 +82,9 @@ src/
 - **`ui/panels.rs`** handles the evaluations panel and footer rendering (extracted to keep files manageable).
 - **`ui/popups.rs`** handles primary popup overlays (template selection, course/category editing, deletions, language, save-as-template).
 - **`ui/eval_popups.rs`** handles evaluation-related popups (evaluation editing, global grade entry, bulk-add evaluations).
+- **Every popup ends in a keybinding hint** rendered by `ui/keyhints.rs`. Never
+  hand-roll one, and never bake the key into an i18n string — the key belongs to
+  the code, the label to the translation.
 - **`ui/helpers.rs`** contains shared rendering helpers (`centered_rect`, `render_input_field`, `render_toggle_field`, `focused_border_style`) and formatting functions (`format_course_status`, `format_course_average`, `format_weight_validation`, `format_needed_grade`).
 - **`app/mod.rs` coordinates** — holds state, navigation, getters, delegates to `model/` for domain logic and `persistence.rs` for disk I/O.
 - **`app/forms.rs`** handles form input/confirmation for courses, categories, evaluations, deletion, and weight management.

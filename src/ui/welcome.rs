@@ -30,6 +30,7 @@ use crate::i18n::Language;
 
 use super::home::wordmark_lines;
 use super::icons::icons;
+use super::keyhints::render_hint;
 use super::theme::theme;
 
 pub fn draw_welcome(frame: &mut Frame, app: &App, fonts_step: bool) {
@@ -186,7 +187,6 @@ fn draw_font_step(frame: &mut Frame, app: &App, area: Rect) {
 
 fn draw_hint(frame: &mut Frame, app: &App, fonts_step: bool, area: Rect) {
     let m = app.messages();
-    let t = theme();
 
     let yes_no = format!("{} / {}", m.welcome_yes, m.welcome_no);
     let keys: Vec<(&str, &str)> = if fonts_step {
@@ -199,24 +199,5 @@ fn draw_hint(frame: &mut Frame, app: &App, fonts_step: bool, area: Rect) {
         vec![("j/k", m.help_move_updown), ("Enter", m.welcome_next)]
     };
 
-    let mut spans = Vec::new();
-    for (i, (key, label)) in keys.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::raw("   "));
-        }
-        spans.push(Span::styled("[", Style::default().fg(t.footer_border)));
-        spans.push(Span::styled(
-            *key,
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled("] ", Style::default().fg(t.footer_border)));
-        spans.push(Span::styled(*label, Style::default().fg(t.footer_desc)));
-    }
-
-    frame.render_widget(
-        Paragraph::new(Line::from(spans)).alignment(Alignment::Center),
-        area,
-    );
+    render_hint(frame, &keys, area);
 }

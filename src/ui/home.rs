@@ -36,6 +36,7 @@ use super::helpers::{
     centered_rect, focused_border_style, render_delete_confirmation, render_input_field,
 };
 use super::icons::icons;
+use super::keyhints::{render_hint, styled_keybindings};
 use super::theme::{Theme, theme};
 
 /// Wordmark shown when there is nothing to report yet.
@@ -610,7 +611,7 @@ fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
         ("?", m.help_open),
     ];
 
-    let line = super::panels::styled_keybindings(&keys, t, area.width.saturating_sub(2));
+    let line = styled_keybindings(&keys, t, area.width.saturating_sub(2));
 
     let footer = Paragraph::new(line).block(
         Block::default()
@@ -654,16 +655,7 @@ pub fn draw_semester_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     render_input_field(frame, m.semester_name_label, &app.edit_name, true, rows[0]);
 
-    let hint = Line::from(vec![
-        Span::styled("Enter", Style::default().fg(t.footer_key)),
-        Span::styled(
-            format!(":{}  ", m.confirm),
-            Style::default().fg(t.footer_desc),
-        ),
-        Span::styled("Esc", Style::default().fg(t.footer_key)),
-        Span::styled(format!(":{}", m.cancel), Style::default().fg(t.footer_desc)),
-    ]);
-    frame.render_widget(Paragraph::new(hint).alignment(Alignment::Center), rows[1]);
+    render_hint(frame, &[("Enter", m.confirm), ("Esc", m.cancel)], rows[1]);
 }
 
 pub fn draw_delete_semester_popup(frame: &mut Frame, app: &App) {

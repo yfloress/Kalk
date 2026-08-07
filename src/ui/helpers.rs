@@ -52,6 +52,7 @@ use ratatui::{
 };
 
 use super::icons::icons;
+use super::keyhints::render_hint;
 use super::theme::theme;
 
 // =============================================================================
@@ -161,18 +162,11 @@ pub fn render_delete_confirmation(
     .wrap(Wrap { trim: true });
     frame.render_widget(warn, chunks[2]);
 
-    // Keybinding hints
-    let hints = Paragraph::new(Line::from(vec![
-        Span::styled(
-            format!("Enter/y: {}  ", confirm_label),
-            Style::default().fg(t.status_fail),
-        ),
-        Span::styled(
-            format!("Esc/n: {}", cancel_label),
-            Style::default().fg(t.text_muted),
-        ),
-    ]));
-    frame.render_widget(hints, chunks[4]);
+    render_hint(
+        frame,
+        &[("Enter/y", confirm_label), ("Esc/n", cancel_label)],
+        chunks[4],
+    );
 }
 
 // =============================================================================

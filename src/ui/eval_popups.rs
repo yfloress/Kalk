@@ -21,6 +21,7 @@ use super::helpers::{
     centered_rect, format_course_status, format_needed_grade, render_input_field,
 };
 use super::icons::icons;
+use super::keyhints::render_hint;
 use super::theme::theme;
 use crate::app::{App, InputField};
 use crate::model::{GlobalExamPolicy, NeededGradeStatus, WeightValidation};
@@ -67,6 +68,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
         constraints.push(Constraint::Length(1)); // Weight hint
     }
     constraints.push(Constraint::Length(3)); // Required grade info
+    constraints.push(Constraint::Length(1)); // Key hints
 
     let inner = Layout::default()
         .direction(Direction::Vertical)
@@ -162,6 +164,18 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
             .block(info_block);
         frame.render_widget(info_widget, inner[slot]);
     }
+
+    if let Some(area) = inner.last() {
+        render_hint(
+            frame,
+            &[
+                ("Tab", m.help_cycle_focus),
+                ("Enter", m.confirm),
+                ("Esc", m.cancel),
+            ],
+            *area,
+        );
+    }
 }
 
 // =============================================================================
@@ -201,6 +215,7 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
             Constraint::Length(1), // spacing
             Constraint::Length(3), // grade input
             Constraint::Min(0),    // spacer
+            Constraint::Length(1), // key hints
         ])
         .split(inner);
 
@@ -252,6 +267,8 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
         true,
         field_area,
     );
+
+    render_hint(frame, &[("Enter", m.confirm), ("Esc", m.cancel)], layout[5]);
 }
 
 // =============================================================================
@@ -264,7 +281,7 @@ pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
     let t = theme();
     // Fixed size: 3+1+3+1+1 = 9 content + 2 v-margin + 2 borders = 13
     let popup_w = 50u16;
-    let popup_h = 13u16;
+    let popup_h = 15u16;
     let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -286,6 +303,8 @@ pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
             Constraint::Length(3), // Count field
             Constraint::Length(1), // Spacing
             Constraint::Length(1), // Hint
+            Constraint::Length(1), // Spacing
+            Constraint::Length(1), // Key hints
         ])
         .split(area);
     let on_name = app.input_field == InputField::Name;
@@ -299,4 +318,14 @@ pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
     );
     let hint = Paragraph::new(m.bulk_add_hint).style(Style::default().fg(t.text_muted));
     frame.render_widget(hint, inner[4]);
+
+    render_hint(
+        frame,
+        &[
+            ("Tab", m.help_cycle_focus),
+            ("Enter", m.confirm),
+            ("Esc", m.cancel),
+        ],
+        inner[6],
+    );
 }
