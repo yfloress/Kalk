@@ -313,8 +313,8 @@ Respond with ONLY a JSON object — no prose, no markdown code fences, nothing b
       "minimum_average": <number or null>,
       "minimum_per_evaluation": <number or null>,
       "minimum_one_eval": <number or null>,
-      "on_minimum_not_met":          "<final_equals_average | requires_global | fail_course>",
-      "on_min_per_eval_not_met":     "<final_equals_average | requires_global | fail_course>",
+      "on_minimum_not_met":          "<final_equals_average | requires_global | fail_course | cap_final_grade>",
+      "on_min_per_eval_not_met":     "<final_equals_average | requires_global | fail_course | cap_final_grade>",
       "on_min_one_eval_not_met":     "<final_equals_average | requires_global | fail_course | cap_final_grade>",
       "cap_final_grade": <number or null>,
       "requires_categories": ["<category name>", ...],
@@ -329,46 +329,83 @@ Respond with ONLY a JSON object — no prose, no markdown code fences, nothing b
 }
 
 Rules:
+
+Output
 - Output ONLY the JSON.  No code fences, no comments, no explanation.
-- Use null for anything not stated in the syllabus.
+- Use null for anything the syllabus does not state.  Never guess.
+- Keep names ("name" fields) in the language of the syllabus.
+
+Grades
+- Every grade in Kalk is on a 0-100 scale, and so is "passing_grade".
+- If the syllabus uses another scale, convert proportionally and say nothing:
+  1-7 becomes 0-100 as (grade - 1) / 6 * 100, so a 4.0 pass mark is 50 and a
+  5.5 is 75.  A 0-10 scale multiplies by 10.  Letter grades have no faithful
+  conversion — leave grades null and set passing_grade to 55.
 - If passing_grade is not stated, default to 55.
+- Do not invent grades — leave "grade" as null unless the syllabus literally
+  provides the student's own mark.
+- Generate evaluation names like "C1", "C2", "Quiz 1", "Lab 1", "Tarea 1",
+  based on what the syllabus describes.
+
+Structure
+- A category is a weighted group of evaluations: "Tests" at 60%, "Labs" at 40%.
 - Category weights MUST add up to 100.  Adjust if the syllabus is ambiguous.
-- global_exam.policy:
-  * "none"            — there is no global / final exam.
-  * "weighted"        — final_grade = semester * X + global * Y.
-  * "replaces_worst"  — the global replaces the worst evaluation of a category.
-- Do not invent grades — leave "grade" as null unless the syllabus literally provides it.
-- Generate evaluation names like "C1", "C2", "Quiz 1", "Lab 1", "Tarea 1", based on what the syllabus describes.
-- If the syllabus lists "drop the lowest N", set drop_lowest accordingly; otherwise 0.
-- "attendance.required_percent" is the minimum attendance the syllabus demands.
-  Use "fails_course" when falling short means failing regardless of grades,
-  "warn_only" when the syllabus only mentions it.
-- "global_exam.only_if_category_below" is for recovery exams reserved for
-  students who did badly, e.g. "only those whose reports average under 60".
-- "global_exam.cap_if_passed" / "cap_if_failed" are ceilings the recovery exam
-  imposes, e.g. "passing the retake caps the course at 55".
-- "requires_categories" lists categories that must be completed before this one
-  may be sat, e.g. "you may only sit the test after the 4 quizzes and 4
-  assignments".  It changes no grade — Kalk only warns.
-- "credits" is the course's credit value (SCT, ECTS, or whatever the institution
-  uses).  Use null when the syllabus does not state it — do not guess.
-- Minimum rules, and what happens when one is not met:
-  * "minimum_average"        — the category must average at least this to pass.
-  * "minimum_per_evaluation" — EVERY evaluation must reach at least this.
-  * "minimum_one_eval"       — AT LEAST ONE evaluation must reach this.
-  Each has a matching "on_..._not_met" telling Kalk what a failure means:
+- "weighted_evaluations": true when the evaluations inside a category carry
+  different weights ("the first report is worth 20%, the other two 40% each").
+  Then every evaluation needs a "weight" and they MUST add up to 100.  When it
+  is false, leave every evaluation "weight" as null and they are averaged
+  equally.
+- "drop_lowest": how many of the worst grades the category discards.  0 if the
+  syllabus does not offer it.
+- "averaging_method": "geometric" only when the syllabus literally asks for a
+  geometric mean, which punishes a single low grade far more than the usual
+  average.  Otherwise "arithmetic".
+- "round_before_weighting": true when the category average is rounded to a
+  whole number before its weight is applied.
+- "credits" is the course's credit value (SCT, ECTS, or whatever the
+  institution uses).  Null when the syllabus does not state it.
+
+Minimums, and what breaking one does
+- "minimum_average"        — the category must average at least this.
+- "minimum_per_evaluation" — EVERY evaluation must reach at least this.
+- "minimum_one_eval"       — AT LEAST ONE evaluation must reach this.
+  Each has a matching "on_..._not_met" saying what breaking it means:
   * "final_equals_average" — the final grade becomes that category's average.
   * "requires_global"      — the student must sit the global exam.
   * "fail_course"          — the course is failed outright.
-  * "cap_final_grade"     — the course can no longer exceed "cap_final_grade".
-    Use this for wording like "if the tests average 50 or less, the final
-    grade is capped at 54": the student is not failed outright, they simply
-    cannot climb past the ceiling.  Always set "cap_final_grade" with it.
-  Set the action only when the syllabus states a minimum; otherwise use
-  "final_equals_average".  Read the wording carefully: "must average 50 to pass
-  the course" is fail_course, while "must average 50 or go to the global" is
-  requires_global.  Getting this wrong changes whether the student is told they
-  passed.
+  * "cap_final_grade"      — the course can no longer exceed "cap_final_grade".
+    Use it for wording like "if the tests average 50 or less, the final grade
+    is capped at 54": the student is not failed outright, they simply cannot
+    climb past the ceiling.  Always set "cap_final_grade" alongside it.
+- Set an action only when the syllabus states the matching minimum; otherwise
+  leave "final_equals_average".  Read the wording carefully: "must average 50
+  to pass the course" is fail_course, while "must average 50 or go to the
+  global" is requires_global.  Getting this wrong changes whether the student
+  is told they passed.
+
+Global / recovery exam
+- "policy":
+  * "none"            — there is no global / final exam.
+  * "weighted"        — final_grade = semester * X + global * Y.
+  * "replaces_worst"  — the global replaces the worst evaluation of a category.
+- "min_grade" is the minimum semester grade needed to be allowed to sit it.
+- "only_if_category_below" is for recovery exams reserved for students who did
+  badly, e.g. "only those whose reports average under 60".
+- "cap_if_passed" / "cap_if_failed" are ceilings the exam itself imposes,
+  e.g. "passing the retake caps the course at 55, failing it at 54".
+
+Attendance and prerequisites
+- "attendance.required_percent" is the minimum attendance the syllabus demands.
+  Use "fails_course" when falling short means failing regardless of grades,
+  "warn_only" when the syllabus only mentions it.
+- "requires_categories" lists categories that must be completed before this one
+  may be sat, e.g. "you may only sit the test after the 4 quizzes and 4
+  assignments".  It changes no grade — Kalk only warns.
+
+When the syllabus does not fit
+- If a rule cannot be expressed with these fields, choose the closest option
+  that is not more optimistic than the real rule, and leave the rest null.
+  Never invent field names: anything outside this schema is discarded.
 
 Example 1 — a straightforward course, most rules unused:
 {"schema_version":1,"name":"Calculus 1","passing_grade":55,"credits":5,"attendance":{"required_percent":null,"if_not_met":"warn_only"},"global_exam":{"policy":"weighted","semester_weight":0.7,"global_weight":0.3,"min_grade":null,"only_if_category_below":null,"cap_if_passed":null,"cap_if_failed":null},"categories":[{"name":"Tests","weight":60,"drop_lowest":1,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","cap_final_grade":null,"requires_categories":[],"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"C1","grade":null,"weight":null},{"name":"C2","grade":null,"weight":null},{"name":"C3","grade":null,"weight":null}]},{"name":"Labs","weight":40,"drop_lowest":0,"minimum_average":null,"minimum_per_evaluation":null,"minimum_one_eval":null,"on_minimum_not_met":"final_equals_average","on_min_per_eval_not_met":"final_equals_average","on_min_one_eval_not_met":"final_equals_average","cap_final_grade":null,"requires_categories":[],"weighted_evaluations":false,"averaging_method":"arithmetic","round_before_weighting":false,"evaluations":[{"name":"Lab 1","grade":null,"weight":null},{"name":"Lab 2","grade":null,"weight":null},{"name":"Lab 3","grade":null,"weight":null}]}]}

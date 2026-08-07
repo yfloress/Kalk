@@ -540,6 +540,45 @@ mod tests {
     }
 
     #[test]
+    fn every_action_field_offers_every_action() {
+        // A list that omits an action teaches the AI that action is invalid
+        // there. cap_final_grade was once offered only on the one-eval rule,
+        // the single rule real syllabi do not use it for.
+        for prompt in [crate::i18n::EN.import_prompt, crate::i18n::ES.import_prompt] {
+            for field in [
+                "on_minimum_not_met",
+                "on_min_per_eval_not_met",
+                "on_min_one_eval_not_met",
+            ] {
+                let declaration = prompt
+                    .lines()
+                    .find(|l| l.trim_start().starts_with(&format!("\"{field}\"")))
+                    .unwrap_or_else(|| panic!("{field} is not declared in the schema"));
+                for action in [
+                    "final_equals_average",
+                    "requires_global",
+                    "fail_course",
+                    "cap_final_grade",
+                ] {
+                    assert!(
+                        declaration.contains(action),
+                        "{field} does not offer {action}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn prompt_states_the_grade_scale_and_how_to_convert() {
+        // Without this a 1-7 syllabus produces numbers Kalk reads as 0-100.
+        for prompt in [crate::i18n::EN.import_prompt, crate::i18n::ES.import_prompt] {
+            assert!(prompt.contains("0-100"), "the grade scale is never stated");
+            assert!(prompt.contains("1-7"), "no conversion guidance for 1-7");
+        }
+    }
+
+    #[test]
     fn prompt_shows_a_worked_example_of_every_hard_rule() {
         // Naming a field in the prose is not enough: the AI imitates the
         // worked examples hardest, and a field it only ever sees as null is a
