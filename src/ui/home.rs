@@ -47,11 +47,19 @@ const WORDMARK: &str = r#" ___  __    ________  ___       ___  __
    \ \__\\ \__\ \__\ \__\ \_______\ \__\\ \__\
     \|__| \|__|\|__|\|__|\|_______|\|__| \|__|"#;
 
+/// The wordmark as styled lines, ready to render left-aligned.
+pub(super) fn wordmark_lines(color: ratatui::style::Color) -> Vec<Line<'static>> {
+    WORDMARK
+        .lines()
+        .map(|l| Line::from(Span::styled(l, Style::default().fg(color))))
+        .collect()
+}
+
 /// Rows the wordmark needs, plus breathing room above and below.
 const WORDMARK_ROWS: u16 = 11;
 
 /// Width of the label column in the metrics pane.
-const LABEL_W: usize = 12;
+const LABEL_W: usize = 14;
 
 const BAR_FULL: &str = "\u{2588}";
 const BAR_EMPTY: &str = "\u{2591}";
@@ -238,16 +246,16 @@ fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'
 
     if counts.pending_global > 0 {
         lines.push(metric_row(
-            m.metric_pending_global,
-            counts.pending_global.to_string(),
+            m.metric_global,
+            format!("{} {}", counts.pending_global, m.metric_pending_word),
             t.status_override,
         ));
     }
 
     if metrics.failed_minimums > 0 {
         lines.push(metric_row(
-            m.metric_minimums_unmet,
-            metrics.failed_minimums.to_string(),
+            m.metric_minimums,
+            format!("{} {}", metrics.failed_minimums, m.metric_unmet_word),
             t.status_override,
         ));
     }
@@ -568,11 +576,10 @@ fn draw_wordmark(frame: &mut Frame, app: &App, area: Rect) {
         width: art_w,
         height: art_h,
     };
-    let art: Vec<Line> = WORDMARK
-        .lines()
-        .map(|l| Line::from(Span::styled(l, Style::default().fg(t.status_info))))
-        .collect();
-    frame.render_widget(Paragraph::new(art).alignment(Alignment::Left), art_area);
+    frame.render_widget(
+        Paragraph::new(wordmark_lines(t.status_info)).alignment(Alignment::Left),
+        art_area,
+    );
 
     let hint_area = Rect {
         x: area.x,

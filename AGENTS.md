@@ -27,6 +27,7 @@ src/
 │   ├── forms.rs     # Form handling: course/category/eval editing, deletion, weight mgmt
 │   ├── actions.rs   # Secondary actions: templates, language, settings, global grade, yank/paste, bulk-add
 │   ├── semesters.rs # Semester navigation/CRUD, session persistence (config())
+│   ├── welcome.rs   # First-run wizard: language, then Nerd Font check
 │   ├── input.rs     # InputField enum and form-field focus/toggle cycling
 │   ├── status.rs    # StatusSeverity and the status-message setters
 │   ├── history.rs   # Undo/redo snapshots (captures all semesters)
@@ -41,6 +42,7 @@ src/
 ├── ui/
 │   ├── mod.rs       # Main draw, panel rendering (courses, categories)
 │   ├── home.rs      # Home screen: semester list, dashboard metrics, semester popups
+│   ├── welcome.rs   # First-run wizard rendering
 │   ├── panels.rs    # Evaluations panel and footer rendering
 │   ├── popups.rs    # Popup dialogs (template, course, category, delete, language, save-template)
 │   ├── eval_popups.rs # Evaluation popup, global grade entry, bulk-add evaluations
@@ -56,7 +58,7 @@ src/
 ~/.local/share/kalk/
 ├── data.json           # Semesters and their courses (schema_version 2)
 ├── data.json.v1.bak    # Pre-migration backup, written once
-├── config.json         # User configuration (language, nerd fonts, last session)
+├── config.json         # User configuration (language, nerd fonts, last session, configured)
 └── user_templates.json # User-created templates
 ```
 

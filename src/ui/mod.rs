@@ -32,6 +32,7 @@ mod popups;
 mod popups_import;
 mod settings_popup;
 pub(crate) mod theme;
+mod welcome;
 
 use crate::app::{App, Focus, Screen};
 use crate::model::{
@@ -63,6 +64,11 @@ use theme::theme;
 
 /// Main UI rendering function.
 pub fn draw(frame: &mut Frame, app: &App) {
+    if matches!(app.screen, Screen::Welcome | Screen::WelcomeFonts) {
+        welcome::draw_welcome(frame, app, app.screen == Screen::WelcomeFonts);
+        return;
+    }
+
     // Home replaces the whole layout rather than overlaying it, and its own
     // popups belong on top of Home — not on top of the three-panel view.
     if matches!(
@@ -152,6 +158,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::Home
         | Screen::EditingSemester { .. }
         | Screen::ConfirmDeleteSemester
+        | Screen::Welcome
+        | Screen::WelcomeFonts
         | Screen::Main => {}
     }
 }

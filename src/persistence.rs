@@ -42,6 +42,17 @@ pub struct Config {
     /// Semester open when the last session ended.
     #[serde(default)]
     pub last_semester: Option<Uuid>,
+    /// Whether the first-run wizard has been completed.
+    ///
+    /// A config file written before this field existed belongs to someone who
+    /// already knows the app, so a missing value means "configured". Only a
+    /// fresh install, which has no file at all, falls back to `Default`.
+    #[serde(default = "configured_by_default")]
+    pub configured: bool,
+}
+
+fn configured_by_default() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -51,6 +62,7 @@ impl Default for Config {
             use_nerd_fonts: true,
             start_on_home: true,
             last_semester: None,
+            configured: false,
         }
     }
 }
@@ -322,6 +334,21 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.language, Language::English);
         assert!(config.use_nerd_fonts);
+    }
+
+    #[test]
+    fn a_config_written_before_the_wizard_existed_counts_as_configured() {
+        // Someone already using Kalk must not be dropped into the first-run
+        // wizard just because their config predates the field.
+        let json = r#"{"language":"Spanish","use_nerd_fonts":true}"#;
+        let cfg: Config = serde_json::from_str(json).unwrap();
+        assert!(cfg.configured);
+    }
+
+    #[test]
+    fn a_fresh_install_starts_unconfigured() {
+        // No file on disk means load_config falls back to Default.
+        assert!(!Config::default().configured);
     }
 
     // =========================================================================

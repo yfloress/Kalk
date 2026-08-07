@@ -33,6 +33,7 @@ impl App {
             language: self.language,
             use_nerd_fonts: self.use_nerd_fonts,
             start_on_home: self.screen == Screen::Home,
+            configured: self.configured,
             last_semester: self.semesters.get(self.selected_semester).map(|s| s.id),
         }
     }

@@ -30,6 +30,7 @@ pub mod import;
 mod input;
 mod semesters;
 mod status;
+mod welcome;
 
 pub use input::InputField;
 pub use status::StatusSeverity;
@@ -93,6 +94,10 @@ pub enum Screen {
     ImportPreview,
     /// Semester list and dashboard.
     Home,
+    /// First run, step 1: pick a language.
+    Welcome,
+    /// First run, step 2: confirm whether Nerd Font icons render.
+    WelcomeFonts,
     EditingSemester {
         is_new: bool,
     },
@@ -186,6 +191,9 @@ pub struct App {
 
     /// Whether to use Nerd Font icons (persisted in config).
     pub use_nerd_fonts: bool,
+    /// False until the first-run wizard is finished; quitting midway keeps it
+    /// false so the wizard comes back.
+    pub configured: bool,
     /// Index of the focused setting in the settings popup.
     pub selected_setting: usize,
 
@@ -270,6 +278,7 @@ impl Default for App {
             show_advanced_rules: false,
             show_field_help: false,
             use_nerd_fonts: true,
+            configured: true,
             selected_setting: 0,
             import_copied: false,
             import_prompt_fullscreen: false,
@@ -350,7 +359,9 @@ impl App {
                 .map(|_| 0)
         });
 
-        let screen = if config.start_on_home {
+        let screen = if !config.configured {
+            Screen::Welcome
+        } else if config.start_on_home {
             Screen::Home
         } else {
             Screen::Main
@@ -368,6 +379,7 @@ impl App {
             status_severity,
             language,
             use_nerd_fonts,
+            configured: config.configured,
             ..Default::default()
         }
     }

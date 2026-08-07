@@ -831,7 +831,7 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
             };
             let style = if is_current {
                 Style::default()
-                    .fg(t.status_pass)
+                    .fg(t.footer_key)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()

@@ -780,7 +780,9 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ),
         Screen::Help => styled_keybindings(&[("Esc/Enter/?", m.cancel)], t, available_width),
         // Home draws its own footer; these two are its popups.
-        Screen::Home => styled_keybindings(&[("Esc", m.cancel)], t, available_width),
+        Screen::Home | Screen::Welcome | Screen::WelcomeFonts => {
+            styled_keybindings(&[("Esc", m.cancel)], t, available_width)
+        }
         Screen::EditingSemester { .. } => styled_keybindings(
             &[("Enter", m.confirm), ("Esc", m.cancel)],
             t,

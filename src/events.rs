@@ -126,6 +126,8 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
         match &app.screen {
             Screen::Main => handle_main_keys(app, key.code, key.modifiers),
             Screen::Home => handle_home_keys(app, key.code),
+            Screen::Welcome => handle_welcome_keys(app, key.code),
+            Screen::WelcomeFonts => handle_welcome_fonts_keys(app, key.code),
             Screen::EditingSemester { .. } => handle_edit_semester_keys(app, key.code),
             Screen::ConfirmDeleteSemester => handle_confirm_delete_semester_keys(app, key.code),
             Screen::SelectingTemplate => handle_template_keys(app, key.code),
@@ -551,6 +553,29 @@ fn handle_confirm_delete_semester_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Enter | KeyCode::Char('y') => app.confirm_delete_semester(),
         KeyCode::Esc | KeyCode::Char('n') => app.show_home(),
+        _ => {}
+    }
+}
+
+/// First run, step 1: language. Deliberately has no quit key — the wizard is
+/// two answers long and both are needed before anything else makes sense.
+fn handle_welcome_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Down | KeyCode::Char('j') => app.welcome_next_language(),
+        KeyCode::Up | KeyCode::Char('k') => app.welcome_previous_language(),
+        KeyCode::Enter => app.welcome_confirm_language(),
+        _ => {}
+    }
+}
+
+/// First run, step 2: Nerd Font icons.
+fn handle_welcome_fonts_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Left | KeyCode::Char('h') => app.welcome_set_fonts(true),
+        KeyCode::Right | KeyCode::Char('l') => app.welcome_set_fonts(false),
+        KeyCode::Char(' ') | KeyCode::Tab => app.welcome_toggle_fonts(),
+        KeyCode::Enter => app.welcome_finish(),
+        KeyCode::Esc => app.welcome_back(),
         _ => {}
     }
 }
