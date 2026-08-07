@@ -53,6 +53,22 @@ pub const MIN_GRADE: f64 = 0.0;
 /// Maximum valid grade
 pub const MAX_GRADE: f64 = 100.0;
 
+/// Passing grades below this are taken as a sign that the user is working on
+/// another scale — 4 on the Chilean 1-7, 5 on a 0-10 — rather than a course
+/// that genuinely passes at 7 out of 100.
+///
+/// Kalk only implements 0-100.  Left unguarded,
+/// another scale is accepted silently and then judged with 0-100 rounding,
+/// which reports a Chilean 3.5 as a pass.  Rejecting is the honest answer
+/// until scales are a real feature.
+pub const IMPLAUSIBLE_PASSING_GRADE: f64 = 20.0;
+
+/// Whether a passing grade looks like it belongs to a scale Kalk cannot judge.
+/// Zero is allowed: it means "no minimum", not "another scale".
+pub fn is_unsupported_scale(passing_grade: f64) -> bool {
+    passing_grade > MIN_GRADE && passing_grade < IMPLAUSIBLE_PASSING_GRADE
+}
+
 // =============================================================================
 // Evaluation
 // =============================================================================

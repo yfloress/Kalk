@@ -421,6 +421,7 @@ una acción que lo nombre:
 
     // Semesters
     semester_name_prefix: "Semestre",
+    unsupported_scale: "Kalk sólo admite la escala 0-100 por ahora. Convierte tus notas (1-7: (n-1)/6*100).",
     import_requires_first: "Requiere otras categorías antes",
     attendance_title: "Asistencia",
     attendance_total: "Clases realizadas",

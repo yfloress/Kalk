@@ -3682,3 +3682,38 @@ fn test_margin_is_silent_until_something_is_graded() {
     // 40/4 = 10 → 10 - 55.
     assert!((started.margin().unwrap() + 45.0).abs() < 0.01);
 }
+
+#[test]
+fn test_grades_from_another_scale_are_refused() {
+    // The passing grades of the scales Kalk does not implement yet.
+    for passing in [3.0, 4.0, 5.0, 6.0] {
+        assert!(
+            is_unsupported_scale(passing),
+            "{passing} should be refused until scales are a feature"
+        );
+    }
+
+    // Plausible 0-100 requirements, and "no minimum".
+    for passing in [0.0, 20.0, 55.0, 60.0, 100.0] {
+        assert!(
+            !is_unsupported_scale(passing),
+            "{passing} is a valid 0-100 bar"
+        );
+    }
+}
+
+#[test]
+fn test_the_rounding_that_makes_other_scales_wrong() {
+    // Documents why the guard exists: on a 1-7 scale a 3.5 is failing, but
+    // 0-100 rounding lifts it to 4 and Kalk would call it a pass.
+    let mut course = Course::new("Chilean".to_string(), 4.0);
+    let mut cat = Category::new("Cat".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("E1".to_string(), 3.5));
+    course.categories.push(cat);
+
+    assert!(
+        course.is_passing_grade(3.5),
+        "this is the wrong answer the guard prevents reaching"
+    );
+}

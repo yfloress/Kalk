@@ -29,7 +29,8 @@ use serde::Deserialize;
 use crate::i18n::Messages;
 use crate::model::{
     Attendance, AttendanceAction, AveragingMethod, Category, CategoryRules, CategoryThreshold,
-    Course, Evaluation, GlobalEligibility, GlobalExamPolicy, GlobalOutcome, MinimumNotMetAction,
+    Course, DEFAULT_PASSING_GRADE, Evaluation, GlobalEligibility, GlobalExamPolicy, GlobalOutcome,
+    MinimumNotMetAction,
 };
 
 /// Version of the import schema this build understands.  Bump when making
@@ -237,7 +238,16 @@ pub fn parse(raw: &str) -> Result<ImportSchema, ImportError> {
 pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &str) -> Course {
     let final_name = unique_name(schema.name.trim(), existing_names, copy_suffix);
 
-    let mut course = Course::new(final_name, schema.passing_grade);
+    // The prompt asks the AI to convert other scales, but a stray 1-7 grading
+    // rule would otherwise be judged with 0-100 rounding. Fall back rather
+    // than import a course whose verdicts would be wrong.
+    let passing_grade = if crate::model::is_unsupported_scale(schema.passing_grade) {
+        DEFAULT_PASSING_GRADE
+    } else {
+        schema.passing_grade
+    };
+
+    let mut course = Course::new(final_name, passing_grade);
     course.credits = schema.credits.filter(|c| *c > 0);
 
     if let Some(a) = &schema.attendance

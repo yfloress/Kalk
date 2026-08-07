@@ -49,7 +49,7 @@ Gestiona ramos, registra notas por categorías y calcula automáticamente la not
 
 ## Cálculo de Notas
 
-- **Escala**: 0-100 puntos
+- **Escala**: 0-100 puntos (la única admitida por ahora)
 - **Nota de aprobación por defecto**: 55 (configurable por ramo)
 - **Redondeo**: 0.5+ redondea hacia arriba (entonces 54.5 → 55 = aprobado)
 - **Indicadores por evaluación**: Muestra "Necesitas X+ en esta eval para aprobar" al editar

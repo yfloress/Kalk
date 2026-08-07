@@ -418,6 +418,7 @@ next to an action that names it:
 
     // Semesters
     semester_name_prefix: "Semester",
+    unsupported_scale: "Kalk only supports the 0-100 scale for now. Convert your grades (1-7: (g-1)/6*100).",
     import_requires_first: "Requires other categories first",
     attendance_title: "Attendance",
     attendance_total: "Classes held",

@@ -150,6 +150,15 @@ impl App {
             return;
         }
 
+        // Kalk judges everything on 0-100; a passing grade from another scale
+        // would be accepted and then rounded by 0-100 rules, silently turning
+        // a Chilean 3.5 into a pass.
+        if crate::model::is_unsupported_scale(passing_grade) {
+            let msg = self.messages().unsupported_scale.to_string();
+            self.set_warning(msg);
+            return;
+        }
+
         // Empty or unparsable means "no credits declared".
         let credits: Option<u32> = self.edit_credits.trim().parse().ok().filter(|c| *c > 0);
 

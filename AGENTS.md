@@ -71,6 +71,11 @@ src/
   `app.courses()` / `app.courses_mut()`, never a bare field.
 - **`Course::outcome()` is the single pass/fail verdict.** `ui/` renders it and
   must not re-derive it from `compute_grade()`.
+- **0-100 is the only scale Kalk implements.** `round_grade` rounds to an
+  integer, which is wrong for any scale with decimals, so `is_unsupported_scale`
+  refuses another scale rather than accepting it and misjudging it. Supporting
+  scales properly means making the scale a per-course value with its own decimal
+  precision — do not lift the guard piecemeal.
 - **The displayed grade is the floor, not an estimate** — ungraded evaluations
   count as zero. `Course::best_case_grade()` is the matching ceiling; never add
   a "worst case" metric, it is the number already on screen.

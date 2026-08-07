@@ -49,7 +49,7 @@ Manage courses, track grades by categories, and automatically calculate the exac
 
 ## Grade Calculation
 
-- **Scale**: 0-100 points
+- **Scale**: 0-100 points (the only scale supported for now)
 - **Default passing grade**: 55 (customizable per course)
 - **Rounding**: 0.5+ rounds up (so 54.5 → 55 = pass)
 - **Per-evaluation hints**: Shows "Need X+ in this eval to pass" when editing
