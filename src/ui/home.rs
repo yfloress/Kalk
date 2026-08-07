@@ -477,36 +477,20 @@ fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let t = theme();
 
+    // Only the essentials; renaming and reordering live in the `?` overlay.
+    // `?` stays last so the width ladder never drops it.
     let keys = [
         ("j/k", m.help_move_updown),
-        ("l/Enter", m.semester_open),
+        ("Enter", m.semester_open),
         ("n", m.semester_new),
-        ("r", m.semester_rename),
         ("d", m.semester_delete),
-        ("J/K", m.semester_move),
-        ("L", m.select_language),
-        ("?", m.help_open),
         ("Esc", m.help_close_popup),
+        ("?", m.help_open),
     ];
 
-    let mut spans = Vec::new();
-    for (i, (key, label)) in keys.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::styled(" · ", Style::default().fg(t.footer_desc)));
-        }
-        spans.push(Span::styled(
-            *key,
-            Style::default()
-                .fg(t.footer_key)
-                .add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(
-            format!(":{}", label),
-            Style::default().fg(t.footer_desc),
-        ));
-    }
+    let line = super::panels::styled_keybindings(&keys, t, area.width.saturating_sub(2));
 
-    let footer = Paragraph::new(Line::from(spans)).block(
+    let footer = Paragraph::new(line).block(
         Block::default()
             .borders(Borders::ALL)
             .border_type(t.border_type)

@@ -75,7 +75,6 @@ pub struct IconSet {
 
     // Separators / decorative
     pub separator_dot: &'static str,
-    pub key_hint_sep: &'static str,
     pub bullet: &'static str,
 }
 
@@ -130,7 +129,6 @@ pub const NERD: IconSet = IconSet {
 
     // Separators / decorative
     separator_dot: " \u{2502} ", // │ (box drawing vertical)
-    key_hint_sep: " \u{2502} ",  // │
     bullet: "\u{f111} ",         //  (circle)
 };
 
@@ -186,7 +184,6 @@ pub const UNICODE: IconSet = IconSet {
 
     // Separators / decorative
     separator_dot: " | ",
-    key_hint_sep: " | ",
     bullet: "\u{2022} ", // •
 };
 

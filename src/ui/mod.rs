@@ -27,7 +27,7 @@ mod eval_popups;
 pub(crate) mod helpers;
 mod home;
 pub(crate) mod icons;
-mod panels;
+pub(crate) mod panels;
 mod popups;
 mod popups_import;
 mod settings_popup;
