@@ -540,6 +540,35 @@ mod tests {
     }
 
     #[test]
+    fn prompt_shows_a_worked_example_of_every_hard_rule() {
+        // Naming a field in the prose is not enough: the AI imitates the
+        // worked examples hardest, and a field it only ever sees as null is a
+        // field it will keep emitting as null.
+        for prompt in [crate::i18n::EN.import_prompt, crate::i18n::ES.import_prompt] {
+            for populated in [
+                r#""cap_final_grade":54"#,
+                r#""on_minimum_not_met":"cap_final_grade""#,
+                r#""on_min_per_eval_not_met":"requires_global""#,
+                r#""on_min_one_eval_not_met":"fail_course""#,
+                r#""requires_categories":["Informes"]"#,
+                r#""only_if_category_below":{"#,
+                r#""cap_if_passed":55"#,
+                r#""cap_if_failed":54"#,
+                r#""if_not_met":"fails_course""#,
+                r#""required_percent":85"#,
+                r#""averaging_method":"geometric""#,
+                r#""weighted_evaluations":true"#,
+                r#""round_before_weighting":true"#,
+            ] {
+                assert!(
+                    prompt.contains(populated),
+                    "no worked example for {populated}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn prompt_documents_every_importable_field() {
         // The prompt is the only thing that makes the AI emit these, so a new
         // schema field that never reaches the prompt is a silent dead end.
