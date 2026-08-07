@@ -171,6 +171,74 @@ pub fn draw(frame: &mut Frame, app: &App) {
 // Panel Drawing
 // =============================================================================
 
+/// One muted line summarising where the course can still end up: the ceiling
+/// if everything left is aced, the distance to passing, and how much of the
+/// grade is still undecided.
+fn outlook_line(course: &Course, m: &crate::i18n::Messages) -> Line<'static> {
+    let t = theme();
+    let mut spans: Vec<Span<'static>> = Vec::new();
+
+    let push = |spans: &mut Vec<Span<'static>>, label: &str, value: String, color| {
+        if !spans.is_empty() {
+            spans.push(Span::styled(
+                "  \u{b7}  ",
+                Style::default().fg(t.text_muted),
+            ));
+        }
+        spans.push(Span::styled(
+            format!("{} ", label),
+            Style::default().fg(t.text_muted),
+        ));
+        spans.push(Span::styled(value, Style::default().fg(color)));
+    };
+
+    if let Some(best) = course.best_case_grade() {
+        let color = if course.is_unrecoverable() {
+            t.status_fail
+        } else {
+            t.status_info
+        };
+        push(
+            &mut spans,
+            m.metric_ceiling,
+            format!("{:.0}", Course::round_grade(best)),
+            color,
+        );
+    }
+
+    if let Some(margin) = course.margin() {
+        let color = if margin >= 0.0 {
+            t.status_pass
+        } else {
+            t.status_fail
+        };
+        push(
+            &mut spans,
+            m.metric_margin,
+            format!("{:+.0}", margin),
+            color,
+        );
+    }
+
+    if course.has_evaluations() {
+        push(
+            &mut spans,
+            m.metric_in_play,
+            format!("{:.0}%", course.pending_weight()),
+            t.text_secondary,
+        );
+    }
+
+    if course.is_unrecoverable() {
+        spans.push(Span::styled(
+            format!("  \u{b7}  {}", m.metric_lost),
+            Style::default().fg(t.status_fail),
+        ));
+    }
+
+    Line::from(spans)
+}
+
 fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let t = theme();
@@ -268,6 +336,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         .constraints([
             Constraint::Length(3), // Header with weight info
             Constraint::Length(3), // Course average
+            Constraint::Length(1), // Outlook: ceiling, margin, weight in play
             Constraint::Min(0),    // Category list
         ])
         .split(area);
@@ -317,6 +386,16 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         .border_style(Style::default().fg(avg_color));
     let avg_widget = Paragraph::new(avg_line).block(avg_block);
     frame.render_widget(avg_widget, chunks[1]);
+
+    // Where the course can still end up. The average above is the floor, so
+    // without this the ceiling is only visible from the Home dashboard — one
+    // level away from the course the user is actually looking at.
+    frame.render_widget(
+        Paragraph::new(outlook_line(course, m))
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(t.text_muted)),
+        chunks[2],
+    );
 
     // Category list — use grade_result to show failed minimums and eval violations
     let passing_grade = course.passing_grade;
@@ -560,5 +639,5 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     let mut state = ListState::default();
     state.select(app.selected_category);
 
-    frame.render_stateful_widget(list, chunks[2], &mut state);
+    frame.render_stateful_widget(list, chunks[3], &mut state);
 }

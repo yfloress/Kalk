@@ -316,6 +316,8 @@ pub struct Messages {
     // Semesters
     /// Prefix for auto-generated semester names ("Semester 1", "Semester 2").
     pub semester_name_prefix: &'static str,
+    pub metric_ceiling: &'static str,
+    pub metric_margin: &'static str,
     pub welcome_language_title: &'static str,
     pub welcome_fonts_title: &'static str,
     pub welcome_fonts_question: &'static str,

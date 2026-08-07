@@ -141,22 +141,41 @@ fn draw_metrics(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    // Headline figures on top, the per-course breakdown fills what is left.
+    // The summary takes what it needs and no more, and yields its optional
+    // rows before the course list underneath loses room.
+    let width = inner.width.saturating_sub(4);
+    let budget = inner.height.saturating_sub(if app.courses().is_empty() {
+        0
+    } else {
+        BREAKDOWN_MIN
+    });
+    let summary = fit_summary(summary_lines(app, &metrics, width), budget);
+
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .horizontal_margin(2)
-        .constraints([Constraint::Length(17), Constraint::Min(0)])
+        .constraints([Constraint::Length(summary.len() as u16), Constraint::Min(0)])
         .split(inner);
 
-    frame.render_widget(
-        Paragraph::new(summary_lines(app, &metrics, rows[0].width)),
-        rows[0],
-    );
+    frame.render_widget(Paragraph::new(summary), rows[0]);
     draw_course_breakdown(frame, app, rows[1]);
 }
 
+/// How readily a summary row gives up its space when the pane is short.
+/// Lower survives longer; `KEEP` rows are the reason the pane exists.
+const KEEP: u8 = 0;
+const USEFUL: u8 = 1;
+const EXTRA: u8 = 2;
+const NICETY: u8 = 3;
+
+/// Rows the per-course breakdown needs before it is worth drawing at all:
+/// its heading plus two courses.
+const BREAKDOWN_MIN: u16 = 3;
+
 /// The headline block: averages, outcome mix, progress, credits, trend.
-fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'static>> {
+/// Each row carries a priority so a short pane can shed the optional ones
+/// instead of starving the course list underneath.
+fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<(u8, Line<'static>)> {
     let m = app.messages();
     let t = theme();
     let counts = &metrics.counts;
@@ -168,16 +187,15 @@ fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'
 
     // Ungraded evaluations count as zero, so `average` is the floor. Pairing
     // it with the ceiling turns a bare number into the range still in reach.
-    lines.push(average_row(m, t, metrics));
+    lines.push((KEEP, average_row(m, t, metrics)));
 
     if let Some(avg) = cumulative_average(&app.semesters) {
-        lines.push(metric_row(
-            m.metric_cumulative,
-            format!("{:.1}", avg),
-            t.text_secondary,
+        lines.push((
+            NICETY,
+            metric_row(m.metric_cumulative, format!("{:.1}", avg), t.text_secondary),
         ));
     }
-    lines.push(Line::from(""));
+    lines.push((KEEP, Line::from("")));
 
     // Outcome mix as one stacked bar, each segment in its status colour.
     let mut spans = vec![Span::styled(
@@ -206,82 +224,99 @@ fn summary_lines(app: &App, metrics: &SemesterMetrics, width: u16) -> Vec<Line<'
         ),
         Style::default().fg(t.text_muted),
     ));
-    lines.push(Line::from(spans));
+    lines.push((KEEP, Line::from(spans)));
 
     // How much of the semester has actually been graded.
     if metrics.total_evaluations > 0 {
-        lines.push(gauge_row(
-            m.metric_progress,
-            metrics.graded_evaluations,
-            metrics.total_evaluations,
-            bar_w,
-            t.status_info,
-            format!(
-                "  {}/{} {}",
-                metrics.graded_evaluations, metrics.total_evaluations, m.metric_evaluations
+        lines.push((
+            EXTRA,
+            gauge_row(
+                m.metric_progress,
+                metrics.graded_evaluations,
+                metrics.total_evaluations,
+                bar_w,
+                t.status_info,
+                format!(
+                    "  {}/{} {}",
+                    metrics.graded_evaluations, metrics.total_evaluations, m.metric_evaluations
+                ),
             ),
         ));
     }
 
     if let Some(total) = metrics.total_credits {
         let at_risk = metrics.credits_at_risk.unwrap_or(0);
-        lines.push(gauge_row(
-            m.metric_credits,
-            at_risk as usize,
-            total as usize,
-            bar_w,
-            t.status_fail,
-            format!("  {} {} / {}", at_risk, m.metric_credits_at_risk, total),
+        lines.push((
+            EXTRA,
+            gauge_row(
+                m.metric_credits,
+                at_risk as usize,
+                total as usize,
+                bar_w,
+                t.status_fail,
+                format!("  {} {} / {}", at_risk, m.metric_credits_at_risk, total),
+            ),
         ));
     }
 
     if let Some(pending) = metrics.pending_weight {
-        lines.push(metric_row(
-            m.metric_in_play,
-            format!("{:.0}%", pending),
-            t.text_secondary,
+        lines.push((
+            NICETY,
+            metric_row(
+                m.metric_in_play,
+                format!("{:.0}%", pending),
+                t.text_secondary,
+            ),
         ));
     }
 
-    lines.push(Line::from(""));
+    lines.push((USEFUL, Line::from("")));
 
     if counts.pending_global > 0 {
-        lines.push(metric_row(
-            m.metric_global,
-            format!("{} {}", counts.pending_global, m.metric_pending_word),
-            t.status_override,
+        lines.push((
+            USEFUL,
+            metric_row(
+                m.metric_global,
+                format!("{} {}", counts.pending_global, m.metric_pending_word),
+                t.status_override,
+            ),
         ));
     }
 
     if metrics.failed_minimums > 0 {
-        lines.push(metric_row(
-            m.metric_minimums,
-            format!("{} {}", metrics.failed_minimums, m.metric_unmet_word),
-            t.status_override,
+        lines.push((
+            USEFUL,
+            metric_row(
+                m.metric_minimums,
+                format!("{} {}", metrics.failed_minimums, m.metric_unmet_word),
+                t.status_override,
+            ),
         ));
     }
 
     if metrics.unrecoverable > 0 {
-        lines.push(metric_row(
-            m.metric_unrecoverable,
-            metrics.unrecoverable.to_string(),
-            t.status_fail,
+        lines.push((
+            USEFUL,
+            metric_row(
+                m.metric_unrecoverable,
+                metrics.unrecoverable.to_string(),
+                t.status_fail,
+            ),
         ));
     }
 
     // The single course furthest from safety, and what would fix it.
     if let Some(course) = metrics.critical.and_then(|i| app.courses().get(i)) {
-        lines.push(metric_row(
-            m.metric_critical,
-            critical_detail(course, m),
-            t.status_fail,
+        lines.push((
+            USEFUL,
+            metric_row(m.metric_critical, critical_detail(course, m), t.status_fail),
         ));
     }
 
     // Trend only says something once there is more than one semester.
     if app.semesters.len() > 1 {
-        lines.push(Line::from(""));
-        lines.push(trend_row(app, m.metric_trend));
+        lines.push((NICETY, Line::from("")));
+        lines.push((NICETY, trend_row(app, m.metric_trend)));
     }
 
     lines
@@ -358,6 +393,36 @@ fn critical_detail(course: &Course, m: &crate::i18n::Messages) -> String {
         "{}  \u{b7}  {} {:.0} {} {}",
         grade, m.metric_needs, value, m.metric_in, name
     )
+}
+
+/// Drop the most expendable rows until the summary fits `budget`, keeping the
+/// surviving rows in their original order and never leaving a dangling blank.
+fn fit_summary(rows: Vec<(u8, Line<'static>)>, budget: u16) -> Vec<Line<'static>> {
+    let budget = budget as usize;
+    let mut kept: Vec<(u8, Line<'static>)> = rows;
+
+    for level in (KEEP + 1..=NICETY).rev() {
+        if kept.len() <= budget {
+            break;
+        }
+        kept.retain(|(priority, _)| *priority < level);
+    }
+
+    let mut lines: Vec<Line<'static>> = kept.into_iter().map(|(_, line)| line).collect();
+
+    lines.dedup_by(|a, b| is_blank(a) && is_blank(b));
+    lines.truncate(budget);
+
+    // Trim last: truncating to the budget can re-expose a separator whose
+    // group was cut off below it.
+    while lines.last().is_some_and(is_blank) {
+        lines.pop();
+    }
+    lines
+}
+
+fn is_blank(line: &Line<'static>) -> bool {
+    line.spans.iter().all(|s| s.content.trim().is_empty())
 }
 
 /// A label, a partially filled bar, and a caption.
@@ -679,4 +744,71 @@ pub fn draw_delete_semester_popup(frame: &mut Frame, app: &App) {
         m.cancel,
         app.use_nerd_fonts,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rows() -> Vec<(u8, Line<'static>)> {
+        vec![
+            (KEEP, Line::from("average")),
+            (NICETY, Line::from("cumulative")),
+            (KEEP, Line::from("")),
+            (KEEP, Line::from("status")),
+            (EXTRA, Line::from("progress")),
+            (USEFUL, Line::from("")),
+            (USEFUL, Line::from("critical")),
+            (NICETY, Line::from("")),
+            (NICETY, Line::from("trend")),
+        ]
+    }
+
+    fn text(lines: &[Line<'static>]) -> Vec<String> {
+        lines
+            .iter()
+            .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn everything_survives_when_there_is_room() {
+        let out = fit_summary(rows(), 20);
+        assert_eq!(out.len(), 9);
+    }
+
+    #[test]
+    fn niceties_go_first_and_order_is_preserved() {
+        let out = fit_summary(rows(), 6);
+        let got = text(&out);
+        assert!(!got.contains(&"trend".to_string()), "{got:?}");
+        assert!(!got.contains(&"cumulative".to_string()), "{got:?}");
+        assert!(got.contains(&"critical".to_string()), "{got:?}");
+        assert_eq!(got.first().unwrap(), "average");
+    }
+
+    #[test]
+    fn the_headline_rows_are_the_last_to_go() {
+        let got = text(&fit_summary(rows(), 3));
+        assert!(got.contains(&"average".to_string()), "{got:?}");
+        assert!(got.contains(&"status".to_string()), "{got:?}");
+    }
+
+    #[test]
+    fn never_ends_on_a_dangling_separator() {
+        for budget in 1..=12u16 {
+            let out = fit_summary(rows(), budget);
+            assert!(
+                !out.last().is_some_and(is_blank),
+                "budget {budget} left a trailing blank"
+            );
+        }
+    }
+
+    #[test]
+    fn never_exceeds_the_budget() {
+        for budget in 0..=12u16 {
+            assert!(fit_summary(rows(), budget).len() <= budget as usize);
+        }
+    }
 }

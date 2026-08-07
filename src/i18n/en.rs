@@ -353,6 +353,8 @@ Example:
 
     // Semesters
     semester_name_prefix: "Semester",
+    metric_ceiling: "Ceiling",
+    metric_margin: "Margin",
     welcome_language_title: "Choose your language",
     welcome_fonts_title: "Nerd Font icons",
     welcome_fonts_question: "Do these icons display correctly?",

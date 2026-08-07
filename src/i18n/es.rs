@@ -352,6 +352,8 @@ Ejemplo:
 
     // Semesters
     semester_name_prefix: "Semestre",
+    metric_ceiling: "Techo",
+    metric_margin: "Margen",
     welcome_language_title: "Elige tu idioma",
     welcome_fonts_title: "Iconos Nerd Font",
     welcome_fonts_question: "¿Se ven bien estos iconos?",
