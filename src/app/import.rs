@@ -49,6 +49,8 @@ pub struct ImportSchema {
     #[serde(default = "default_passing_grade")]
     pub passing_grade: f64,
     #[serde(default)]
+    pub credits: Option<u32>,
+    #[serde(default)]
     pub global_exam: Option<ImportGlobal>,
     #[serde(default)]
     pub categories: Vec<ImportCategory>,
@@ -83,6 +85,15 @@ pub struct ImportCategory {
     pub minimum_average: Option<f64>,
     #[serde(default)]
     pub minimum_per_evaluation: Option<f64>,
+    #[serde(default)]
+    pub minimum_one_eval: Option<f64>,
+    /// Each one of `"final_equals_average"`, `"requires_global"`, `"fail_course"`.
+    #[serde(default)]
+    pub on_minimum_not_met: Option<String>,
+    #[serde(default)]
+    pub on_min_per_eval_not_met: Option<String>,
+    #[serde(default)]
+    pub on_min_one_eval_not_met: Option<String>,
     #[serde(default)]
     pub weighted_evaluations: Option<bool>,
     /// One of `"arithmetic"`, `"geometric"`.
@@ -197,6 +208,7 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
     let final_name = unique_name(schema.name.trim(), existing_names, copy_suffix);
 
     let mut course = Course::new(final_name, schema.passing_grade);
+    course.credits = schema.credits.filter(|c| *c > 0);
 
     if let Some(g) = &schema.global_exam {
         course.global_policy = match g.policy.as_str() {
@@ -234,13 +246,13 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
 
             let rules = CategoryRules {
                 minimum_average: ic.minimum_average,
-                on_minimum_not_met: MinimumNotMetAction::default(),
+                on_minimum_not_met: parse_action(ic.on_minimum_not_met.as_deref()),
                 drop_lowest: ic.drop_lowest.unwrap_or(0),
                 averaging_method,
                 minimum_per_evaluation: ic.minimum_per_evaluation,
-                on_min_per_eval_not_met: MinimumNotMetAction::default(),
-                minimum_one_eval: None,
-                on_min_one_eval_not_met: MinimumNotMetAction::default(),
+                on_min_per_eval_not_met: parse_action(ic.on_min_per_eval_not_met.as_deref()),
+                minimum_one_eval: ic.minimum_one_eval,
+                on_min_one_eval_not_met: parse_action(ic.on_min_one_eval_not_met.as_deref()),
                 round_before_weighting: ic.round_before_weighting.unwrap_or(false),
                 weighted_evaluations: ic.weighted_evaluations.unwrap_or(false),
             };
@@ -250,6 +262,16 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
         .collect();
 
     course
+}
+
+/// Map a minimum-not-met action name onto the enum. Anything unrecognised
+/// falls back to the default rather than failing the whole import.
+fn parse_action(raw: Option<&str>) -> MinimumNotMetAction {
+    match raw {
+        Some("requires_global") => MinimumNotMetAction::RequiresGlobal,
+        Some("fail_course") => MinimumNotMetAction::FailCourse,
+        _ => MinimumNotMetAction::FinalEqualsAverage,
+    }
 }
 
 /// Compute the sum of category weights, used by the preview to warn the user
@@ -345,6 +367,95 @@ mod tests {
             unique_name("Algebra", &existing, "copia"),
             "Algebra (copia 2)"
         );
+    }
+
+    #[test]
+    fn to_course_reads_credits() {
+        let raw = r#"{"schema_version":1,"name":"Math","credits":10,
+            "categories":[{"name":"C","weight":100}]}"#;
+        let schema = parse(raw).unwrap();
+        let course = to_course(&schema, &[], "copy");
+        assert_eq!(course.credits, Some(10));
+    }
+
+    #[test]
+    fn to_course_treats_missing_or_zero_credits_as_none() {
+        for raw in [
+            r#"{"schema_version":1,"name":"Math","categories":[{"name":"C","weight":100}]}"#,
+            r#"{"schema_version":1,"name":"Math","credits":0,"categories":[{"name":"C","weight":100}]}"#,
+        ] {
+            let schema = parse(raw).unwrap();
+            assert!(to_course(&schema, &[], "copy").credits.is_none());
+        }
+    }
+
+    #[test]
+    fn to_course_reads_minimum_rules_and_actions() {
+        let raw = r#"{"schema_version":1,"name":"Math","categories":[{
+            "name":"C","weight":100,
+            "minimum_average":50,"on_minimum_not_met":"requires_global",
+            "minimum_per_evaluation":30,"on_min_per_eval_not_met":"fail_course",
+            "minimum_one_eval":60,"on_min_one_eval_not_met":"final_equals_average"
+        }]}"#;
+        let schema = parse(raw).unwrap();
+        let course = to_course(&schema, &[], "copy");
+        let rules = &course.categories[0].rules;
+
+        assert_eq!(rules.minimum_average, Some(50.0));
+        assert_eq!(
+            rules.on_minimum_not_met,
+            MinimumNotMetAction::RequiresGlobal
+        );
+        assert_eq!(rules.minimum_per_evaluation, Some(30.0));
+        assert_eq!(
+            rules.on_min_per_eval_not_met,
+            MinimumNotMetAction::FailCourse
+        );
+        assert_eq!(rules.minimum_one_eval, Some(60.0));
+        assert_eq!(
+            rules.on_min_one_eval_not_met,
+            MinimumNotMetAction::FinalEqualsAverage
+        );
+    }
+
+    #[test]
+    fn unknown_action_falls_back_instead_of_failing_the_import() {
+        let raw = r#"{"schema_version":1,"name":"Math","categories":[{
+            "name":"C","weight":100,"minimum_average":50,
+            "on_minimum_not_met":"explode"}]}"#;
+        let schema = parse(raw).unwrap();
+        let course = to_course(&schema, &[], "copy");
+        assert_eq!(
+            course.categories[0].rules.on_minimum_not_met,
+            MinimumNotMetAction::FinalEqualsAverage
+        );
+    }
+
+    #[test]
+    fn prompt_documents_every_importable_field() {
+        // The prompt is the only thing that makes the AI emit these, so a new
+        // schema field that never reaches the prompt is a silent dead end.
+        for prompt in [crate::i18n::EN.import_prompt, crate::i18n::ES.import_prompt] {
+            for field in [
+                "credits",
+                "passing_grade",
+                "minimum_average",
+                "minimum_per_evaluation",
+                "minimum_one_eval",
+                "on_minimum_not_met",
+                "on_min_per_eval_not_met",
+                "on_min_one_eval_not_met",
+                "drop_lowest",
+                "averaging_method",
+                "round_before_weighting",
+                "weighted_evaluations",
+                "semester_weight",
+                "global_weight",
+                "min_grade",
+            ] {
+                assert!(prompt.contains(field), "prompt is missing {field}");
+            }
+        }
     }
 
     #[test]

@@ -18,7 +18,7 @@
 //! Data persistence using JSON and XDG directories.
 
 use crate::i18n::Language;
-use crate::model::{Course, CourseTemplate};
+use crate::model::{Course, CourseTemplate, Semester};
 use color_eyre::eyre::{Context, Result};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,7 @@ use std::{
     io::{BufReader, BufWriter, Write},
     path::PathBuf,
 };
+use uuid::Uuid;
 
 /// Application configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +35,13 @@ pub struct Config {
     pub language: Language,
     #[serde(default)]
     pub use_nerd_fonts: bool,
+    /// Whether the last session ended on the Home screen. Defaults to `true`
+    /// only for a brand-new install, so a first run lands on the dashboard.
+    #[serde(default)]
+    pub start_on_home: bool,
+    /// Semester open when the last session ended.
+    #[serde(default)]
+    pub last_semester: Option<Uuid>,
 }
 
 impl Default for Config {
@@ -41,6 +49,8 @@ impl Default for Config {
         Self {
             language: Language::English,
             use_nerd_fonts: true,
+            start_on_home: true,
+            last_semester: None,
         }
     }
 }
@@ -60,9 +70,29 @@ fn config_path() -> Option<PathBuf> {
     ProjectDirs::from("", "", "kalk").map(|dirs| dirs.data_dir().join("config.json"))
 }
 
-/// Load courses from disk.
-/// Returns an empty vector if the file doesn't exist or can't be parsed.
-pub fn load_data() -> Result<Vec<Course>> {
+/// Current on-disk schema version for `data.json`.
+const DATA_SCHEMA_VERSION: u32 = 2;
+
+/// On-disk shape of `data.json` from v2 onwards.
+#[derive(Debug, Serialize, Deserialize)]
+struct DataFile {
+    schema_version: u32,
+    semesters: Vec<Semester>,
+}
+
+/// Either shape `data.json` may have on disk. Untagged matching is
+/// unambiguous: v1 was a bare array, v2 is an object.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredData {
+    Versioned(DataFile),
+    Legacy(Vec<Course>),
+}
+
+/// Load semesters from disk, migrating the v1 format if that is what is there.
+/// `legacy_semester_name` (already translated) names the semester that v1
+/// courses get wrapped into.
+pub fn load_data(legacy_semester_name: &str) -> Result<Vec<Semester>> {
     let Some(path) = data_path() else {
         return Ok(Vec::new());
     };
@@ -74,13 +104,40 @@ pub fn load_data() -> Result<Vec<Course>> {
     let file = File::open(&path).context("Failed to open data file")?;
     let reader = BufReader::new(file);
 
-    let courses: Vec<Course> = serde_json::from_reader(reader).context("Failed to parse data")?;
+    let stored: StoredData = serde_json::from_reader(reader).context("Failed to parse data")?;
 
-    Ok(courses)
+    if matches!(stored, StoredData::Legacy(_)) {
+        back_up_legacy_data(&path);
+    }
+
+    Ok(migrate(stored, legacy_semester_name))
 }
 
-/// Save courses to disk.
-pub fn save_data(courses: &[Course]) -> Result<()> {
+/// Bring either on-disk shape to the current one. Pure, so it is testable
+/// without touching the filesystem.
+fn migrate(stored: StoredData, legacy_semester_name: &str) -> Vec<Semester> {
+    match stored {
+        StoredData::Versioned(data) => data.semesters,
+        StoredData::Legacy(courses) if courses.is_empty() => Vec::new(),
+        StoredData::Legacy(courses) => {
+            let mut semester = Semester::new(legacy_semester_name.to_string(), 0);
+            semester.courses = courses;
+            vec![semester]
+        }
+    }
+}
+
+/// Copy the v1 file aside before v2 overwrites it. Never overwrites an
+/// existing backup, so a later bad state cannot clobber a good one.
+fn back_up_legacy_data(path: &PathBuf) {
+    let backup = path.with_extension("v1.bak");
+    if !backup.exists() {
+        let _ = fs::copy(path, &backup);
+    }
+}
+
+/// Save semesters to disk.
+pub fn save_data(semesters: &[Semester]) -> Result<()> {
     let Some(path) = data_path() else {
         return Ok(());
     };
@@ -94,7 +151,11 @@ pub fn save_data(courses: &[Course]) -> Result<()> {
     let file = File::create(&tmp_path).context("Failed to create temp data file")?;
     let mut writer = BufWriter::new(file);
 
-    serde_json::to_writer_pretty(&mut writer, courses).context("Failed to serialize data")?;
+    let data = DataFile {
+        schema_version: DATA_SCHEMA_VERSION,
+        semesters: semesters.to_vec(),
+    };
+    serde_json::to_writer_pretty(&mut writer, &data).context("Failed to serialize data")?;
     writer.flush().context("Failed to flush data to disk")?;
     drop(writer);
 
@@ -261,5 +322,65 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.language, Language::English);
         assert!(config.use_nerd_fonts);
+    }
+
+    // =========================================================================
+    // data.json migration (v1 -> v2)
+    // =========================================================================
+
+    const V1_JSON: &str = r#"[
+        {"id":"00000000-0000-0000-0000-000000000001","name":"Calculus",
+         "passing_grade":55.0,"categories":[]}
+    ]"#;
+
+    #[test]
+    fn test_v1_array_is_wrapped_into_one_semester() {
+        let stored: StoredData = serde_json::from_str(V1_JSON).unwrap();
+        let semesters = migrate(stored, "Current");
+
+        assert_eq!(semesters.len(), 1);
+        assert_eq!(semesters[0].name, "Current");
+        assert_eq!(semesters[0].order, 0);
+        assert_eq!(semesters[0].courses.len(), 1);
+        assert_eq!(semesters[0].courses[0].name, "Calculus");
+    }
+
+    #[test]
+    fn test_empty_v1_array_produces_no_semester() {
+        let stored: StoredData = serde_json::from_str("[]").unwrap();
+        assert!(migrate(stored, "Current").is_empty());
+    }
+
+    #[test]
+    fn test_v2_object_is_read_as_is() {
+        let json = r#"{"schema_version":2,"semesters":[
+            {"id":"00000000-0000-0000-0000-000000000002","name":"2025-2",
+             "order":3,"courses":[]}
+        ]}"#;
+        let stored: StoredData = serde_json::from_str(json).unwrap();
+        let semesters = migrate(stored, "Current");
+
+        assert_eq!(semesters.len(), 1);
+        assert_eq!(semesters[0].name, "2025-2");
+        assert_eq!(semesters[0].order, 3);
+    }
+
+    #[test]
+    fn test_v2_round_trip_reloads_identically() {
+        let mut semester = Semester::new("2026-1".to_string(), 0);
+        semester
+            .courses
+            .push(Course::new("Physics".to_string(), 55.0));
+        let data = DataFile {
+            schema_version: DATA_SCHEMA_VERSION,
+            semesters: vec![semester],
+        };
+
+        let json = serde_json::to_string(&data).unwrap();
+        let stored: StoredData = serde_json::from_str(&json).unwrap();
+        let semesters = migrate(stored, "Current");
+
+        assert_eq!(semesters.len(), 1);
+        assert_eq!(semesters[0].courses[0].name, "Physics");
     }
 }

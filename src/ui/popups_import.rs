@@ -25,8 +25,10 @@
 //! 3. [`draw_import_preview`] — preview of the parsed course; `Enter` commits.
 
 use super::helpers::centered_rect;
-use super::theme::theme;
+use super::theme::{Theme, theme};
 use crate::app::App;
+use crate::i18n::Messages;
+use crate::model::{AveragingMethod, Category, Course, GlobalExamPolicy, MinimumNotMetAction};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
@@ -241,7 +243,7 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // Course header — name (+ rename note) and passing grade.
+    // -- Course header -------------------------------------------------------
     lines.push(Line::from(vec![
         Span::styled(
             format!("{}: ", m.name),
@@ -256,11 +258,15 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
     ]));
     if let Some(from) = &app.import_renamed_from {
         lines.push(Line::from(Span::styled(
-            format!("  ({} {} → {})", m.import_renamed_to, from, course.name),
+            format!(
+                "  ({} {} \u{2192} {})",
+                m.import_renamed_to, from, course.name
+            ),
             Style::default().fg(t.status_warn),
         )));
     }
-    lines.push(Line::from(vec![
+
+    let mut header = vec![
         Span::styled(
             format!("{}: ", m.passing_grade),
             Style::default().fg(t.text_secondary),
@@ -269,9 +275,24 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
             format!("{:.0}", course.passing_grade),
             Style::default().fg(t.text_primary),
         ),
-    ]));
+    ];
+    if let Some(credits) = course.credits {
+        header.push(Span::styled(
+            format!("   \u{00b7}   {}: ", m.metric_credits),
+            Style::default().fg(t.text_secondary),
+        ));
+        header.push(Span::styled(
+            credits.to_string(),
+            Style::default().fg(t.text_primary),
+        ));
+    }
+    lines.push(Line::from(header));
 
-    // Weight summary line.
+    // The global policy moves the final grade as much as any category weight,
+    // so it has to be visible before the user confirms.
+    lines.push(global_line(course, m, t));
+
+    // -- Weight summary ------------------------------------------------------
     let weight_color = if (app.import_total_weight - 100.0).abs() < 0.01 {
         t.status_pass
     } else {
@@ -290,7 +311,7 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         ),
         Span::styled(
             format!(
-                "   ·   {} {}",
+                "   \u{00b7}   {} {}",
                 app.import_total_evals, m.import_step3_evaluations
             ),
             Style::default().fg(t.text_muted),
@@ -299,17 +320,17 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
 
     if (app.import_total_weight - 100.0).abs() >= 0.01 {
         lines.push(Line::from(Span::styled(
-            format!("⚠ {}", m.import_warning_weight_not_100),
+            format!("\u{26a0} {}", m.import_warning_weight_not_100),
             Style::default().fg(t.status_warn),
         )));
     }
 
     lines.push(Line::from(""));
 
-    // Categories listing.
+    // -- Categories ----------------------------------------------------------
     for cat in &course.categories {
         let mut header_spans = vec![
-            Span::styled("▎ ", Style::default().fg(t.popup_border)),
+            Span::styled("\u{258e} ", Style::default().fg(t.popup_border)),
             Span::styled(
                 cat.name.clone(),
                 Style::default()
@@ -321,21 +342,55 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
                 Style::default().fg(t.weight_label),
             ),
         ];
-        if cat.rules.drop_lowest > 0 {
+        for badge in category_badges(cat, m) {
             header_spans.push(Span::styled(
-                format!("  -{}", cat.rules.drop_lowest),
+                format!("  {}", badge),
                 Style::default().fg(t.status_override),
             ));
         }
         lines.push(Line::from(header_spans));
-        lines.push(Line::from(Span::styled(
-            format!(
-                "    {} {}",
-                cat.evaluations.len(),
-                m.import_step3_evaluations
-            ),
-            Style::default().fg(t.text_muted),
-        )));
+
+        for rule in minimum_rules(cat, m) {
+            lines.push(Line::from(Span::styled(
+                format!("    {}", rule),
+                Style::default().fg(t.status_warn),
+            )));
+        }
+
+        // Every evaluation with whatever grade the AI claimed. A bare count
+        // would hide an invented grade until after the import.
+        for ev in &cat.evaluations {
+            let mut spans = vec![
+                Span::styled("    \u{00b7} ", Style::default().fg(t.text_muted)),
+                Span::styled(ev.name.clone(), Style::default().fg(t.text_secondary)),
+            ];
+            match ev.grade {
+                Some(g) => spans.push(Span::styled(
+                    format!("  {:.0}", g),
+                    Style::default().fg(t.status_warn),
+                )),
+                None => spans.push(Span::styled(
+                    "  \u{2014}".to_string(),
+                    Style::default().fg(t.text_muted),
+                )),
+            }
+            if cat.rules.weighted_evaluations
+                && let Some(w) = ev.weight
+            {
+                spans.push(Span::styled(
+                    format!("  ({:.0}%)", w),
+                    Style::default().fg(t.weight_label),
+                ));
+            }
+            lines.push(Line::from(spans));
+        }
+
+        if cat.evaluations.is_empty() {
+            lines.push(Line::from(Span::styled(
+                format!("    0 {}", m.import_step3_evaluations),
+                Style::default().fg(t.text_muted),
+            )));
+        }
     }
 
     let chunks = Layout::default()
@@ -343,11 +398,16 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(inner);
 
-    let body = Paragraph::new(lines).wrap(Wrap { trim: false });
+    let body = Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .scroll((app.import_preview_scroll, 0));
     frame.render_widget(body, chunks[0]);
 
     let footer = Paragraph::new(Line::from(vec![
         Span::styled(m.import_step2_back, Style::default().fg(t.footer_key)),
+        Span::styled("   ", Style::default()),
+        Span::styled("j/k: ", Style::default().fg(t.footer_key)),
+        Span::styled(m.help_move_updown, Style::default().fg(t.footer_desc)),
         Span::styled("   ", Style::default()),
         Span::styled(
             m.import_step3_save_as_template,
@@ -362,4 +422,166 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         ),
     ]));
     frame.render_widget(footer, chunks[1]);
+}
+
+/// One line describing the global exam, which moves the final grade as much as
+/// the category weights do.
+fn global_line(course: &Course, m: &Messages, t: &Theme) -> Line<'static> {
+    let label = Span::styled(
+        format!("{}: ", m.global_exam),
+        Style::default().fg(t.text_secondary),
+    );
+
+    match &course.global_policy {
+        GlobalExamPolicy::None => Line::from(vec![
+            label,
+            Span::styled(
+                m.global_policy_none.to_string(),
+                Style::default().fg(t.text_muted),
+            ),
+        ]),
+        GlobalExamPolicy::Weighted {
+            semester_weight,
+            global_weight,
+        } => {
+            let mut spans = vec![
+                label,
+                Span::styled(
+                    format!(
+                        "{}  {:.0}% / {:.0}%",
+                        m.global_policy_weighted,
+                        semester_weight * 100.0,
+                        global_weight * 100.0
+                    ),
+                    Style::default().fg(t.status_override),
+                ),
+            ];
+            push_min_grade(&mut spans, course, m, t);
+            Line::from(spans)
+        }
+        GlobalExamPolicy::ReplacesWorstGrade => {
+            let mut spans = vec![
+                label,
+                Span::styled(
+                    m.global_policy_replaces.to_string(),
+                    Style::default().fg(t.status_override),
+                ),
+            ];
+            push_min_grade(&mut spans, course, m, t);
+            Line::from(spans)
+        }
+    }
+}
+
+fn push_min_grade(spans: &mut Vec<Span<'static>>, course: &Course, m: &Messages, t: &Theme) {
+    if let Some(min) = course.global_eligibility.min_grade {
+        spans.push(Span::styled(
+            format!("   \u{00b7}   {}: {:.0}", m.global_min_grade, min),
+            Style::default().fg(t.text_muted),
+        ));
+    }
+}
+
+/// Short badges for the category rules that the numbers alone do not reveal.
+fn category_badges(cat: &Category, m: &Messages) -> Vec<String> {
+    let mut badges = Vec::new();
+    if cat.rules.drop_lowest > 0 {
+        badges.push(format!("-{}", cat.rules.drop_lowest));
+    }
+    if cat.rules.averaging_method == AveragingMethod::Geometric {
+        badges.push(m.averaging_geometric.to_string());
+    }
+    if cat.rules.weighted_evaluations {
+        badges.push(m.weighted_evaluations.to_string());
+    }
+    if cat.rules.round_before_weighting {
+        badges.push(m.round_before_weighting.to_string());
+    }
+    badges
+}
+
+/// One line per minimum the syllabus set, each with what failing it does.
+fn minimum_rules(cat: &Category, m: &Messages) -> Vec<String> {
+    let action = |a: MinimumNotMetAction| match a {
+        MinimumNotMetAction::FinalEqualsAverage => m.action_final_equals_avg,
+        MinimumNotMetAction::RequiresGlobal => m.action_requires_global,
+        MinimumNotMetAction::FailCourse => m.action_fail_course,
+    };
+
+    let mut rules = Vec::new();
+    if let Some(v) = cat.rules.minimum_average {
+        rules.push(format!(
+            "{}: {:.0}  \u{2192}  {}",
+            m.minimum_average,
+            v,
+            action(cat.rules.on_minimum_not_met)
+        ));
+    }
+    if let Some(v) = cat.rules.minimum_per_evaluation {
+        rules.push(format!(
+            "{}: {:.0}  \u{2192}  {}",
+            m.minimum_per_evaluation,
+            v,
+            action(cat.rules.on_min_per_eval_not_met)
+        ));
+    }
+    if let Some(v) = cat.rules.minimum_one_eval {
+        rules.push(format!(
+            "{}: {:.0}  \u{2192}  {}",
+            m.minimum_one_eval,
+            v,
+            action(cat.rules.on_min_one_eval_not_met)
+        ));
+    }
+    rules
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::i18n::EN;
+    use crate::model::CategoryRules;
+
+    fn category_with_every_rule() -> Category {
+        let rules = CategoryRules {
+            minimum_average: Some(50.0),
+            on_minimum_not_met: MinimumNotMetAction::RequiresGlobal,
+            drop_lowest: 1,
+            averaging_method: AveragingMethod::Geometric,
+            minimum_per_evaluation: Some(30.0),
+            on_min_per_eval_not_met: MinimumNotMetAction::FailCourse,
+            minimum_one_eval: Some(60.0),
+            on_min_one_eval_not_met: MinimumNotMetAction::FinalEqualsAverage,
+            round_before_weighting: true,
+            weighted_evaluations: true,
+        };
+        Category::with_rules("Cat".to_string(), 100.0, Vec::new(), rules)
+    }
+
+    #[test]
+    fn preview_surfaces_every_minimum_with_its_action() {
+        let rules = minimum_rules(&category_with_every_rule(), &EN);
+        assert_eq!(rules.len(), 3, "one line per minimum: {rules:?}");
+        assert!(rules[0].contains(EN.action_requires_global));
+        assert!(rules[1].contains(EN.action_fail_course));
+        assert!(rules[2].contains(EN.action_final_equals_avg));
+    }
+
+    #[test]
+    fn preview_badges_every_non_obvious_rule() {
+        let badges = category_badges(&category_with_every_rule(), &EN);
+        assert_eq!(
+            badges.len(),
+            4,
+            "drop, geometric, weighted, round: {badges:?}"
+        );
+        assert!(badges.contains(&"-1".to_string()));
+    }
+
+    #[test]
+    fn preview_shows_nothing_for_a_category_without_rules() {
+        let plain = Category::new("Plain".to_string(), 100.0);
+        assert!(minimum_rules(&plain, &EN).is_empty());
+        assert!(category_badges(&plain, &EN).is_empty());
+    }
 }

@@ -70,6 +70,7 @@ impl App {
         self.input_field = InputField::Name;
         self.edit_name.clear();
         self.edit_passing_grade = format_grade(DEFAULT_PASSING_GRADE);
+        self.edit_credits.clear();
         self.show_field_help = false;
 
         // Pre-populate global fields from the selected template.
@@ -104,7 +105,8 @@ impl App {
         let Some(idx) = self.selected_course else {
             return;
         };
-        let Some(course) = self.courses.get(idx) else {
+        // Cloned: `courses()` borrows all of `self`, unlike a field access.
+        let Some(course) = self.courses().get(idx).cloned() else {
             return;
         };
 
@@ -114,6 +116,7 @@ impl App {
         self.edit_name = course.name.clone();
         let pg = course.passing_grade;
         self.edit_passing_grade = format_grade(pg);
+        self.edit_credits = course.credits.map(|c| c.to_string()).unwrap_or_default();
 
         // Load global exam fields from the course
         self.edit_global_policy = course.global_policy.clone();
@@ -147,6 +150,9 @@ impl App {
             return;
         }
 
+        // Empty or unparsable means "no credits declared".
+        let credits: Option<u32> = self.edit_credits.trim().parse().ok().filter(|c| *c > 0);
+
         // Build global policy from form fields
         let global_policy = self.build_global_policy();
         let global_eligibility = self.build_global_eligibility();
@@ -163,17 +169,19 @@ impl App {
                 };
                 course.global_policy = global_policy;
                 course.global_eligibility = global_eligibility;
-                self.courses.push(course);
-                self.selected_course = Some(self.courses.len() - 1);
+                course.credits = credits;
+                self.courses_mut().push(course);
+                self.selected_course = Some(self.courses().len() - 1);
                 self.reset_category_selection();
                 self.reset_evaluation_selection();
             }
             Screen::EditingCourse { is_new: false } => {
                 if let Some(idx) = self.selected_course
-                    && let Some(course) = self.courses.get_mut(idx)
+                    && let Some(course) = self.courses_mut().get_mut(idx)
                 {
                     course.name = name;
                     course.passing_grade = passing_grade;
+                    course.credits = credits;
                     course.global_policy = global_policy;
                     course.global_eligibility = global_eligibility;
                 }
@@ -355,7 +363,7 @@ impl App {
         match self.screen {
             Screen::EditingCategory { is_new: true } => {
                 if let Some(idx) = self.selected_course
-                    && let Some(course) = self.courses.get_mut(idx)
+                    && let Some(course) = self.courses_mut().get_mut(idx)
                 {
                     let category = Category::with_rules(name, weight, Vec::new(), rules);
                     course.categories.push(category);
@@ -366,7 +374,7 @@ impl App {
             Screen::EditingCategory { is_new: false } => {
                 if let Some(course_idx) = self.selected_course
                     && let Some(cat_idx) = selected_cat
-                    && let Some(course) = self.courses.get_mut(course_idx)
+                    && let Some(course) = self.courses_mut().get_mut(course_idx)
                     && let Some(category) = course.categories.get_mut(cat_idx)
                 {
                     category.name = name;
@@ -450,7 +458,7 @@ impl App {
             Screen::EditingEvaluation { is_new: true } => {
                 if let Some(ci) = course_idx
                     && let Some(cati) = cat_idx
-                    && let Some(course) = self.courses.get_mut(ci)
+                    && let Some(course) = self.courses_mut().get_mut(ci)
                     && let Some(category) = course.categories.get_mut(cati)
                 {
                     let mut eval = Evaluation::new(name);
@@ -464,7 +472,7 @@ impl App {
                 if let Some(ci) = course_idx
                     && let Some(cati) = cat_idx
                     && let Some(ei) = eval_idx
-                    && let Some(course) = self.courses.get_mut(ci)
+                    && let Some(course) = self.courses_mut().get_mut(ci)
                     && let Some(category) = course.categories.get_mut(cati)
                     && let Some(eval) = category.evaluations.get_mut(ei)
                 {
@@ -502,11 +510,11 @@ impl App {
         match self.focus {
             super::Focus::Courses => {
                 if let Some(idx) = self.selected_course {
-                    self.courses.remove(idx);
-                    self.selected_course = if self.courses.is_empty() {
+                    self.courses_mut().remove(idx);
+                    self.selected_course = if self.courses().is_empty() {
                         None
                     } else {
-                        Some(idx.min(self.courses.len() - 1))
+                        Some(idx.min(self.courses().len() - 1))
                     };
                     self.reset_category_selection();
                 }
@@ -514,7 +522,7 @@ impl App {
             super::Focus::Categories => {
                 if let Some(course_idx) = self.selected_course
                     && let Some(cat_idx) = self.selected_category
-                    && let Some(course) = self.courses.get_mut(course_idx)
+                    && let Some(course) = self.courses_mut().get_mut(course_idx)
                 {
                     course.categories.remove(cat_idx);
                     self.selected_category = if course.categories.is_empty() {
@@ -529,7 +537,7 @@ impl App {
                 if let Some(course_idx) = self.selected_course
                     && let Some(cat_idx) = self.selected_category
                     && let Some(eval_idx) = self.selected_evaluation
-                    && let Some(course) = self.courses.get_mut(course_idx)
+                    && let Some(course) = self.courses_mut().get_mut(course_idx)
                     && let Some(category) = course.categories.get_mut(cat_idx)
                 {
                     category.evaluations.remove(eval_idx);
@@ -553,11 +561,11 @@ impl App {
     /// Auto-balance weights for current course.
     pub fn auto_balance_weights(&mut self) {
         if let Some(course_idx) = self.selected_course
-            && self.courses.get(course_idx).is_some()
+            && self.courses().get(course_idx).is_some()
         {
             // Snapshot for undo before mutating weights.
             self.push_undo();
-            if let Some(course) = self.courses.get_mut(course_idx) {
+            if let Some(course) = self.courses_mut().get_mut(course_idx) {
                 course.auto_balance_weights();
             }
             self.clear_status();

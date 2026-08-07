@@ -17,25 +17,27 @@
 
 //! Undo / redo history for mutating user actions.
 //!
-//! Snapshots capture the user's course data and the current selection
-//! (course/category/evaluation/focus) so that undo can also restore the
-//! cursor to where the user was when the action was performed.
+//! Snapshots capture every semester plus the current selection, so undo also
+//! restores the cursor. Capturing the whole semester list (not just the active
+//! semester's courses) keeps semester-level actions undoable and stops an undo
+//! after switching semesters from writing courses into the wrong one.
 //!
 //! Snapshots are taken *before* a mutation happens. The redo stack is
 //! cleared whenever a new mutation is pushed (standard linear history).
 
 use super::{App, Focus};
-use crate::model::Course;
+use crate::model::Semester;
 
 /// Maximum number of snapshots retained on the undo stack.
-/// Each snapshot deep-clones `Vec<Course>` — 50 is plenty for interactive
+/// Each snapshot deep-clones `Vec<Semester>` — 50 is plenty for interactive
 /// work without meaningfully growing memory usage.
 const MAX_HISTORY: usize = 50;
 
 /// A point-in-time snapshot of the user's data and selection.
 #[derive(Debug, Clone)]
 pub struct Snapshot {
-    pub courses: Vec<Course>,
+    pub semesters: Vec<Semester>,
+    pub selected_semester: usize,
     pub selected_course: Option<usize>,
     pub selected_category: Option<usize>,
     pub selected_evaluation: Option<usize>,
@@ -46,7 +48,8 @@ impl App {
     /// Capture the current state into a snapshot.
     fn snapshot(&self) -> Snapshot {
         Snapshot {
-            courses: self.courses.clone(),
+            semesters: self.semesters.clone(),
+            selected_semester: self.selected_semester,
             selected_course: self.selected_course,
             selected_category: self.selected_category,
             selected_evaluation: self.selected_evaluation,
@@ -54,9 +57,12 @@ impl App {
         }
     }
 
-    /// Restore courses and selection from a snapshot.
+    /// Restore data and selection from a snapshot.
     fn restore(&mut self, snap: Snapshot) {
-        self.courses = snap.courses;
+        self.semesters = snap.semesters;
+        self.selected_semester = snap
+            .selected_semester
+            .min(self.semesters.len().saturating_sub(1));
         self.selected_course = snap.selected_course;
         self.selected_category = snap.selected_category;
         self.selected_evaluation = snap.selected_evaluation;

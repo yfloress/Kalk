@@ -96,6 +96,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             break;
         }
     }
+
+    app.save_session();
     Ok(())
 }
 

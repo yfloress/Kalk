@@ -27,19 +27,28 @@ mod actions;
 mod forms;
 mod history;
 pub mod import;
+mod input;
+mod semesters;
+mod status;
+
+pub use input::InputField;
+pub use status::StatusSeverity;
 
 use crate::i18n::{Language, Messages};
 use crate::model::{
     AveragingMethod, Category, Course, CourseTemplate, Evaluation, GlobalExamPolicy,
-    MinimumNotMetAction, NeededGradeStatus,
+    MinimumNotMetAction, NeededGradeStatus, Semester,
 };
 use crate::persistence;
 use crate::templates;
 
 use history::Snapshot;
 
-/// Maximum value for the "drop lowest" toggle cycle (0..=MAX_DROP_LOWEST).
-const MAX_DROP_LOWEST: usize = 5;
+/// Auto-generated name for the semester at `order`, e.g. "Semester 1".
+/// Only a starting point — the user renames it.
+fn semester_name(prefix: &str, order: u32) -> String {
+    format!("{} {}", prefix, order + 1)
+}
 
 // =============================================================================
 // Enums
@@ -82,81 +91,12 @@ pub enum Screen {
     ImportPaste,
     /// AI import wizard — step 3: previews the parsed course and confirms.
     ImportPreview,
-}
-
-/// Severity of a transient status message shown in the footer.
-/// Drives the colour of the banner so that informational, warning and
-/// error states are distinguishable in any language.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum StatusSeverity {
-    #[default]
-    Info,
-    Warning,
-    Error,
-}
-
-/// Input field being edited.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InputField {
-    Name,
-    PassingGrade,
-    Weight,
-    Grade,
-    Description,
-    /// Evaluation weight within a weighted-evaluations category (text input).
-    EvalWeight,
-    // Category rule fields (text input)
-    MinimumAverage,
-    MinPerEval,
-    MinOneEval,
-    // Category rule toggle fields (cycled with Space/Enter, not typed)
-    DropLowest,
-    AvgMethod,
-    OnMinNotMet,
-    OnMinPerEvalNotMet,
-    OnMinOneEvalNotMet,
-    RoundBeforeWeight,
-    /// Toggle: whether evaluations in this category have individual weights.
-    WeightedEvals,
-    // Global exam fields (course form)
-    GlobalPolicy,
-    GlobalSemesterWeight,
-    GlobalExamWeight,
-    GlobalMinGrade,
-}
-
-impl InputField {
-    /// Returns true if this field is a toggle (cycled, not typed).
-    pub fn is_toggle(&self) -> bool {
-        matches!(
-            self,
-            InputField::DropLowest
-                | InputField::AvgMethod
-                | InputField::OnMinNotMet
-                | InputField::OnMinPerEvalNotMet
-                | InputField::OnMinOneEvalNotMet
-                | InputField::RoundBeforeWeight
-                | InputField::WeightedEvals
-                | InputField::GlobalPolicy
-        )
-    }
-
-    /// Returns true if this field only accepts numeric input (digits, dot, comma).
-    pub fn is_numeric(&self) -> bool {
-        matches!(
-            self,
-            InputField::PassingGrade
-                | InputField::Weight
-                | InputField::Grade
-                | InputField::EvalWeight
-                | InputField::MinimumAverage
-                | InputField::MinPerEval
-                | InputField::MinOneEval
-                | InputField::GlobalSemesterWeight
-                | InputField::GlobalExamWeight
-                | InputField::GlobalMinGrade
-        )
-    }
+    /// Semester list and dashboard.
+    Home,
+    EditingSemester {
+        is_new: bool,
+    },
+    ConfirmDeleteSemester,
 }
 
 // =============================================================================
@@ -166,11 +106,13 @@ impl InputField {
 /// Main application state.
 #[derive(Debug)]
 pub struct App {
-    pub courses: Vec<Course>,
+    /// Oldest first by `order`. Invariant: never empty.
+    pub semesters: Vec<Semester>,
     pub built_in_templates: Vec<CourseTemplate>,
     pub user_templates: Vec<CourseTemplate>,
 
     // Selection state
+    pub selected_semester: usize,
     pub selected_course: Option<usize>,
     pub selected_category: Option<usize>,
     pub selected_evaluation: Option<usize>,
@@ -180,6 +122,8 @@ pub struct App {
     // UI state
     pub focus: Focus,
     pub screen: Screen,
+    /// Screen to return to when a full-screen overlay (help, language) closes.
+    pub return_screen: Screen,
     pub should_quit: bool,
 
     /// Clipboard for yanked evaluation (name, grade, weight).
@@ -203,6 +147,8 @@ pub struct App {
     pub input_field: InputField,
     pub edit_name: String,
     pub edit_passing_grade: String,
+    /// Optional course credits, empty string means "not declared".
+    pub edit_credits: String,
     pub edit_weight: String,
     pub edit_grade: String,
     pub edit_description: String,
@@ -251,6 +197,9 @@ pub struct App {
     /// the user can select-and-copy with the mouse in any terminal (universal
     /// fallback when OSC 52 isn't supported).
     pub import_prompt_fullscreen: bool,
+    /// Vertical scroll offset for the step-3 preview, which can outgrow the
+    /// popup once a course has many evaluations.
+    pub import_preview_scroll: u16,
     /// Vertical scroll offset (in source lines) for the step-1 prompt view —
     /// shared between the popup and full-screen variants so the user keeps
     /// their place when toggling.
@@ -272,9 +221,13 @@ impl Default for App {
     fn default() -> Self {
         let language = Language::default();
         Self {
-            courses: Vec::new(),
+            semesters: vec![Semester::new(
+                semester_name(language.messages().semester_name_prefix, 0),
+                0,
+            )],
             built_in_templates: templates::built_in_templates(language),
             user_templates: Vec::new(),
+            selected_semester: 0,
             selected_course: None,
             selected_category: None,
             selected_evaluation: None,
@@ -282,6 +235,7 @@ impl Default for App {
             selected_language: 0,
             focus: Focus::Courses,
             screen: Screen::Main,
+            return_screen: Screen::Main,
             should_quit: false,
             clipboard_evaluation: None,
             status_message: None,
@@ -292,6 +246,7 @@ impl Default for App {
             input_field: InputField::Name,
             edit_name: String::new(),
             edit_passing_grade: String::new(),
+            edit_credits: String::new(),
             edit_weight: String::new(),
             edit_grade: String::new(),
             edit_description: String::new(),
@@ -319,6 +274,7 @@ impl Default for App {
             import_copied: false,
             import_prompt_fullscreen: false,
             import_prompt_scroll: 0,
+            import_preview_scroll: 0,
             import_paste_error: None,
             import_parsed: None,
             import_renamed_from: None,
@@ -349,14 +305,21 @@ impl App {
             status_severity = StatusSeverity::Warning;
         }
 
-        let courses = match persistence::load_data() {
-            Ok(courses) => courses,
+        let mut semesters = match persistence::load_data(&semester_name(m.semester_name_prefix, 0))
+        {
+            Ok(semesters) => semesters,
             Err(_) => {
                 status_message = Some(m.load_error.to_string());
                 status_severity = StatusSeverity::Error;
                 Vec::new()
             }
         };
+
+        // Upholds the "never empty" invariant on a fresh install or failed load.
+        if semesters.is_empty() {
+            semesters.push(Semester::new(semester_name(m.semester_name_prefix, 0), 0));
+        }
+        semesters.sort_by_key(|s| s.order);
 
         let user_templates = match persistence::load_user_templates() {
             Ok(templates) => templates,
@@ -370,6 +333,14 @@ impl App {
         // Generate built-in templates for current language
         let built_in_templates = templates::built_in_templates(language);
 
+        // Reopen where the last session ended, falling back to the most
+        // recent semester.
+        let selected_semester = config
+            .last_semester
+            .and_then(|id| semesters.iter().position(|s| s.id == id))
+            .unwrap_or(semesters.len() - 1);
+        let courses = &semesters[selected_semester].courses;
+
         let selected_course = if courses.is_empty() { None } else { Some(0) };
 
         let selected_category = selected_course.and_then(|idx| {
@@ -379,10 +350,18 @@ impl App {
                 .map(|_| 0)
         });
 
+        let screen = if config.start_on_home {
+            Screen::Home
+        } else {
+            Screen::Main
+        };
+
         Self {
-            courses,
+            semesters,
+            screen,
             built_in_templates,
             user_templates,
+            selected_semester,
             selected_course,
             selected_category,
             status_message,
@@ -400,31 +379,35 @@ impl App {
 
     /// Save current state to disk.
     pub fn save(&self) -> color_eyre::Result<()> {
-        persistence::save_data(&self.courses)
+        persistence::save_data(&self.semesters)
     }
 
-    /// Clear the status message (called before each user action).
-    pub fn clear_status(&mut self) {
-        self.status_message = None;
-        self.status_severity = StatusSeverity::Info;
+    // =========================================================================
+    // Semester access
+    // =========================================================================
+
+    /// The semester currently in view.
+    pub fn current_semester(&self) -> &Semester {
+        let idx = self.selected_semester.min(self.semesters.len() - 1);
+        &self.semesters[idx]
     }
 
-    /// Set an informational status message (neutral colour).
-    pub fn set_status(&mut self, msg: String) {
-        self.status_message = Some(msg);
-        self.status_severity = StatusSeverity::Info;
+    /// Courses of the semester currently in view.
+    pub fn courses(&self) -> &[Course] {
+        &self.current_semester().courses
     }
 
-    /// Set a warning status message (yellow/peach colour).
-    pub fn set_warning(&mut self, msg: String) {
-        self.status_message = Some(msg);
-        self.status_severity = StatusSeverity::Warning;
-    }
-
-    /// Set an error status message (red colour).
-    pub fn set_error(&mut self, msg: String) {
-        self.status_message = Some(msg);
-        self.status_severity = StatusSeverity::Error;
+    /// Mutable courses of the semester currently in view.
+    pub fn courses_mut(&mut self) -> &mut Vec<Course> {
+        debug_assert!(
+            !self.semesters.is_empty(),
+            "App must always hold at least one semester"
+        );
+        if self.semesters.is_empty() {
+            self.semesters.push(Semester::new(String::new(), 0));
+        }
+        let idx = self.selected_semester.min(self.semesters.len() - 1);
+        &mut self.semesters[idx].courses
     }
 
     /// Persist state to disk. Shows error to user via status message on failure.
@@ -441,7 +424,7 @@ impl App {
 
     /// Get the currently selected Course, if any.
     pub fn current_course(&self) -> Option<&Course> {
-        self.selected_course.and_then(|i| self.courses.get(i))
+        self.selected_course.and_then(|i| self.courses().get(i))
     }
 
     /// Get the currently selected Category, if any.
@@ -571,19 +554,19 @@ impl App {
     // =========================================================================
 
     pub fn next_course(&mut self) {
-        if self.courses.is_empty() {
+        if self.courses().is_empty() {
             self.selected_course = None;
             return;
         }
         self.selected_course = Some(match self.selected_course {
-            Some(i) => (i + 1).min(self.courses.len() - 1),
+            Some(i) => (i + 1).min(self.courses().len() - 1),
             None => 0,
         });
         self.reset_category_selection();
     }
 
     pub fn previous_course(&mut self) {
-        if self.courses.is_empty() {
+        if self.courses().is_empty() {
             self.selected_course = None;
             return;
         }
@@ -717,224 +700,6 @@ impl App {
     /// Toggle the field help panel in the category popup.
     pub fn toggle_field_help(&mut self) {
         self.show_field_help = !self.show_field_help;
-    }
-
-    pub fn next_input_field(&mut self) {
-        self.input_field = match (&self.screen, &self.input_field) {
-            (Screen::EditingCourse { .. }, InputField::Name) => InputField::PassingGrade,
-            (Screen::EditingCourse { .. }, InputField::PassingGrade) => InputField::GlobalPolicy,
-            (Screen::EditingCourse { .. }, InputField::GlobalPolicy) => {
-                match self.edit_global_policy {
-                    GlobalExamPolicy::None => InputField::Name,
-                    GlobalExamPolicy::Weighted { .. } => InputField::GlobalSemesterWeight,
-                    GlobalExamPolicy::ReplacesWorstGrade => InputField::GlobalMinGrade,
-                }
-            }
-            (Screen::EditingCourse { .. }, InputField::GlobalSemesterWeight) => {
-                InputField::GlobalExamWeight
-            }
-            (Screen::EditingCourse { .. }, InputField::GlobalExamWeight) => {
-                InputField::GlobalMinGrade
-            }
-            (Screen::EditingCourse { .. }, InputField::GlobalMinGrade) => InputField::Name,
-            // Category: Name → Weight → (advanced fields if expanded) → Name
-            (Screen::EditingCategory { .. }, InputField::Name) => InputField::Weight,
-            (Screen::EditingCategory { .. }, InputField::Weight) => {
-                if self.show_advanced_rules {
-                    InputField::DropLowest
-                } else {
-                    InputField::Name
-                }
-            }
-            (Screen::EditingCategory { .. }, InputField::DropLowest) => InputField::AvgMethod,
-            (Screen::EditingCategory { .. }, InputField::AvgMethod) => InputField::MinimumAverage,
-            (Screen::EditingCategory { .. }, InputField::MinimumAverage) => {
-                // Show OnMinNotMet only if a minimum average is set
-                if !self.edit_min_average.trim().is_empty() {
-                    InputField::OnMinNotMet
-                } else {
-                    InputField::MinPerEval
-                }
-            }
-            (Screen::EditingCategory { .. }, InputField::OnMinNotMet) => InputField::MinPerEval,
-            (Screen::EditingCategory { .. }, InputField::MinPerEval) => {
-                // Show OnMinPerEvalNotMet only if min per eval is set
-                if !self.edit_min_per_eval.trim().is_empty() {
-                    InputField::OnMinPerEvalNotMet
-                } else {
-                    InputField::MinOneEval
-                }
-            }
-            (Screen::EditingCategory { .. }, InputField::OnMinPerEvalNotMet) => {
-                InputField::MinOneEval
-            }
-            (Screen::EditingCategory { .. }, InputField::MinOneEval) => {
-                // Show OnMinOneEvalNotMet only if min one eval is set
-                if !self.edit_min_one_eval.trim().is_empty() {
-                    InputField::OnMinOneEvalNotMet
-                } else {
-                    InputField::RoundBeforeWeight
-                }
-            }
-            (Screen::EditingCategory { .. }, InputField::OnMinOneEvalNotMet) => {
-                InputField::RoundBeforeWeight
-            }
-            (Screen::EditingCategory { .. }, InputField::RoundBeforeWeight) => {
-                InputField::WeightedEvals
-            }
-            (Screen::EditingCategory { .. }, InputField::WeightedEvals) => InputField::Name,
-            (Screen::EditingEvaluation { .. }, InputField::Grade) => InputField::Name,
-            (Screen::EditingEvaluation { .. }, InputField::Name) => {
-                // Show weight field only when category has weighted evaluations
-                if self.category_has_weighted_evals() {
-                    InputField::EvalWeight
-                } else {
-                    InputField::Grade
-                }
-            }
-            (Screen::EditingEvaluation { .. }, InputField::EvalWeight) => InputField::Grade,
-            (Screen::SavingTemplate, InputField::Name) => InputField::Description,
-            (Screen::SavingTemplate, InputField::Description) => InputField::Name,
-            _ => self.input_field,
-        };
-    }
-
-    pub fn current_input_buffer(&mut self) -> &mut String {
-        match self.input_field {
-            InputField::Name => &mut self.edit_name,
-            InputField::PassingGrade => &mut self.edit_passing_grade,
-            InputField::Weight => &mut self.edit_weight,
-            InputField::Grade => &mut self.edit_grade,
-            InputField::Description => &mut self.edit_description,
-            InputField::EvalWeight => &mut self.edit_eval_weight,
-            InputField::MinimumAverage => &mut self.edit_min_average,
-            InputField::MinPerEval => &mut self.edit_min_per_eval,
-            InputField::MinOneEval => &mut self.edit_min_one_eval,
-            InputField::GlobalSemesterWeight => &mut self.edit_global_semester_weight,
-            InputField::GlobalExamWeight => &mut self.edit_global_exam_weight,
-            InputField::GlobalMinGrade => &mut self.edit_global_min_grade,
-            // Toggle fields don't have text buffers — they are cycled, not typed into.
-            // This branch should never be reached in practice.
-            InputField::DropLowest
-            | InputField::AvgMethod
-            | InputField::OnMinNotMet
-            | InputField::OnMinPerEvalNotMet
-            | InputField::OnMinOneEvalNotMet
-            | InputField::RoundBeforeWeight
-            | InputField::WeightedEvals
-            | InputField::GlobalPolicy => {
-                debug_assert!(
-                    false,
-                    "current_input_buffer called on toggle field {:?}",
-                    self.input_field
-                );
-                &mut self.edit_description
-            }
-        }
-    }
-
-    /// Cycle the current toggle field forward (→ / Space / Enter / l).
-    pub fn cycle_toggle_field(&mut self) {
-        match self.input_field {
-            InputField::DropLowest => {
-                self.edit_drop_lowest = (self.edit_drop_lowest + 1) % (MAX_DROP_LOWEST + 1);
-            }
-            InputField::AvgMethod => {
-                self.edit_averaging_method = match self.edit_averaging_method {
-                    AveragingMethod::Arithmetic => AveragingMethod::Geometric,
-                    AveragingMethod::Geometric => AveragingMethod::Arithmetic,
-                };
-            }
-            InputField::OnMinNotMet => {
-                self.edit_on_min_not_met = match self.edit_on_min_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
-                };
-            }
-            InputField::OnMinPerEvalNotMet => {
-                self.edit_on_min_per_eval_not_met = match self.edit_on_min_per_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
-                };
-            }
-            InputField::OnMinOneEvalNotMet => {
-                self.edit_on_min_one_eval_not_met = match self.edit_on_min_one_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::FinalEqualsAverage,
-                };
-            }
-            InputField::RoundBeforeWeight => {
-                self.edit_round_before_weighting = !self.edit_round_before_weighting;
-            }
-            InputField::WeightedEvals => {
-                self.edit_weighted_evaluations = !self.edit_weighted_evaluations;
-            }
-            InputField::GlobalPolicy => {
-                self.edit_global_policy = match self.edit_global_policy {
-                    GlobalExamPolicy::None => GlobalExamPolicy::Weighted {
-                        semester_weight: 0.7,
-                        global_weight: 0.3,
-                    },
-                    GlobalExamPolicy::Weighted { .. } => GlobalExamPolicy::ReplacesWorstGrade,
-                    GlobalExamPolicy::ReplacesWorstGrade => GlobalExamPolicy::None,
-                };
-            }
-            _ => {}
-        }
-    }
-
-    /// Cycle the current toggle field backward (← / h).
-    pub fn cycle_toggle_field_reverse(&mut self) {
-        match self.input_field {
-            InputField::DropLowest => {
-                self.edit_drop_lowest = if self.edit_drop_lowest == 0 {
-                    MAX_DROP_LOWEST
-                } else {
-                    self.edit_drop_lowest - 1
-                };
-            }
-            // Two-state toggles: reverse == forward
-            InputField::AvgMethod | InputField::RoundBeforeWeight | InputField::WeightedEvals => {
-                self.cycle_toggle_field()
-            }
-            // Three-state toggle: reverse cycle
-            InputField::OnMinNotMet => {
-                self.edit_on_min_not_met = match self.edit_on_min_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
-                };
-            }
-            InputField::OnMinPerEvalNotMet => {
-                self.edit_on_min_per_eval_not_met = match self.edit_on_min_per_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
-                };
-            }
-            InputField::OnMinOneEvalNotMet => {
-                self.edit_on_min_one_eval_not_met = match self.edit_on_min_one_eval_not_met {
-                    MinimumNotMetAction::FinalEqualsAverage => MinimumNotMetAction::FailCourse,
-                    MinimumNotMetAction::FailCourse => MinimumNotMetAction::RequiresGlobal,
-                    MinimumNotMetAction::RequiresGlobal => MinimumNotMetAction::FinalEqualsAverage,
-                };
-            }
-            // Three-state toggle: reverse cycle
-            InputField::GlobalPolicy => {
-                self.edit_global_policy = match self.edit_global_policy {
-                    GlobalExamPolicy::None => GlobalExamPolicy::ReplacesWorstGrade,
-                    GlobalExamPolicy::ReplacesWorstGrade => GlobalExamPolicy::Weighted {
-                        semester_weight: 0.7,
-                        global_weight: 0.3,
-                    },
-                    GlobalExamPolicy::Weighted { .. } => GlobalExamPolicy::None,
-                };
-            }
-            _ => {}
-        }
     }
 
     pub fn cancel_edit(&mut self) {

@@ -30,11 +30,13 @@
 
 mod category;
 mod global;
+mod semester;
 
 #[cfg(test)]
 mod tests;
 
 pub use category::{AveragingMethod, Category, CategoryRules, MinimumNotMetAction};
+pub use semester::{Semester, SemesterMetrics, cumulative_average};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -228,6 +230,16 @@ pub struct CourseGradeResult {
     pub grade_after_global: Option<f64>,
 }
 
+/// Where a course stands overall.  Computed by [`Course::outcome`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CourseOutcome {
+    NoData,
+    Passing,
+    Failing,
+    /// Hinges on a global exam not taken yet and still winnable.
+    PendingGlobal,
+}
+
 /// A category that failed its minimum average requirement.
 #[derive(Debug, Clone)]
 pub struct FailedMinimum {
@@ -263,6 +275,10 @@ pub struct Course {
     pub passing_grade: f64,
     pub categories: Vec<Category>,
 
+    /// Credits (SCT, ECTS, ...). `None` falls back to unweighted averages.
+    #[serde(default)]
+    pub credits: Option<u32>,
+
     /// Global exam policy for this course.
     #[serde(default)]
     pub global_policy: GlobalExamPolicy,
@@ -285,6 +301,7 @@ impl Course {
             name,
             passing_grade: passing_grade.clamp(MIN_GRADE, MAX_GRADE),
             categories: Vec::new(),
+            credits: None,
             global_policy: GlobalExamPolicy::None,
             global_eligibility: GlobalEligibility::default(),
             global_exam_grade: None,
@@ -311,6 +328,7 @@ impl Course {
             name,
             passing_grade: passing_grade.clamp(MIN_GRADE, MAX_GRADE),
             categories,
+            credits: None,
             global_policy: template.global_policy.clone(),
             global_eligibility: template.global_eligibility.clone(),
             global_exam_grade: None,
@@ -574,6 +592,56 @@ impl Course {
     /// Check if the course has any evaluations at all.
     pub fn has_evaluations(&self) -> bool {
         self.categories.iter().any(|c| !c.evaluations.is_empty())
+    }
+
+    /// After-global grade once the global is taken, semester grade otherwise.
+    pub fn final_grade(&self) -> Option<f64> {
+        if !self.has_evaluations() {
+            return None;
+        }
+        let result = self.compute_grade();
+        Some(result.grade_after_global.unwrap_or(result.grade))
+    }
+
+    /// The only place that decides whether a course passes. The UI renders
+    /// this verdict, it must not re-derive it.
+    pub fn outcome(&self) -> CourseOutcome {
+        if !self.has_evaluations() {
+            return CourseOutcome::NoData;
+        }
+
+        let result = self.compute_grade();
+
+        if result.needs_global {
+            if let Some(after) = result.grade_after_global {
+                return if self.is_passing_grade(after) {
+                    CourseOutcome::Passing
+                } else {
+                    CourseOutcome::Failing
+                };
+            }
+
+            // Still winnable unless even a perfect global fails.
+            let impossible = self.global_policy != GlobalExamPolicy::None
+                && matches!(
+                    self.needed_global_grade().status,
+                    NeededGradeStatus::Failure
+                );
+
+            return if impossible {
+                CourseOutcome::Failing
+            } else {
+                CourseOutcome::PendingGlobal
+            };
+        }
+
+        let has_rule_issues = result.overridden_by.is_some() || !result.failed_minimums.is_empty();
+
+        if has_rule_issues || !self.is_passing_grade(result.grade) {
+            CourseOutcome::Failing
+        } else {
+            CourseOutcome::Passing
+        }
     }
 
     // =========================================================================

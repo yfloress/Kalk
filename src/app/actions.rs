@@ -151,6 +151,7 @@ impl App {
             .iter()
             .position(|&l| l == self.language)
             .unwrap_or(0);
+        self.return_screen = self.screen.clone();
         self.screen = Screen::SelectingLanguage;
     }
 
@@ -183,22 +184,19 @@ impl App {
             self.built_in_templates = crate::templates::built_in_templates(new_lang);
 
             // Save config
-            let config = persistence::Config {
-                language: new_lang,
-                use_nerd_fonts: self.use_nerd_fonts,
-            };
+            let config = self.config();
             if persistence::save_config(&config).is_err() {
                 let msg = self.messages().config_save_error.to_string();
                 self.set_error(msg);
             }
         }
 
-        self.screen = Screen::Main;
+        self.screen = self.return_screen.clone();
     }
 
     /// Cancel language selection.
     pub fn cancel_language_selection(&mut self) {
-        self.screen = Screen::Main;
+        self.screen = self.return_screen.clone();
     }
 
     // =========================================================================
@@ -262,10 +260,7 @@ impl App {
 
     /// Confirm and persist settings, then return to the main screen.
     pub fn confirm_settings(&mut self) {
-        let config = persistence::Config {
-            language: self.language,
-            use_nerd_fonts: self.use_nerd_fonts,
-        };
+        let config = self.config();
         if persistence::save_config(&config).is_err() {
             let msg = self.messages().config_save_error.to_string();
             self.set_error(msg);
@@ -293,7 +288,7 @@ impl App {
         let Some(idx) = self.selected_course else {
             return;
         };
-        let Some(course) = self.courses.get(idx) else {
+        let Some(course) = self.courses().get(idx) else {
             return;
         };
 
@@ -317,7 +312,7 @@ impl App {
             self.screen = Screen::Main;
             return;
         };
-        if self.courses.get(idx).is_none() {
+        if self.courses().get(idx).is_none() {
             self.screen = Screen::Main;
             return;
         }
@@ -325,7 +320,7 @@ impl App {
         let trimmed = self.edit_global_grade.trim().to_string();
         // Snapshot for undo (before applying the new global grade).
         self.push_undo();
-        let Some(course) = self.courses.get_mut(idx) else {
+        let Some(course) = self.courses_mut().get_mut(idx) else {
             self.screen = Screen::Main;
             return;
         };
@@ -397,7 +392,7 @@ impl App {
         self.push_undo();
         if let Some(ci) = self.selected_course
             && let Some(cati) = self.selected_category
-            && let Some(course) = self.courses.get_mut(ci)
+            && let Some(course) = self.courses_mut().get_mut(ci)
             && let Some(category) = course.categories.get_mut(cati)
         {
             let mut eval = Evaluation::new(name.clone());
@@ -449,7 +444,7 @@ impl App {
         let mut inserted = false;
         if let Some(ci) = self.selected_course
             && let Some(cati) = self.selected_category
-            && let Some(course) = self.courses.get_mut(ci)
+            && let Some(course) = self.courses_mut().get_mut(ci)
             && let Some(category) = course.categories.get_mut(cati)
         {
             for i in 1..=count {
@@ -485,13 +480,14 @@ impl App {
     /// `Screen::Help` is a no-op so a second `?` press toggles via the events
     /// layer instead.
     pub fn show_help(&mut self) {
+        self.return_screen = self.screen.clone();
         self.screen = Screen::Help;
     }
 
-    /// Close the help overlay and return to the main screen.
+    /// Close the help overlay and return to wherever it was opened from.
     pub fn close_help(&mut self) {
         if self.screen == Screen::Help {
-            self.screen = Screen::Main;
+            self.screen = self.return_screen.clone();
         }
     }
 
@@ -512,7 +508,7 @@ impl App {
     pub fn goto_first(&mut self) {
         match self.focus {
             Focus::Courses => {
-                if !self.courses.is_empty() {
+                if !self.courses().is_empty() {
                     self.selected_course = Some(0);
                     self.reset_category_selection();
                 }
@@ -539,8 +535,8 @@ impl App {
     pub fn goto_last(&mut self) {
         match self.focus {
             Focus::Courses => {
-                if !self.courses.is_empty() {
-                    self.selected_course = Some(self.courses.len() - 1);
+                if !self.courses().is_empty() {
+                    self.selected_course = Some(self.courses().len() - 1);
                     self.reset_category_selection();
                 }
             }
@@ -596,6 +592,12 @@ impl App {
         self.import_prompt_scroll = new_scroll as u16;
     }
 
+    /// Scroll the step-3 preview by `delta` lines.
+    pub fn import_scroll_preview(&mut self, delta: i32) {
+        let new = (self.import_preview_scroll as i32 + delta).max(0);
+        self.import_preview_scroll = new as u16;
+    }
+
     /// Jump the step-1 prompt view back to the top.
     pub fn import_scroll_prompt_top(&mut self) {
         self.import_prompt_scroll = 0;
@@ -644,7 +646,7 @@ impl App {
         let m = self.messages();
         match crate::app::import::parse(&raw) {
             Ok(schema) => {
-                let existing: Vec<&str> = self.courses.iter().map(|c| c.name.as_str()).collect();
+                let existing: Vec<&str> = self.courses().iter().map(|c| c.name.as_str()).collect();
                 let course =
                     crate::app::import::to_course(&schema, &existing, m.import_copy_suffix);
                 let renamed_from = if course.name != schema.name.trim() {
@@ -655,6 +657,7 @@ impl App {
                 self.import_total_weight = crate::app::import::total_weight(&schema);
                 self.import_total_evals = crate::app::import::total_evaluations(&schema);
                 self.import_parsed = Some(course);
+                self.import_preview_scroll = 0;
                 self.import_renamed_from = renamed_from;
                 self.import_paste_error = None;
                 self.screen = Screen::ImportPreview;
@@ -674,8 +677,8 @@ impl App {
         };
 
         self.push_undo();
-        self.courses.push(course);
-        let new_idx = self.courses.len() - 1;
+        self.courses_mut().push(course);
+        let new_idx = self.courses().len() - 1;
         self.selected_course = Some(new_idx);
         self.reset_category_selection();
         self.persist();

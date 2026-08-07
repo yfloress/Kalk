@@ -76,7 +76,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
         // Global: Shift+L for language selection (works from main screen)
         if key.code == KeyCode::Char('L')
             && key.modifiers.contains(KeyModifiers::SHIFT)
-            && app.screen == Screen::Main
+            && matches!(app.screen, Screen::Main | Screen::Home)
         {
             app.show_language_popup();
             return Ok(app.should_quit);
@@ -114,7 +114,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
         // ? from the main screen opens the global help overlay; pressing it
         // again (or Esc) closes it.
         if key.code == KeyCode::Char('?') {
-            if app.screen == Screen::Main {
+            if matches!(app.screen, Screen::Main | Screen::Home) {
                 app.show_help();
                 return Ok(app.should_quit);
             } else if app.screen == Screen::Help {
@@ -125,6 +125,9 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
 
         match &app.screen {
             Screen::Main => handle_main_keys(app, key.code, key.modifiers),
+            Screen::Home => handle_home_keys(app, key.code),
+            Screen::EditingSemester { .. } => handle_edit_semester_keys(app, key.code),
+            Screen::ConfirmDeleteSemester => handle_confirm_delete_semester_keys(app, key.code),
             Screen::SelectingTemplate => handle_template_keys(app, key.code),
             Screen::EditingCourse { .. } => handle_edit_course_keys(app, key.code),
             Screen::EditingCategory { .. } => handle_edit_category_keys(app, key.code),
@@ -188,7 +191,13 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
 
         // Focus navigation
         KeyCode::Tab => app.cycle_focus(),
-        KeyCode::Left | KeyCode::Char('h') => app.focus_left(),
+        KeyCode::Left | KeyCode::Char('h') => {
+            if app.focus == Focus::Courses {
+                app.show_home();
+            } else {
+                app.focus_left();
+            }
+        }
         KeyCode::Right | KeyCode::Char('l') => app.focus_right(),
 
         // Item navigation (up/down within current focus)
@@ -493,6 +502,55 @@ fn handle_import_preview_keys(app: &mut App, key: KeyCode) {
         KeyCode::Esc => app.import_cancel(),
         KeyCode::Char('b') => app.import_back_to_paste(),
         KeyCode::Enter => app.import_confirm(),
+        KeyCode::Down | KeyCode::Char('j') => app.import_scroll_preview(1),
+        KeyCode::Up | KeyCode::Char('k') => app.import_scroll_preview(-1),
+        KeyCode::PageDown => app.import_scroll_preview(10),
+        KeyCode::PageUp => app.import_scroll_preview(-10),
+        _ => {}
+    }
+}
+
+/// Home screen: semester list plus the dashboard.
+fn handle_home_keys(app: &mut App, key: KeyCode) {
+    app.clear_status();
+
+    match key {
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Esc => app.close_home(),
+
+        KeyCode::Up | KeyCode::Char('k') => app.previous_semester(),
+        KeyCode::Down | KeyCode::Char('j') => app.next_semester(),
+
+        KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => app.enter_semester(),
+
+        KeyCode::Char('n') => app.start_new_semester(),
+        KeyCode::Char('r') => app.start_rename_semester(),
+        KeyCode::Char('d') => app.start_delete_semester(),
+
+        KeyCode::Char('K') => app.move_semester_up(),
+        KeyCode::Char('J') => app.move_semester_down(),
+
+        _ => {}
+    }
+}
+
+/// Single-field form for creating or renaming a semester.
+fn handle_edit_semester_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.show_home(),
+        KeyCode::Enter => app.confirm_semester(),
+        KeyCode::Backspace => {
+            app.edit_name.pop();
+        }
+        KeyCode::Char(c) => app.edit_name.push(c),
+        _ => {}
+    }
+}
+
+fn handle_confirm_delete_semester_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Enter | KeyCode::Char('y') => app.confirm_delete_semester(),
+        KeyCode::Esc | KeyCode::Char('n') => app.show_home(),
         _ => {}
     }
 }

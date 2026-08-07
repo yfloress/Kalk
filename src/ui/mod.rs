@@ -25,6 +25,7 @@
 
 mod eval_popups;
 pub(crate) mod helpers;
+mod home;
 pub(crate) mod icons;
 mod panels;
 mod popups;
@@ -33,9 +34,12 @@ mod settings_popup;
 pub(crate) mod theme;
 
 use crate::app::{App, Focus, Screen};
-use crate::model::{Course, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation};
+use crate::model::{
+    Course, CourseOutcome, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation,
+};
 use eval_popups::{draw_bulk_add_popup, draw_evaluation_popup, draw_global_grade_popup};
 use helpers::{focused_border_style, format_course_average, format_weight_validation};
+use home::{draw_delete_semester_popup, draw_semester_popup};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
@@ -59,6 +63,21 @@ use theme::theme;
 
 /// Main UI rendering function.
 pub fn draw(frame: &mut Frame, app: &App) {
+    // Home replaces the whole layout rather than overlaying it, and its own
+    // popups belong on top of Home — not on top of the three-panel view.
+    if matches!(
+        app.screen,
+        Screen::Home | Screen::EditingSemester { .. } | Screen::ConfirmDeleteSemester
+    ) {
+        home::draw_home(frame, app);
+        match &app.screen {
+            Screen::EditingSemester { is_new } => draw_semester_popup(frame, app, *is_new),
+            Screen::ConfirmDeleteSemester => draw_delete_semester_popup(frame, app),
+            _ => {}
+        }
+        return;
+    }
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(3)])
@@ -71,7 +90,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     let highlight_len = ic.highlight.chars().count() as u16;
     let max_name_len = app
-        .courses
+        .courses()
         .iter()
         .map(|c| c.name.chars().count() as u16)
         .max()
@@ -80,10 +99,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     // Minimum width = title text so it never gets clipped.
     // Title: " {icon}Courses (N) " + 2 border columns.
     let title_width = {
-        let count_digits = if app.courses.is_empty() {
+        let count_digits = if app.courses().is_empty() {
             1
         } else {
-            (app.courses.len() as f64).log10().floor() as u16 + 1
+            (app.courses().len() as f64).log10().floor() as u16 + 1
         };
         // " " + icon + label + " (" + digits + ") " + borders
         1 + ic.course.chars().count() as u16
@@ -130,7 +149,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::ImportPrompt => draw_import_prompt(frame, app),
         Screen::ImportPaste => draw_import_paste(frame, app),
         Screen::ImportPreview => draw_import_preview(frame, app),
-        Screen::Main => {}
+        Screen::Home
+        | Screen::EditingSemester { .. }
+        | Screen::ConfirmDeleteSemester
+        | Screen::Main => {}
     }
 }
 
@@ -146,52 +168,14 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
     let border_style = focused_border_style(is_focused);
 
     let items: Vec<ListItem> = app
-        .courses
+        .courses()
         .iter()
         .map(|c| {
-            // Compute the true course result (accounting for rule overrides)
-            let grade_result = c.compute_grade();
-            let has_evals = c.has_evaluations();
-
-            // True pass/fail color: accounts for rule overrides and needs_global.
-            // When needs_global is set, check whether it's actually possible
-            // to pass via the global exam.  If impossible, treat as failed.
-            let global_impossible = grade_result.needs_global
-                && c.global_policy != GlobalExamPolicy::None
-                && matches!(c.needed_global_grade().status, NeededGradeStatus::Failure);
-
-            // Check if the global was already taken and resolved the outcome
-            let global_taken_passing = grade_result.needs_global
-                && grade_result
-                    .grade_after_global
-                    .is_some_and(|g| c.is_passing_grade(g));
-            let global_taken_failing = grade_result.needs_global
-                && grade_result
-                    .grade_after_global
-                    .is_some_and(|g| !c.is_passing_grade(g));
-
-            // True pass/fail color: accounts for rule overrides and needs_global.
-            // A course is only truly passing when:
-            // - grade >= passing_grade
-            // - no rule overrides (overridden_by is None)
-            // - no unresolved needs_global flag
-            // - no failed_minimums at all
-            let has_rule_issues = grade_result.overridden_by.is_some()
-                || (grade_result.needs_global && !global_taken_passing)
-                || !grade_result.failed_minimums.is_empty();
-
-            let true_color = if !has_evals {
-                t.text_muted
-            } else if global_taken_passing {
-                t.status_pass
-            } else if global_taken_failing {
-                t.status_fail
-            } else if grade_result.needs_global && !global_impossible {
-                t.status_override
-            } else if has_rule_issues || !c.is_passing_grade(grade_result.grade) {
-                t.status_fail
-            } else {
-                t.status_pass
+            let true_color = match c.outcome() {
+                CourseOutcome::NoData => t.text_muted,
+                CourseOutcome::Passing => t.status_pass,
+                CourseOutcome::Failing => t.status_fail,
+                CourseOutcome::PendingGlobal => t.status_override,
             };
 
             // Coloured accent bar shown before each course so the user can
@@ -206,17 +190,9 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
 
             // Single line — "NAME GRADE X/Y" with colour-coded grade and a
             // muted progress chip.
-            let short_grade = if has_evals {
-                // When global was taken, show the after-global grade
-                let display_grade = if let Some(after) = grade_result.grade_after_global {
-                    after
-                } else {
-                    grade_result.grade
-                };
-                let rounded = Course::round_grade(display_grade);
-                format!(" {:.0}", rounded)
-            } else {
-                " -".to_string()
+            let short_grade = match c.final_grade() {
+                Some(grade) => format!(" {:.0}", Course::round_grade(grade)),
+                None => " -".to_string(),
             };
             let mut spans = vec![
                 accent,
@@ -233,7 +209,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let title = format!(" {}{} ({}) ", ic.course, m.courses, app.courses.len());
+    let title = format!(" {}{} ({}) ", ic.course, m.courses, app.courses().len());
     let list = List::new(items)
         .block(
             Block::default()

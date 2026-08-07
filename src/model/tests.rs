@@ -3129,3 +3129,177 @@ fn test_eval_weight_serde_default() {
     let eval: Evaluation = serde_json::from_str(json).unwrap();
     assert!(eval.weight.is_none());
 }
+
+// =============================================================================
+// Course outcome
+// =============================================================================
+
+/// Build a single-category course whose average is exactly `grade`.
+fn course_with_grade(name: &str, grade: f64) -> Course {
+    let mut course = Course::new(name.to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Cat".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("E1".to_string(), grade));
+    course.categories.push(cat);
+    course
+}
+
+#[test]
+fn test_outcome_no_data_without_evaluations() {
+    let course = Course::new("Empty".to_string(), DEFAULT_PASSING_GRADE);
+    assert_eq!(course.outcome(), CourseOutcome::NoData);
+    assert!(course.final_grade().is_none());
+}
+
+#[test]
+fn test_outcome_passing_and_failing() {
+    assert_eq!(
+        course_with_grade("Ok", 80.0).outcome(),
+        CourseOutcome::Passing
+    );
+    assert_eq!(
+        course_with_grade("Bad", 30.0).outcome(),
+        CourseOutcome::Failing
+    );
+}
+
+#[test]
+fn test_outcome_passing_at_rounding_boundary() {
+    // 54.5 rounds to 55 and must count as passing.
+    assert_eq!(
+        course_with_grade("Edge", 54.5).outcome(),
+        CourseOutcome::Passing
+    );
+}
+
+#[test]
+fn test_outcome_failing_when_minimum_caps_the_grade() {
+    let mut course = Course::new("Capped".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Cat".to_string(), 100.0);
+    cat.rules.minimum_average = Some(60.0);
+    cat.rules.on_minimum_not_met = MinimumNotMetAction::FinalEqualsAverage;
+    cat.evaluations
+        .push(Evaluation::with_grade("E1".to_string(), 50.0));
+    course.categories.push(cat);
+
+    assert_eq!(course.outcome(), CourseOutcome::Failing);
+}
+
+// =============================================================================
+// Semester metrics
+// =============================================================================
+
+fn semester_with(courses: Vec<Course>) -> Semester {
+    let mut s = Semester::new("2026-1".to_string(), 0);
+    s.courses = courses;
+    s
+}
+
+#[test]
+fn test_semester_average_is_arithmetic_without_credits() {
+    let s = semester_with(vec![
+        course_with_grade("A", 40.0),
+        course_with_grade("B", 80.0),
+    ]);
+    let m = s.metrics();
+    assert!(!m.weighted);
+    assert!((m.average.unwrap() - 60.0).abs() < 0.01);
+    assert!(m.total_credits.is_none());
+}
+
+#[test]
+fn test_semester_average_is_credit_weighted_when_all_declare_credits() {
+    let mut heavy = course_with_grade("Heavy", 40.0);
+    heavy.credits = Some(10);
+    let mut light = course_with_grade("Light", 90.0);
+    light.credits = Some(3);
+
+    let m = semester_with(vec![heavy, light]).metrics();
+    assert!(m.weighted);
+    // (40*10 + 90*3) / 13 = 51.53...
+    assert!(
+        (m.average.unwrap() - 51.538).abs() < 0.01,
+        "got {:?}",
+        m.average
+    );
+    assert_eq!(m.total_credits, Some(13));
+}
+
+#[test]
+fn test_semester_average_falls_back_when_credits_are_partial() {
+    // A partial set of credits must not silently weight the average.
+    let mut a = course_with_grade("A", 40.0);
+    a.credits = Some(10);
+    let b = course_with_grade("B", 80.0);
+
+    let m = semester_with(vec![a, b]).metrics();
+    assert!(!m.weighted);
+    assert!((m.average.unwrap() - 60.0).abs() < 0.01);
+}
+
+#[test]
+fn test_semester_counts_and_credits_at_risk() {
+    let mut ok = course_with_grade("Ok", 80.0);
+    ok.credits = Some(5);
+    let mut bad = course_with_grade("Bad", 20.0);
+    bad.credits = Some(8);
+    let empty = Course::new("Empty".to_string(), DEFAULT_PASSING_GRADE);
+
+    let m = semester_with(vec![ok, bad, empty]).metrics();
+    assert_eq!(m.counts.passing, 1);
+    assert_eq!(m.counts.failing, 1);
+    assert_eq!(m.counts.no_data, 1);
+    assert_eq!(m.total_courses, 3);
+    assert_eq!(m.credits_at_risk, Some(8));
+}
+
+#[test]
+fn test_semester_critical_is_the_worst_unsecured_course() {
+    let m = semester_with(vec![
+        course_with_grade("Fine", 90.0),
+        course_with_grade("Bad", 40.0),
+        course_with_grade("Worst", 10.0),
+    ])
+    .metrics();
+    assert_eq!(m.critical, Some(2));
+}
+
+#[test]
+fn test_semester_metrics_on_empty_semester() {
+    let m = semester_with(vec![]).metrics();
+    assert!(m.average.is_none());
+    assert!(m.critical.is_none());
+    assert_eq!(m.total_courses, 0);
+    assert!(m.credits_at_risk.is_none());
+}
+
+#[test]
+fn test_cumulative_average_spans_semesters() {
+    let s1 = semester_with(vec![course_with_grade("A", 40.0)]);
+    let s2 = semester_with(vec![course_with_grade("B", 80.0)]);
+    let avg = cumulative_average(&[s1, s2]).unwrap();
+    assert!((avg - 60.0).abs() < 0.01);
+}
+
+#[test]
+fn test_course_credits_serde_default() {
+    // Course data written before credits existed must still load.
+    let json = r#"{"id":"00000000-0000-0000-0000-000000000000","name":"Old",
+        "passing_grade":55.0,"categories":[]}"#;
+    let course: Course = serde_json::from_str(json).unwrap();
+    assert!(course.credits.is_none());
+}
+
+#[test]
+fn test_semester_counts_evaluation_progress() {
+    let mut course = Course::new("Math".to_string(), DEFAULT_PASSING_GRADE);
+    let mut cat = Category::new("Cat".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("E1".to_string(), 70.0));
+    cat.evaluations.push(Evaluation::new("E2".to_string()));
+    course.categories.push(cat);
+
+    let m = semester_with(vec![course]).metrics();
+    assert_eq!(m.graded_evaluations, 1);
+    assert_eq!(m.total_evaluations, 2);
+}

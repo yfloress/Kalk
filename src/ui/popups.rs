@@ -124,7 +124,8 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
     };
 
     // Dynamic height based on selected global policy:
-    // Content: top_sp(1) + Name(3) + sp(1) + PassingGrade(3) + sp(1) + GlobalPolicy(3) = 12
+    // Content: top_sp(1) + Name(3) + sp(1) + PassingGrade(3) + sp(1) + Credits(3)
+    //          + sp(1) + GlobalPolicy(3) = 16
     // Weighted adds: sp(1) + SemWeight(3) + sp(1) + GlobWeight(3) = 8
     // Both non-None add eligibility: sp(1) + MinGrade(3) = 4
     // Overhead: border(2)
@@ -133,7 +134,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         GlobalExamPolicy::Weighted { .. } => 8 + 4, // weights + eligibility
         GlobalExamPolicy::ReplacesWorstGrade => 4,  // eligibility only
     };
-    let popup_h = (12 + extra + help_lines_needed + 2).min(frame.area().height);
+    let popup_h = (16 + extra + help_lines_needed + 2).min(frame.area().height);
     let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -162,7 +163,9 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         Constraint::Length(1), // spacing
         Constraint::Length(3), // [3] Passing Grade field
         Constraint::Length(1), // spacing
-        Constraint::Length(3), // [5] Global Policy toggle
+        Constraint::Length(3), // [5] Credits field
+        Constraint::Length(1), // spacing
+        Constraint::Length(3), // [7] Global Policy toggle
     ];
 
     // Indices for optional fields (tracked for rendering)
@@ -211,6 +214,14 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         layout[3],
     );
 
+    render_input_field(
+        frame,
+        m.credits_label,
+        &app.edit_credits,
+        app.input_field == InputField::Credits,
+        layout[5],
+    );
+
     // Global Policy toggle
     let policy_label = match &app.edit_global_policy {
         GlobalExamPolicy::None => m.global_policy_none,
@@ -222,7 +233,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         m.global_policy,
         policy_label,
         app.input_field == InputField::GlobalPolicy,
-        layout[5],
+        layout[7],
     );
 
     // -- Conditional Weighted fields --
@@ -712,7 +723,7 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
 
     // Centred popup with breathing room around the content.
     let popup_w = 62u16.min(term.width.saturating_sub(2));
-    let popup_h = 32u16.min(term.height.saturating_sub(2));
+    let popup_h = 38u16.min(term.height.saturating_sub(2));
     let x = term.width.saturating_sub(popup_w) / 2;
     let y = term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w, popup_h);
@@ -754,9 +765,16 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
         row("?", m.help_open),
         row("Esc", m.help_close_popup),
         blank(),
+        group(m.semesters),
+        row("h", m.home_open),
+        row("l / Enter", m.semester_open),
+        row("n / r / d", m.semester_manage),
+        row("J / K", m.semester_move),
+        blank(),
         group(m.help_group_navigation),
         row("k / j  ↑/↓", m.help_move_updown),
         row("h / l  ←/→", m.help_focus_lr),
+        row("h", m.home_open),
         row("Tab", m.help_cycle_focus),
         row("Home / End", m.jump_first_last),
         blank(),

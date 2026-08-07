@@ -584,6 +584,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             Focus::Courses => styled_keybindings(
                 &[
                     ("q", m.quit),
+                    ("h", m.home_open),
                     ("n", m.new),
                     ("Enter", m.edit),
                     ("d", m.delete),
@@ -721,6 +722,20 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             available_width,
         ),
         Screen::Help => styled_keybindings(&[("Esc/Enter/?", m.cancel)], t, ic, available_width),
+        // Home draws its own footer; these two are its popups.
+        Screen::Home => styled_keybindings(&[("Esc", m.cancel)], t, ic, available_width),
+        Screen::EditingSemester { .. } => styled_keybindings(
+            &[("Enter", m.confirm), ("Esc", m.cancel)],
+            t,
+            ic,
+            available_width,
+        ),
+        Screen::ConfirmDeleteSemester => styled_keybindings(
+            &[("Enter/y", m.confirm), ("Esc/n", m.cancel)],
+            t,
+            ic,
+            available_width,
+        ),
         Screen::ImportPrompt => styled_keybindings(
             &[
                 ("c", m.import_step1_copied),
