@@ -454,7 +454,7 @@ una acción que lo nombre:
     metric_in: "en",
     metric_lost: "perdido",
     semester_manage: "Nuevo / Renombrar / Eliminar",
-    home_open: "Semestres (desde Ramos)",
+    home_open: "Inicio",
     metric_status: "Estado",
     metric_progress: "Avance",
     metric_evaluations: "evaluaciones",

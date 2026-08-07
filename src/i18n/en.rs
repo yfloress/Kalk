@@ -451,7 +451,7 @@ next to an action that names it:
     metric_in: "in",
     metric_lost: "lost",
     semester_manage: "New / Rename / Delete",
-    home_open: "Semesters (from Courses)",
+    home_open: "Home",
     metric_status: "Status",
     metric_progress: "Progress",
     metric_evaluations: "evaluations",
