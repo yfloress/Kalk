@@ -16,97 +16,56 @@
 
 ---
 
-## Qué es
+Kalk responde una pregunta: **¿voy a aprobar, y qué necesito para lograrlo?**
+Le describes cómo se evalúa cada ramo y Kalk te muestra tu situación real, en
+la terminal y todo con el teclado.
 
-Kalk responde la pregunta que una planilla nunca termina de contestar:
-**¿voy a aprobar, y qué tengo que hacer al respecto?**
+- **Reglas de programas reales**: categorías con peso, descartar las peores,
+  mínimos, topes de nota, asistencia y exámenes globales.
+- **Lo que necesitas**: la nota que te falta en lo que queda, o un aviso claro
+  cuando ya no se puede aprobar.
+- **Números honestos**: lo que no tiene nota cuenta como cero, así que ves tu
+  piso, junto al mejor caso al que todavía puedes llegar.
+- **Semestres y dashboard**: promedios, créditos en riesgo y el ramo que
+  necesita atención primero.
+- **¿Y si…?**: prueba notas sin guardar nada.
+- **Importación con IA**: pasa el programa del ramo a cualquier IA y revisa
+  cada regla antes de aplicarla.
+- **Tus datos, en tu máquina**: JSON plano, un respaldo de un solo archivo para
+  cambiarte de computador, español e inglés.
 
-Le describes cómo se evalúa un ramo — sus categorías, sus ponderaciones, las
-reglas enterradas en el programa — y Kalk te va diciendo dónde estás parado. No
-es una estimación: lo que no tiene nota cuenta como cero, así que el número que
-ves es el piso, y al lado tienes el techo al que todavía puedes llegar.
-
-Corre en la terminal, todo con el teclado, y guarda tus datos como JSON plano
-en tu propia máquina.
-
-## Qué hace
-
-**Sigue un ramo como se evalúa de verdad.** Categorías con peso, evaluaciones
-dentro de ellas, y las reglas que traen los programas reales: descartar las N
-peores, medias geométricas, promedios mínimos, mínimos por evaluación, topes de
-nota, exigencias de asistencia y exámenes globales.
-
-**Te dice qué necesitas.** Para cualquier evaluación sin nota calcula la marca
-exacta que te haría pasar — y te avisa cuando ninguna nota alcanza, porque
-alguna regla ya dejó la aprobación fuera de alcance.
-
-**Conserva tus semestres.** Los anteriores se quedan, con un dashboard encima:
-promedio y techo alcanzable, cuánto de la nota sigue en juego, créditos en
-riesgo, y qué ramo necesita atención primero.
-
-**Lee un programa por ti.** El asistente de importación te entrega un prompt
-para pegar en cualquier IA junto al PDF del programa; pegas la respuesta de
-vuelta y revisas cada regla antes de aplicarla.
-
-**Habla español e inglés**, completos, intercambiables en cualquier momento.
-
-## Sobre las notas
-
-Las notas van de 0 a 100, se aprueba con 55 por defecto y es configurable por
-ramo. El redondeo sigue la regla habitual: 54.5 pasa a 55, y aprueba.
-
-Las evaluaciones sin nota siempre cuentan como cero. Es a propósito: hace que
-la nota mostrada sea tu situación real y no un pronóstico optimista.
+Las notas van de 0 a 100 y se aprueba con 55 por defecto; 54.5 sube a 55 y
+aprueba.
 
 ## Instalación
 
 ```bash
 git clone https://github.com/yfloress/Kalk.git
 cd Kalk
-./install.sh --user      # en ~/.local
+./install.sh --user
 ```
 
-O `sudo ./install.sh` para instalarlo en el sistema. El script compila Kalk si
-hace falta y deja en su lugar el binario, la entrada de escritorio y el icono;
-con `--uninstall` los quita.
+Necesitas [Rust](https://rustup.rs/) 1.85+. Una
+[Nerd Font](https://www.nerdfonts.com/) es opcional, para los iconos. Otros
+sistemas y opciones están en la [guía de instalación](docs/INSTALL_ES.md).
 
-Necesitas [Rust](https://rustup.rs/) 1.85+, y una
-[Nerd Font](https://www.nerdfonts.com/) si quieres los iconos — Kalk te
-pregunta en el primer arranque y usa Unicode simple si dices que no.
+## Uso
 
-¿Vas a trabajar en Kalk en vez de instalarlo? `nix run` lo levanta directo
-desde el código. Para las notas de macOS, Fedora, Debian y Arch, mira la
-[guía de instalación](docs/INSTALL_ES.md).
+Ejecuta `kalk` y presiona `?` para ver todos los atajos. Los primeros que vale
+la pena saber:
 
-## Cómo moverse
-
-Presiona `?` en cualquier momento para ver el mapa completo de teclas. Todo se
-alcanza sin tocar el mouse.
-
-Tus datos viven en `XDG_DATA_HOME/kalk` como JSON legible — respáldalos,
-sincronízalos o edítalos a mano si quieres.
-
-Para cambiarte de computador, presiona `e` en la pantalla de inicio: todos tus
-semestres y plantillas quedan en `~/kalk-backup-AAAA-MM-DD.json`. Copia ese
-archivo y presiona `i` en el computador nuevo. Antes de reemplazar nada, Kalk
-guarda una copia de tus datos actuales.
-
-Presiona `s` dentro de un semestre para simular: cambia notas libremente y mira
-cómo quedaría cada ramo; nada se guarda, y otra `s` deja todo como estaba. `e`
-sobre un ramo comparte su estructura, sin tus notas, como un archivo que un
-compañero puede arrastrar a la importación.
+| Tecla | Hace |
+|-------|------|
+| `n` / `Enter` / `d` | Nuevo, editar, eliminar |
+| `s` | Simular notas; otra `s` deja todo como estaba |
+| `h` | Semestres y dashboard |
+| `e` / `i` en Home | Exportar / importar todo |
 
 ## Contribuir
 
-[`AGENTS.md`](AGENTS.md) documenta la arquitectura y las convenciones que el
-código se exige a sí mismo. `nix develop` te deja el entorno completo.
+[`AGENTS.md`](AGENTS.md) explica la arquitectura y las convenciones;
+`nix develop` deja el entorno listo.
 
 ## Licencia
 
-**GNU Affero General Public License v3.0 o posterior.** Ver [LICENSE](LICENSE).
-
-<div align="center">
-
-Hecho con 🦀 Rust y ❄️ Nix
-
-</div>
+[AGPL-3.0 o posterior](LICENSE).
