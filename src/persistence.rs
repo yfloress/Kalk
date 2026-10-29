@@ -25,7 +25,8 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs::{self, File},
     io::{BufReader, BufWriter, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use uuid::Uuid;
 
@@ -101,10 +102,21 @@ enum StoredData {
     Legacy(Vec<Course>),
 }
 
+/// Why `data.json` could not be used. The file is copied to `backup` first, so
+/// the next save cannot destroy the only copy of the user's data.
+#[derive(Debug)]
+pub struct DataLoadError {
+    /// Set when the file was written by a newer Kalk with a schema this build
+    /// does not know; `None` means the file is corrupt or unreadable.
+    pub newer_version: Option<u32>,
+    /// Where the unusable file was copied. `None` if even the copy failed.
+    pub backup: Option<PathBuf>,
+}
+
 /// Load semesters from disk, migrating the v1 format if that is what is there.
 /// `legacy_semester_name` (already translated) names the semester that v1
 /// courses get wrapped into.
-pub fn load_data(legacy_semester_name: &str) -> Result<Vec<Semester>> {
+pub fn load_data(legacy_semester_name: &str) -> Result<Vec<Semester>, DataLoadError> {
     let Some(path) = data_path() else {
         return Ok(Vec::new());
     };
@@ -113,35 +125,81 @@ pub fn load_data(legacy_semester_name: &str) -> Result<Vec<Semester>> {
         return Ok(Vec::new());
     }
 
-    let file = File::open(&path).context("Failed to open data file")?;
-    let reader = BufReader::new(file);
-
-    let stored: StoredData = serde_json::from_reader(reader).context("Failed to parse data")?;
+    let stored = fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<StoredData>(&text).ok());
+    let Some(stored) = stored else {
+        return Err(DataLoadError {
+            newer_version: None,
+            backup: back_up_unusable(&path),
+        });
+    };
 
     if matches!(stored, StoredData::Legacy(_)) {
         back_up_legacy_data(&path);
     }
 
-    Ok(migrate(stored, legacy_semester_name))
+    migrate(stored, legacy_semester_name).map_err(|version| DataLoadError {
+        newer_version: Some(version),
+        backup: back_up_unusable(&path),
+    })
 }
 
 /// Bring either on-disk shape to the current one. Pure, so it is testable
-/// without touching the filesystem.
-fn migrate(stored: StoredData, legacy_semester_name: &str) -> Vec<Semester> {
+/// without touching the filesystem. Errs with the file's version when it is
+/// newer than this build: rewriting it as ours would drop what we do not know.
+fn migrate(stored: StoredData, legacy_semester_name: &str) -> Result<Vec<Semester>, u32> {
     match stored {
-        StoredData::Versioned(data) => data.semesters,
-        StoredData::Legacy(courses) if courses.is_empty() => Vec::new(),
+        StoredData::Versioned(data) if data.schema_version > DATA_SCHEMA_VERSION => {
+            Err(data.schema_version)
+        }
+        StoredData::Versioned(data) => Ok(data.semesters),
+        StoredData::Legacy(courses) if courses.is_empty() => Ok(Vec::new()),
         StoredData::Legacy(courses) => {
             let mut semester = Semester::new(legacy_semester_name.to_string(), 0);
             semester.courses = courses;
-            vec![semester]
+            Ok(vec![semester])
         }
     }
 }
 
+/// Copy a `data.json` that could not be loaded next to it, so saving cannot
+/// destroy it.
+fn back_up_unusable(path: &Path) -> Option<PathBuf> {
+    copy_aside(path, "unusable").ok()
+}
+
+/// Copy `data.json` aside before an import replaces it. `Ok(None)` when there
+/// is no file yet, so nothing to protect.
+pub fn back_up_before_import() -> std::io::Result<Option<PathBuf>> {
+    let Some(path) = data_path() else {
+        return Ok(None);
+    };
+    if !path.exists() {
+        return Ok(None);
+    }
+    copy_aside(&path, "before-import").map(Some)
+}
+
+/// Copy `path` to `data.json.<label>-<unix time>` beside it. The timestamp
+/// means a later copy never overwrites an earlier one.
+fn copy_aside(path: &Path, label: &str) -> std::io::Result<PathBuf> {
+    let backup = path.with_file_name(format!("data.json.{}-{}", label, unix_seconds()));
+    fs::copy(path, &backup)?;
+    Ok(backup)
+}
+
+/// Seconds since the Unix epoch; 0 if the clock is before it.
+pub(crate) fn unix_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
 /// Copy the v1 file aside before v2 overwrites it. Never overwrites an
 /// existing backup, so a later bad state cannot clobber a good one.
-fn back_up_legacy_data(path: &PathBuf) {
+fn back_up_legacy_data(path: &Path) {
     let backup = path.with_extension("v1.bak");
     if !backup.exists() {
         let _ = fs::copy(path, &backup);
@@ -153,34 +211,38 @@ pub fn save_data(semesters: &[Semester]) -> Result<()> {
     let Some(path) = data_path() else {
         return Ok(());
     };
+    let data = DataFile {
+        schema_version: DATA_SCHEMA_VERSION,
+        semesters: semesters.to_vec(),
+    };
+    write_json_atomic(&path, &data)
+}
 
-    // Ensure directory exists
+/// Write `value` as pretty JSON to a `.tmp` sibling, then rename it over
+/// `path`, so a crash mid-write never leaves a half-written file behind.
+pub(crate) fn write_json_atomic<T: Serialize + ?Sized>(path: &Path, value: &T) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).context("Failed to create data directory")?;
     }
 
     let tmp_path = path.with_extension("tmp");
-    let file = File::create(&tmp_path).context("Failed to create temp data file")?;
+    let file = File::create(&tmp_path).context("Failed to create temp file")?;
     let mut writer = BufWriter::new(file);
 
-    let data = DataFile {
-        schema_version: DATA_SCHEMA_VERSION,
-        semesters: semesters.to_vec(),
-    };
-    serde_json::to_writer_pretty(&mut writer, &data).context("Failed to serialize data")?;
-    writer.flush().context("Failed to flush data to disk")?;
+    serde_json::to_writer_pretty(&mut writer, value).context("Failed to serialize")?;
+    writer.flush().context("Failed to flush to disk")?;
     drop(writer);
 
-    if let Err(err) = fs::rename(&tmp_path, &path) {
+    if let Err(err) = fs::rename(&tmp_path, path) {
         if path.exists() {
-            fs::remove_file(&path).context("Failed to remove existing data file")?;
-            if let Err(rename_err) = fs::rename(&tmp_path, &path) {
+            fs::remove_file(path).context("Failed to remove existing file")?;
+            if let Err(rename_err) = fs::rename(&tmp_path, path) {
                 let _ = fs::remove_file(&tmp_path);
-                return Err(rename_err).context("Failed to write data file");
+                return Err(rename_err).context("Failed to write file");
             }
         } else {
             let _ = fs::remove_file(&tmp_path);
-            return Err(err).context("Failed to write data file");
+            return Err(err).context("Failed to write file");
         }
     }
 
@@ -212,37 +274,7 @@ pub fn save_user_templates(templates: &[CourseTemplate]) -> Result<()> {
     let Some(path) = user_templates_path() else {
         return Ok(());
     };
-
-    // Ensure directory exists
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).context("Failed to create data directory")?;
-    }
-
-    let tmp_path = path.with_extension("tmp");
-    let file = File::create(&tmp_path).context("Failed to create temp user templates file")?;
-    let mut writer = BufWriter::new(file);
-
-    serde_json::to_writer_pretty(&mut writer, templates)
-        .context("Failed to serialize user templates")?;
-    writer
-        .flush()
-        .context("Failed to flush user templates to disk")?;
-    drop(writer);
-
-    if let Err(err) = fs::rename(&tmp_path, &path) {
-        if path.exists() {
-            fs::remove_file(&path).context("Failed to remove existing user templates file")?;
-            if let Err(rename_err) = fs::rename(&tmp_path, &path) {
-                let _ = fs::remove_file(&tmp_path);
-                return Err(rename_err).context("Failed to write user templates file");
-            }
-        } else {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(err).context("Failed to write user templates file");
-        }
-    }
-
-    Ok(())
+    write_json_atomic(&path, templates)
 }
 
 /// Load configuration from disk.
@@ -276,34 +308,7 @@ pub fn save_config(config: &Config) -> Result<()> {
     let Some(path) = config_path() else {
         return Ok(());
     };
-
-    // Ensure directory exists
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).context("Failed to create config directory")?;
-    }
-
-    let tmp_path = path.with_extension("tmp");
-    let file = File::create(&tmp_path).context("Failed to create temp config file")?;
-    let mut writer = BufWriter::new(file);
-
-    serde_json::to_writer_pretty(&mut writer, config).context("Failed to serialize config")?;
-    writer.flush().context("Failed to flush config to disk")?;
-    drop(writer);
-
-    if let Err(err) = fs::rename(&tmp_path, &path) {
-        if path.exists() {
-            fs::remove_file(&path).context("Failed to remove existing config file")?;
-            if let Err(rename_err) = fs::rename(&tmp_path, &path) {
-                let _ = fs::remove_file(&tmp_path);
-                return Err(rename_err).context("Failed to write config file");
-            }
-        } else {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(err).context("Failed to write config file");
-        }
-    }
-
-    Ok(())
+    write_json_atomic(&path, config)
 }
 
 #[cfg(test)]
@@ -363,7 +368,7 @@ mod tests {
     #[test]
     fn test_v1_array_is_wrapped_into_one_semester() {
         let stored: StoredData = serde_json::from_str(V1_JSON).unwrap();
-        let semesters = migrate(stored, "Current");
+        let semesters = migrate(stored, "Current").unwrap();
 
         assert_eq!(semesters.len(), 1);
         assert_eq!(semesters[0].name, "Current");
@@ -375,7 +380,7 @@ mod tests {
     #[test]
     fn test_empty_v1_array_produces_no_semester() {
         let stored: StoredData = serde_json::from_str("[]").unwrap();
-        assert!(migrate(stored, "Current").is_empty());
+        assert!(migrate(stored, "Current").unwrap().is_empty());
     }
 
     #[test]
@@ -385,7 +390,7 @@ mod tests {
              "order":3,"courses":[]}
         ]}"#;
         let stored: StoredData = serde_json::from_str(json).unwrap();
-        let semesters = migrate(stored, "Current");
+        let semesters = migrate(stored, "Current").unwrap();
 
         assert_eq!(semesters.len(), 1);
         assert_eq!(semesters[0].name, "2025-2");
@@ -405,9 +410,16 @@ mod tests {
 
         let json = serde_json::to_string(&data).unwrap();
         let stored: StoredData = serde_json::from_str(&json).unwrap();
-        let semesters = migrate(stored, "Current");
+        let semesters = migrate(stored, "Current").unwrap();
 
         assert_eq!(semesters.len(), 1);
         assert_eq!(semesters[0].courses[0].name, "Physics");
+    }
+
+    #[test]
+    fn test_newer_schema_is_refused_rather_than_rewritten() {
+        let json = r#"{"schema_version":99,"semesters":[]}"#;
+        let stored: StoredData = serde_json::from_str(json).unwrap();
+        assert_eq!(migrate(stored, "Current").unwrap_err(), 99);
     }
 }

@@ -3717,3 +3717,114 @@ fn test_the_rounding_that_makes_other_scales_wrong() {
         "this is the wrong answer the guard prevents reaching"
     );
 }
+
+// =========================================================================
+// Needed grade spread over every open evaluation
+// =========================================================================
+
+/// One category, four equal evaluations, the first graded 40.
+fn four_quizzes_first_at_40() -> Course {
+    let mut course = Course::new("Quizzes".to_string(), 55.0);
+    let mut cat = Category::new("Q".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("Q1".to_string(), 40.0));
+    for name in ["Q2", "Q3", "Q4"] {
+        cat.evaluations.push(Evaluation::new(name.to_string()));
+    }
+    course.categories.push(cat);
+    course
+}
+
+#[test]
+fn test_needed_across_open_spreads_instead_of_asking_the_impossible() {
+    // The single-evaluation solve asks 178 of Q2 with Q3 and Q4 at zero.
+    // Spread over the three left it is (54.5 - 10) / 0.75 = 59.33.
+    let needed = four_quizzes_first_at_40().needed_across_open(None);
+    assert_eq!(needed.status, NeededGradeStatus::Warning);
+    assert_eq!(needed.spread_over, 3);
+    assert!((needed.value.unwrap() - 59.33).abs() < 0.01);
+}
+
+#[test]
+fn test_needed_grade_ahead_spreads_while_others_are_open() {
+    let needed = four_quizzes_first_at_40().needed_grade_ahead(0, 1, true);
+    assert_eq!(needed.status, NeededGradeStatus::Warning);
+    assert_eq!(needed.spread_over, 3);
+}
+
+#[test]
+fn test_needed_grade_ahead_uses_the_exact_solver_for_the_last_one() {
+    let mut course = four_quizzes_first_at_40();
+    course.categories[0].evaluations[1].grade = Some(60.0);
+    course.categories[0].evaluations[2].grade = Some(60.0);
+
+    // 54.5 * 4 - 160 = 58
+    let needed = course.needed_grade_ahead(0, 3, true);
+    assert_eq!(needed.spread_over, 1);
+    assert!((needed.value.unwrap() - 58.0).abs() < 0.01);
+}
+
+#[test]
+fn test_needed_grade_ahead_reports_a_graded_eval_as_is() {
+    let needed = four_quizzes_first_at_40().needed_grade_ahead(0, 0, false);
+    assert_eq!(needed.status, NeededGradeStatus::Failure);
+    assert_eq!(needed.value, Some(40.0));
+}
+
+#[test]
+fn test_needed_across_open_fails_only_when_full_marks_cannot_pass() {
+    let mut course = four_quizzes_first_at_40();
+    for e in &mut course.categories[0].evaluations[..3] {
+        e.grade = Some(0.0);
+    }
+    let needed = course.needed_across_open(None);
+    assert_eq!(needed.status, NeededGradeStatus::Failure);
+}
+
+#[test]
+fn test_needed_across_open_succeeds_when_already_safe() {
+    let mut course = four_quizzes_first_at_40();
+    for e in &mut course.categories[0].evaluations[..3] {
+        e.grade = Some(100.0);
+    }
+    let needed = course.needed_across_open(None);
+    assert_eq!(needed.status, NeededGradeStatus::Success);
+}
+
+#[test]
+fn test_needed_across_open_points_to_the_global_when_only_it_can_save() {
+    let mut course = Course::new("Physics".to_string(), 55.0);
+    course.global_policy = GlobalExamPolicy::Weighted {
+        semester_weight: 0.7,
+        global_weight: 0.3,
+    };
+    let rules = CategoryRules {
+        minimum_average: Some(50.0),
+        on_minimum_not_met: MinimumNotMetAction::RequiresGlobal,
+        ..CategoryRules::default()
+    };
+    course.categories.push(Category::with_rules(
+        "Tests".to_string(),
+        50.0,
+        vec![Evaluation::with_grade("T1".to_string(), 10.0)],
+        rules,
+    ));
+    let mut labs = Category::new("Labs".to_string(), 50.0);
+    labs.evaluations.push(Evaluation::new("L1".to_string()));
+    course.categories.push(labs);
+
+    let needed = course.needed_across_open(None);
+    assert_eq!(needed.status, NeededGradeStatus::GlobalOnly);
+}
+
+#[test]
+fn test_needed_across_open_has_nothing_to_say_when_all_is_graded() {
+    let mut course = four_quizzes_first_at_40();
+    for e in &mut course.categories[0].evaluations {
+        e.grade = Some(70.0);
+    }
+    assert_eq!(
+        course.needed_across_open(None).status,
+        NeededGradeStatus::Info
+    );
+}

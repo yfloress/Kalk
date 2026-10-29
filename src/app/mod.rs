@@ -25,6 +25,7 @@
 
 mod actions;
 mod attendance;
+mod backup;
 mod forms;
 mod history;
 pub mod import;
@@ -50,6 +51,19 @@ use history::Snapshot;
 /// Only a starting point — the user renames it.
 fn semester_name(prefix: &str, order: u32) -> String {
     format!("{} {}", prefix, order + 1)
+}
+
+/// Status line for a `data.json` that could not be loaded, naming the copy so
+/// the user can recover it.
+fn load_error_message(err: &persistence::DataLoadError, m: &Messages) -> String {
+    let reason = match err.newer_version {
+        Some(_) => m.load_error_newer,
+        None => m.load_error,
+    };
+    match &err.backup {
+        Some(path) => format!("{} {} {}", reason, m.load_error_copied_to, path.display()),
+        None => format!("{} {}", reason, m.save_blocked),
+    }
 }
 
 // =============================================================================
@@ -106,6 +120,8 @@ pub enum Screen {
     /// Attendance for the selected course. Its own popup rather than four more
     /// rows in a course form that already fills a short terminal.
     EditingAttendance,
+    /// Read a backup file from disk and confirm replacing the library with it.
+    ImportBackup,
 }
 
 // =============================================================================
@@ -208,6 +224,9 @@ pub struct App {
     pub configured: bool,
     /// Index of the focused setting in the settings popup.
     pub selected_setting: usize,
+    /// Set when `data.json` could not be loaded nor copied aside: saving would
+    /// overwrite the user's only copy, so nothing is written this session.
+    pub save_blocked: bool,
 
     // -- AI import wizard state ----------------------------------------------
     /// Set to `true` after the user copies the prompt in step 1 so the UI can
@@ -235,6 +254,14 @@ pub struct App {
     pub import_total_weight: f64,
     /// Cached evaluation count from the parsed schema.
     pub import_total_evals: usize,
+
+    // -- Backup import --------------------------------------------------------
+    /// Path typed in the import popup; `~` is expanded when read.
+    pub backup_path: String,
+    /// Backup read from `backup_path`, waiting for a second Enter to apply.
+    pub backup_preview: Option<crate::backup::Backup>,
+    /// Why the last read failed, shown under the path.
+    pub backup_error: Option<String>,
 }
 
 impl Default for App {
@@ -297,6 +324,7 @@ impl Default for App {
             use_nerd_fonts: true,
             configured: true,
             selected_setting: 0,
+            save_blocked: false,
             import_copied: false,
             import_prompt_fullscreen: false,
             import_prompt_scroll: 0,
@@ -306,6 +334,9 @@ impl Default for App {
             import_renamed_from: None,
             import_total_weight: 0.0,
             import_total_evals: 0,
+            backup_path: String::new(),
+            backup_preview: None,
+            backup_error: None,
         }
     }
 }
@@ -331,12 +362,15 @@ impl App {
             status_severity = StatusSeverity::Warning;
         }
 
+        let mut save_blocked = false;
         let mut semesters = match persistence::load_data(&semester_name(m.semester_name_prefix, 0))
         {
             Ok(semesters) => semesters,
-            Err(_) => {
-                status_message = Some(m.load_error.to_string());
+            Err(err) => {
+                status_message = Some(load_error_message(&err, m));
                 status_severity = StatusSeverity::Error;
+                // Without a copy, the first save would destroy the only one.
+                save_blocked = err.backup.is_none();
                 Vec::new()
             }
         };
@@ -397,6 +431,7 @@ impl App {
             language,
             use_nerd_fonts,
             configured: config.configured,
+            save_blocked,
             ..Default::default()
         }
     }
@@ -441,6 +476,11 @@ impl App {
 
     /// Persist state to disk. Shows error to user via status message on failure.
     pub(crate) fn persist(&mut self) {
+        if self.save_blocked {
+            let msg = self.messages().save_blocked.to_string();
+            self.set_error(msg);
+            return;
+        }
         if self.save().is_err() {
             let msg = self.messages().save_error.to_string();
             self.set_error(msg);

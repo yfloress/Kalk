@@ -86,6 +86,11 @@ without the mouse.
 Your data lives in `XDG_DATA_HOME/kalk` as readable JSON — back it up, sync it,
 or edit it by hand if you like.
 
+To move to another computer, press `e` on the Home screen: every semester and
+template goes into `~/kalk-backup-YYYY-MM-DD.json`. Copy that file over and
+press `i` on the new machine. Your current data is copied aside before it is
+replaced.
+
 ## Contributing
 
 [`AGENTS.md`](AGENTS.md) documents the architecture and the conventions the

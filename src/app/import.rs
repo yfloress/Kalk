@@ -30,7 +30,7 @@ use crate::i18n::Messages;
 use crate::model::{
     Attendance, AttendanceAction, AveragingMethod, Category, CategoryRules, CategoryThreshold,
     Course, DEFAULT_PASSING_GRADE, Evaluation, GlobalEligibility, GlobalExamPolicy, GlobalOutcome,
-    MinimumNotMetAction,
+    MAX_GRADE, MIN_GRADE, MinimumNotMetAction,
 };
 
 /// Version of the import schema this build understands.  Bump when making
@@ -63,7 +63,7 @@ fn default_schema_version() -> u32 {
     IMPORT_SCHEMA_VERSION
 }
 fn default_passing_grade() -> f64 {
-    55.0
+    DEFAULT_PASSING_GRADE
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -155,6 +155,9 @@ pub enum ImportError {
     UnsupportedSchema(u32),
     EmptyName,
     NoCategories,
+    /// A passing grade only another scale would use (a 4 out of 7). The
+    /// grades would be on that scale too, so there is no safe way to keep it.
+    UnsupportedScale(f64),
 }
 
 impl ImportError {
@@ -172,6 +175,9 @@ impl ImportError {
             }
             ImportError::EmptyName => m.import_err_empty_name.to_string(),
             ImportError::NoCategories => m.import_err_no_categories.to_string(),
+            ImportError::UnsupportedScale(passing) => {
+                format!("{} ({})", m.import_err_unsupported_scale, passing)
+            }
         }
     }
 }
@@ -222,6 +228,9 @@ pub fn parse(raw: &str) -> Result<ImportSchema, ImportError> {
     if schema.categories.is_empty() {
         return Err(ImportError::NoCategories);
     }
+    if crate::model::is_unsupported_scale(schema.passing_grade) {
+        return Err(ImportError::UnsupportedScale(schema.passing_grade));
+    }
 
     Ok(schema)
 }
@@ -238,16 +247,7 @@ pub fn parse(raw: &str) -> Result<ImportSchema, ImportError> {
 pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &str) -> Course {
     let final_name = unique_name(schema.name.trim(), existing_names, copy_suffix);
 
-    // The prompt asks the AI to convert other scales, but a stray 1-7 grading
-    // rule would otherwise be judged with 0-100 rounding. Fall back rather
-    // than import a course whose verdicts would be wrong.
-    let passing_grade = if crate::model::is_unsupported_scale(schema.passing_grade) {
-        DEFAULT_PASSING_GRADE
-    } else {
-        schema.passing_grade
-    };
-
-    let mut course = Course::new(final_name, passing_grade);
+    let mut course = Course::new(final_name, schema.passing_grade.clamp(MIN_GRADE, MAX_GRADE));
     course.credits = schema.credits.filter(|c| *c > 0);
 
     if let Some(a) = &schema.attendance
@@ -267,8 +267,8 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
     if let Some(g) = &schema.global_exam {
         course.global_policy = match g.policy.as_str() {
             "weighted" => GlobalExamPolicy::Weighted {
-                semester_weight: g.semester_weight.unwrap_or(0.7),
-                global_weight: g.global_weight.unwrap_or(0.3),
+                semester_weight: as_fraction(g.semester_weight.unwrap_or(0.7)),
+                global_weight: as_fraction(g.global_weight.unwrap_or(0.3)),
             },
             "replaces_worst" | "replaces_worst_grade" => GlobalExamPolicy::ReplacesWorstGrade,
             _ => GlobalExamPolicy::None,
@@ -301,8 +301,8 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
                 .iter()
                 .map(|ie| {
                     let mut e = Evaluation::new(ie.name.clone());
-                    e.grade = ie.grade;
-                    e.weight = ie.weight;
+                    e.grade = ie.grade.map(|g| g.clamp(MIN_GRADE, MAX_GRADE));
+                    e.weight = ie.weight.map(|w| w.clamp(0.0, 100.0));
                     e
                 })
                 .collect();
@@ -331,11 +331,19 @@ pub fn to_course(schema: &ImportSchema, existing_names: &[&str], copy_suffix: &s
                     .collect(),
             };
 
-            Category::with_rules(ic.name.clone(), ic.weight, evaluations, rules)
+            Category::with_rules(ic.name.clone(), ic.weight.max(0.0), evaluations, rules)
         })
         .collect();
 
     course
+}
+
+/// The global weights are fractions, but the course form shows them as
+/// percentages and an AI may copy "70" straight from a syllabus. Anything
+/// above 1 can only be a percentage.
+fn as_fraction(weight: f64) -> f64 {
+    let fraction = if weight > 1.0 { weight / 100.0 } else { weight };
+    fraction.clamp(0.0, 1.0)
 }
 
 /// Map a minimum-not-met action name onto the enum. Anything unrecognised
@@ -674,5 +682,42 @@ mod tests {
         assert_eq!(course.categories.len(), 1);
         assert_eq!(course.categories[0].rules.drop_lowest, 1);
         assert_eq!(course.categories[0].evaluations.len(), 2);
+    }
+
+    #[test]
+    fn another_scale_is_refused_instead_of_misjudged() {
+        let raw = r#"{"schema_version":1,"name":"Calculo","passing_grade":4,
+            "categories":[{"name":"C","weight":100}]}"#;
+        assert!(matches!(parse(raw), Err(ImportError::UnsupportedScale(_))));
+    }
+
+    #[test]
+    fn global_weights_given_as_percentages_become_fractions() {
+        let raw = r#"{"schema_version":1,"name":"Math",
+            "global_exam":{"policy":"weighted","semester_weight":70,"global_weight":30},
+            "categories":[{"name":"C","weight":100}]}"#;
+        let course = to_course(&parse(raw).unwrap(), &[], "copy");
+        match course.global_policy {
+            GlobalExamPolicy::Weighted {
+                semester_weight,
+                global_weight,
+            } => {
+                assert!((semester_weight - 0.7).abs() < 1e-9);
+                assert!((global_weight - 0.3).abs() < 1e-9);
+            }
+            other => panic!("expected a weighted global, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn out_of_range_grades_and_weights_are_clamped() {
+        let raw = r#"{"schema_version":1,"name":"Math","categories":[
+            {"name":"C","weight":-10,"weighted_evaluations":true,
+             "evaluations":[{"name":"E","grade":130,"weight":250}]}]}"#;
+        let course = to_course(&parse(raw).unwrap(), &[], "copy");
+        let cat = &course.categories[0];
+        assert_eq!(cat.weight, 0.0);
+        assert_eq!(cat.evaluations[0].grade, Some(100.0));
+        assert_eq!(cat.evaluations[0].weight, Some(100.0));
     }
 }

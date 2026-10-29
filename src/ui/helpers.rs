@@ -700,18 +700,21 @@ pub fn format_needed_grade(needed: &crate::model::NeededGrade, m: &Messages) -> 
         NeededGradeStatus::Warning => {
             if let Some(value) = needed.value {
                 let rounded_up = value.ceil() as i32;
-                if (value - value.floor()).abs() < 0.01 {
-                    format!("{} {} {}", m.need, rounded_up, m.need_grade_in_eval)
+                let scope = if needed.spread_over > 1 {
+                    format!("{} ({})", m.need_grade_in_each_open, needed.spread_over)
                 } else {
-                    format!(
-                        "{} {:.2} -> {} {}",
-                        m.need, value, rounded_up, m.need_grade_in_eval
-                    )
+                    m.need_grade_in_eval.to_string()
+                };
+                if (value - value.floor()).abs() < 0.01 {
+                    format!("{} {} {}", m.need, rounded_up, scope)
+                } else {
+                    format!("{} {:.2} -> {} {}", m.need, value, rounded_up, scope)
                 }
             } else {
                 m.cannot_pass.to_string()
             }
         }
         NeededGradeStatus::Info => m.no_evaluations.to_string(),
+        NeededGradeStatus::GlobalOnly => m.need_grade_global_only.to_string(),
     }
 }

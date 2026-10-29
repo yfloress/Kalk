@@ -137,11 +137,11 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
         let (info, info_color) = if let (Some(cat_idx), Some(eval_idx)) =
             (app.selected_category, app.selected_evaluation)
         {
-            let needed = course.needed_grade_for_evaluation(cat_idx, eval_idx, is_editing);
+            let needed = course.needed_grade_ahead(cat_idx, eval_idx, is_editing);
             let color = match needed.status {
                 NeededGradeStatus::Success => t.status_pass,
                 NeededGradeStatus::Failure => t.status_fail,
-                NeededGradeStatus::Warning => t.status_warn,
+                NeededGradeStatus::Warning | NeededGradeStatus::GlobalOnly => t.status_target,
                 NeededGradeStatus::Info => t.text_muted,
             };
             (format_needed_grade(&needed, m), color)
@@ -236,7 +236,7 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
         let needed_color = match needed.status {
             NeededGradeStatus::Success => t.status_pass,
             NeededGradeStatus::Failure => t.status_fail,
-            NeededGradeStatus::Warning => t.status_warn,
+            NeededGradeStatus::Warning | NeededGradeStatus::GlobalOnly => t.status_target,
             NeededGradeStatus::Info => t.text_muted,
         };
         let needed_line = Paragraph::new(Line::from(vec![

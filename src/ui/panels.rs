@@ -306,9 +306,20 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
             category.evaluations.len()
         )
     };
+    // The name column is as wide as the longest name, not the whole panel:
+    // stretched, it pushed each grade to the far edge, away from its name.
+    let name_w = category
+        .evaluations
+        .iter()
+        .map(|e| e.name.chars().count())
+        .chain(std::iter::once(m.name.chars().count()))
+        .max()
+        .unwrap_or(0)
+        .clamp(6, 40) as u16
+        + 2;
     let mut col_widths: Vec<Constraint> = vec![
         Constraint::Length(3),
-        Constraint::Min(6),
+        Constraint::Length(name_w),
         Constraint::Length(5),
     ];
     if has_eval_weights {
@@ -318,6 +329,8 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
         let status_w = if narrow_evals { 3 } else { 10 };
         col_widths.push(Constraint::Min(status_w));
     }
+    // Takes up the slack so the columns above keep their widths.
+    col_widths.push(Constraint::Min(0));
     let table = Table::new(rows, col_widths).header(header_row).block(
         Block::default()
             .title(title)
@@ -423,7 +436,7 @@ fn draw_virtual_global_panel(frame: &mut Frame, app: &App, area: Rect) {
                 ]));
             }
         }
-        NeededGradeStatus::Info => {}
+        NeededGradeStatus::Info | NeededGradeStatus::GlobalOnly => {}
     }
 
     // 3. Result after global (when grade has been entered)
@@ -496,32 +509,42 @@ fn draw_virtual_global_panel(frame: &mut Frame, app: &App, area: Rect) {
 // Footer
 // =============================================================================
 
+/// Show the pending status message in place of the footer. Returns whether
+/// there was one, so the caller knows to skip its keybinding row.
+///
+/// Colour is driven by `status_severity` so the banner works correctly in
+/// every supported language (a string-prefix check like `starts_with("Error")`
+/// would not match localised messages such as "Advertencia").
+pub(super) fn draw_status_banner(frame: &mut Frame, app: &App, area: Rect) -> bool {
+    let t = theme();
+    let Some(ref status) = app.status_message else {
+        return false;
+    };
+    let color = match app.status_severity {
+        crate::app::StatusSeverity::Error => t.status_fail,
+        crate::app::StatusSeverity::Warning => t.status_warn,
+        crate::app::StatusSeverity::Info => t.status_info,
+    };
+
+    let footer = Paragraph::new(status.as_str())
+        .style(Style::default().fg(color).add_modifier(Modifier::BOLD))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(t.border_type)
+                .border_style(Style::default().fg(color)),
+        );
+    frame.render_widget(footer, area);
+    true
+}
+
 pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let t = theme();
     // Inner width = total width minus 2 border columns
     let available_width = area.width.saturating_sub(2);
 
-    // If there's a status message (info/warning/error), show it prominently.
-    // Colour is driven by `status_severity` so the banner works correctly in
-    // every supported language (a string-prefix check like `starts_with("Error")`
-    // would not match localised messages such as "Advertencia").
-    if let Some(ref status) = app.status_message {
-        let color = match app.status_severity {
-            crate::app::StatusSeverity::Error => t.status_fail,
-            crate::app::StatusSeverity::Warning => t.status_warn,
-            crate::app::StatusSeverity::Info => t.status_info,
-        };
-
-        let footer = Paragraph::new(status.as_str())
-            .style(Style::default().fg(color).add_modifier(Modifier::BOLD))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(t.border_type)
-                    .border_style(Style::default().fg(color)),
-            );
-        frame.render_widget(footer, area);
+    if draw_status_banner(frame, app, area) {
         return;
     }
 
@@ -661,7 +684,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ),
         Screen::Help => styled_keybindings(&[("Esc/Enter/?", m.cancel)], t, available_width),
         // Home draws its own footer; these two are its popups.
-        Screen::Home | Screen::Welcome | Screen::WelcomeFonts => {
+        Screen::Home | Screen::Welcome | Screen::WelcomeFonts | Screen::ImportBackup => {
             styled_keybindings(&[("Esc", m.cancel)], t, available_width)
         }
         Screen::EditingAttendance => styled_keybindings(

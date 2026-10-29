@@ -78,7 +78,7 @@ impl App {
 
     /// Point the course/category/evaluation cursors at something valid for the
     /// semester now in view.
-    fn reset_course_selection(&mut self) {
+    pub(super) fn reset_course_selection(&mut self) {
         self.selected_course = if self.courses().is_empty() {
             None
         } else {

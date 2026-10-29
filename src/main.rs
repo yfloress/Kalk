@@ -21,6 +21,7 @@
 //! Supports hierarchical grade calculation: Course -> Categories -> Evaluations.
 
 mod app;
+mod backup;
 mod clipboard;
 mod events;
 mod i18n;

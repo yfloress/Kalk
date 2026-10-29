@@ -38,6 +38,8 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
             // form fields.
             if app.screen == Screen::ImportPaste {
                 app.import_handle_paste(s);
+            } else if app.screen == Screen::ImportBackup {
+                app.import_backup_paste(s);
             }
             Ok(app.should_quit)
         }
@@ -146,6 +148,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             Screen::ImportPrompt => handle_import_prompt_keys(app, key.code),
             Screen::ImportPaste => handle_import_paste_keys(app, key.code),
             Screen::ImportPreview => handle_import_preview_keys(app, key.code),
+            Screen::ImportBackup => handle_import_backup_keys(app, key.code),
         }
     }
     Ok(app.should_quit)
@@ -532,6 +535,20 @@ fn handle_home_keys(app: &mut App, key: KeyCode) {
         KeyCode::Char('K') => app.move_semester_up(),
         KeyCode::Char('J') => app.move_semester_down(),
 
+        KeyCode::Char('e') => app.export_backup(),
+        KeyCode::Char('i') => app.start_import_backup(),
+
+        _ => {}
+    }
+}
+
+/// Backup import: a path field, then a confirmation of what it holds.
+fn handle_import_backup_keys(app: &mut App, key: KeyCode) {
+    match key {
+        KeyCode::Esc => app.cancel_import_backup(),
+        KeyCode::Enter => app.confirm_import_backup(),
+        KeyCode::Backspace => app.import_backup_backspace(),
+        KeyCode::Char(c) => app.import_backup_type(c),
         _ => {}
     }
 }

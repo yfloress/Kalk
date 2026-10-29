@@ -86,6 +86,11 @@ alcanza sin tocar el mouse.
 Tus datos viven en `XDG_DATA_HOME/kalk` como JSON legible — respáldalos,
 sincronízalos o edítalos a mano si quieres.
 
+Para cambiarte de computador, presiona `e` en la pantalla de inicio: todos tus
+semestres y plantillas quedan en `~/kalk-backup-AAAA-MM-DD.json`. Copia ese
+archivo y presiona `i` en el computador nuevo. Antes de reemplazar nada, Kalk
+guarda una copia de tus datos actuales.
+
 ## Contribuir
 
 [`AGENTS.md`](AGENTS.md) documenta la arquitectura y las convenciones que el

@@ -39,7 +39,7 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
 
     // Centred popup with breathing room around the content.
     let popup_w = 62u16.min(term.width.saturating_sub(2));
-    let popup_h = 38u16.min(term.height.saturating_sub(2));
+    let popup_h = 39u16.min(term.height.saturating_sub(2));
     let x = term.width.saturating_sub(popup_w) / 2;
     let y = term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w, popup_h);
@@ -85,6 +85,7 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
         row("l / Enter", m.semester_open),
         row("n / r / d", m.semester_manage),
         row("J / K", m.semester_move),
+        row("e / i", m.backup_manage),
         blank(),
         group(m.help_group_navigation),
         row("k / j  ↑/↓", m.help_move_updown),

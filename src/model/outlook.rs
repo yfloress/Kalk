@@ -21,7 +21,7 @@
 //! zero — so these answer the other half: the best case, and what is still in
 //! play to get there.
 
-use super::{Course, GlobalExamPolicy, MAX_GRADE};
+use super::{Course, GlobalExamPolicy, MAX_GRADE, MIN_GRADE, NeededGrade};
 
 impl Course {
     /// The highest final grade still reachable: full marks on everything
@@ -130,5 +130,115 @@ impl Course {
                     .position(|e| e.grade.is_none())
                     .map(|ei| (ci, ei))
             })
+    }
+
+    /// What evaluation `(category_idx, eval_idx)` asks for, counting every
+    /// other evaluation still open.
+    ///
+    /// When it is the only one left, the exact single-evaluation solver
+    /// answers. Otherwise the requirement is spread evenly over all of them:
+    /// solving for one while the rest count as zero makes that one carry the
+    /// whole course, which early in a semester asks for 200 or more.
+    pub fn needed_grade_ahead(
+        &self,
+        category_idx: usize,
+        eval_idx: usize,
+        ignore_current_grade: bool,
+    ) -> NeededGrade {
+        let graded = self
+            .categories
+            .get(category_idx)
+            .and_then(|c| c.evaluations.get(eval_idx))
+            .is_some_and(|e| e.grade.is_some());
+        if graded && !ignore_current_grade {
+            return self.needed_grade_for_evaluation(category_idx, eval_idx, false);
+        }
+
+        if self.open_evaluations(Some((category_idx, eval_idx))).len() <= 1 {
+            return self.needed_grade_for_evaluation(category_idx, eval_idx, ignore_current_grade);
+        }
+        self.needed_across_open(Some((category_idx, eval_idx)))
+    }
+
+    /// The even grade needed on every ungraded evaluation (plus `target`, if
+    /// given) to pass without the global exam.
+    pub fn needed_across_open(&self, target: Option<(usize, usize)>) -> NeededGrade {
+        let open = self.open_evaluations(target);
+        if open.is_empty() {
+            return NeededGrade::info();
+        }
+        let passes_at = |grade: f64| self.passes_with_open_at(&open, grade);
+
+        if passes_at(MIN_GRADE) {
+            return NeededGrade::success(0.0).spread_over(open.len());
+        }
+        if !passes_at(MAX_GRADE) {
+            // No grade passes the semester outright. Either the global can
+            // still rescue it or nothing can.
+            return if self.is_unrecoverable() {
+                NeededGrade::failure(None)
+            } else {
+                NeededGrade::global_only()
+            };
+        }
+
+        // Raising grades never lowers the final grade nor breaks a rule, so
+        // the pass/fail boundary is a single point and bisection finds it.
+        let (mut low, mut high) = (MIN_GRADE, MAX_GRADE);
+        for _ in 0..30 {
+            let mid = (low + high) / 2.0;
+            if passes_at(mid) {
+                high = mid;
+            } else {
+                low = mid;
+            }
+        }
+        NeededGrade::warning(high).spread_over(open.len())
+    }
+
+    /// Every ungraded evaluation as `(category, evaluation)`, plus `target`
+    /// when it exists and is not already among them.
+    fn open_evaluations(&self, target: Option<(usize, usize)>) -> Vec<(usize, usize)> {
+        let mut open: Vec<(usize, usize)> = self
+            .categories
+            .iter()
+            .enumerate()
+            .flat_map(|(ci, category)| {
+                category
+                    .evaluations
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, e)| e.grade.is_none())
+                    .map(move |(ei, _)| (ci, ei))
+            })
+            .collect();
+
+        if let Some((ci, ei)) = target
+            && self
+                .categories
+                .get(ci)
+                .is_some_and(|c| ei < c.evaluations.len())
+            && !open.contains(&(ci, ei))
+        {
+            open.push((ci, ei));
+        }
+        open
+    }
+
+    /// Whether the course passes without the global exam when every
+    /// evaluation in `open` scores `grade` and the rest keep theirs.
+    pub(super) fn passes_with_open_at(&self, open: &[(usize, usize)], grade: f64) -> bool {
+        let mut probe = self.clone();
+        for &(ci, ei) in open {
+            if let Some(evaluation) = probe
+                .categories
+                .get_mut(ci)
+                .and_then(|c| c.evaluations.get_mut(ei))
+            {
+                evaluation.grade = Some(grade);
+            }
+        }
+        let result = probe.compute_grade();
+        probe.is_passing_grade(result.grade) && !result.needs_global
     }
 }

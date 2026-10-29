@@ -358,7 +358,8 @@ fn average_row(m: &crate::i18n::Messages, t: &Theme, metrics: &SemesterMetrics) 
     Line::from(spans)
 }
 
-/// "Physics (41) \u{b7} needs 72 in C3", or a plain note when it is already lost.
+/// "Physics (41) \u{b7} needs 62 in each pending one", or a plain note when it
+/// is already lost.
 fn critical_detail(course: &Course, m: &crate::i18n::Messages) -> String {
     let grade = match course.final_grade() {
         Some(g) => format!("{}  ({:.0})", course.name, Course::round_grade(g)),
@@ -369,30 +370,32 @@ fn critical_detail(course: &Course, m: &crate::i18n::Messages) -> String {
         return format!("{}  \u{b7}  {}", grade, m.metric_lost);
     }
 
-    // What the next untaken evaluation would have to score.
-    let Some((ci, ei)) = course.next_ungraded() else {
-        return grade;
-    };
-    let needed = course.needed_grade_for_evaluation(ci, ei, true);
-    let (Some(value), Some(name)) = (
-        needed.value,
-        course
-            .categories
-            .get(ci)
-            .and_then(|c| c.evaluations.get(ei))
-            .map(|e| e.name.as_str()),
-    ) else {
-        return grade;
-    };
-
-    if matches!(needed.status, NeededGradeStatus::Failure) {
-        return format!("{}  \u{b7}  {}", grade, m.metric_lost);
+    // What everything still open has to score, spread evenly.
+    let needed = course.needed_across_open(None);
+    match needed.status {
+        NeededGradeStatus::Warning => {
+            let Some(value) = needed.value else {
+                return grade;
+            };
+            let scope = match course.next_ungraded() {
+                Some((ci, ei)) if needed.spread_over == 1 => course
+                    .categories
+                    .get(ci)
+                    .and_then(|c| c.evaluations.get(ei))
+                    .map(|e| format!("{} {}", m.metric_in, e.name))
+                    .unwrap_or_default(),
+                _ => m.metric_in_each_open.to_string(),
+            };
+            format!(
+                "{}  \u{b7}  {} {:.0} {}",
+                grade,
+                m.metric_needs,
+                value.ceil(),
+                scope
+            )
+        }
+        _ => grade,
     }
-
-    format!(
-        "{}  \u{b7}  {} {:.0} {} {}",
-        grade, m.metric_needs, value, m.metric_in, name
-    )
 }
 
 /// Drop the most expendable rows until the summary fits `budget`, keeping the
@@ -662,6 +665,11 @@ fn draw_wordmark(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
+    // Home is where a session starts, so a load error must surface here.
+    if super::panels::draw_status_banner(frame, app, area) {
+        return;
+    }
+
     let m = app.messages();
     let t = theme();
 
@@ -672,6 +680,8 @@ fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
         ("Enter", m.semester_open),
         ("n", m.semester_new),
         ("d", m.semester_delete),
+        ("e", m.backup_export),
+        ("i", m.backup_import),
         ("Esc", m.help_close_popup),
         ("?", m.help_open),
     ];

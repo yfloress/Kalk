@@ -24,6 +24,7 @@
 //! All calculation logic lives in `model/` — this module only formats and renders.
 
 mod attendance_popup;
+mod backup_popup;
 mod eval_popups;
 mod help_popup;
 pub(crate) mod helpers;
@@ -78,12 +79,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
     // popups belong on top of Home — not on top of the three-panel view.
     if matches!(
         app.screen,
-        Screen::Home | Screen::EditingSemester { .. } | Screen::ConfirmDeleteSemester
+        Screen::Home
+            | Screen::EditingSemester { .. }
+            | Screen::ConfirmDeleteSemester
+            | Screen::ImportBackup
     ) {
         home::draw_home(frame, app);
         match &app.screen {
             Screen::EditingSemester { is_new } => draw_semester_popup(frame, app, *is_new),
             Screen::ConfirmDeleteSemester => draw_delete_semester_popup(frame, app),
+            Screen::ImportBackup => backup_popup::draw_import_backup_popup(frame, app),
             _ => {}
         }
         return;
@@ -164,6 +169,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::Home
         | Screen::EditingSemester { .. }
         | Screen::ConfirmDeleteSemester
+        | Screen::ImportBackup
         | Screen::Welcome
         | Screen::WelcomeFonts
         | Screen::Main => {}
@@ -268,7 +274,9 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
     let items: Vec<ListItem> = app
         .courses()
         .iter()
-        .map(|c| {
+        .enumerate()
+        .map(|(idx, c)| {
+            let muted = t.muted_on(app.selected_course == Some(idx));
             let true_color = match c.outcome() {
                 CourseOutcome::NoData => t.text_muted,
                 CourseOutcome::Passing => t.status_pass,
@@ -300,7 +308,7 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
             if total_count > 0 {
                 spans.push(Span::styled(
                     format!(" {}/{}", graded_count, total_count),
-                    Style::default().fg(t.text_muted),
+                    Style::default().fg(muted),
                 ));
             }
             ListItem::new(Line::from(spans))
@@ -353,9 +361,8 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Header with weight info
-            Constraint::Length(3), // Course average
-            Constraint::Length(1), // Outlook: ceiling, margin, weight in play
+            Constraint::Length(3), // Header: passing grade and weight check
+            Constraint::Length(4), // Course average, then the outlook under it
             Constraint::Min(0),    // Category list
         ])
         .split(area);
@@ -370,14 +377,24 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     };
 
     let validation_msg = format_weight_validation(&validation, m);
-    let total_w = course.total_weight().abs();
-    let header_text = format!(
-        "{:.0} · {:.0}% · {}",
-        course.passing_grade, total_w, validation_msg
-    );
+    let weights_text = match validation {
+        WeightValidation::Valid => {
+            format!("{:.0}% {}", course.total_weight().abs(), validation_msg)
+        }
+        _ => validation_msg,
+    };
+    let label = Style::default().fg(t.text_muted);
+    let header_line = Line::from(vec![
+        Span::styled(format!("{} ", m.header_passes_with), label),
+        Span::styled(
+            format!("{:.0}", course.passing_grade),
+            Style::default().fg(t.text_primary),
+        ),
+        Span::styled(format!("  \u{b7}  {} ", m.header_weights), label),
+        Span::styled(weights_text, Style::default().fg(validation_color)),
+    ]);
 
-    let header = Paragraph::new(header_text)
-        .style(Style::default().fg(validation_color))
+    let header = Paragraph::new(header_line)
         .alignment(Alignment::Center)
         .block(
             Block::default()
@@ -403,18 +420,11 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_type(t.border_type)
         .border_style(Style::default().fg(avg_color));
-    let avg_widget = Paragraph::new(avg_line).block(avg_block);
+    // Where the course can still end up, under the grade it starts from. The
+    // average is the floor, so without this the ceiling is only visible from
+    // the Home dashboard, one level away from the course in view.
+    let avg_widget = Paragraph::new(vec![avg_line, outlook_line(course, m)]).block(avg_block);
     frame.render_widget(avg_widget, chunks[1]);
-
-    // Where the course can still end up. The average above is the floor, so
-    // without this the ceiling is only visible from the Home dashboard — one
-    // level away from the course the user is actually looking at.
-    frame.render_widget(
-        Paragraph::new(outlook_line(course, m))
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(t.text_muted)),
-        chunks[2],
-    );
 
     // Category list — use grade_result to show failed minimums and eval violations
     let passing_grade = course.passing_grade;
@@ -426,6 +436,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
         .iter()
         .enumerate()
         .map(|(cat_idx, cat)| {
+            let muted = t.muted_on(app.selected_category == Some(cat_idx));
             let avg = cat
                 .average_grade()
                 .map(|g| format!("{:.1}", g))
@@ -512,10 +523,7 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
             let mut avg_spans = vec![
                 Span::raw(format!("    {}: ", m.avg)),
                 Span::styled(avg, Style::default().fg(avg_color)),
-                Span::styled(
-                    format!(" · {}", progress),
-                    Style::default().fg(t.text_muted),
-                ),
+                Span::styled(format!(" · {}", progress), Style::default().fg(muted)),
             ];
             if let Some(fm) = failed_min {
                 // In narrow mode, show a short hint; in wide mode, show full text
@@ -545,6 +553,8 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
 
     // Virtual "Global" category row — shown when the course needs a global exam
     if app.shows_virtual_global() {
+        // The virtual row sits right after the real categories.
+        let muted = t.muted_on(app.selected_category == Some(course.categories.len()));
         let global_grade_text = match course.global_exam_grade {
             Some(g) => format!("{:.1}", g),
             None => "-".to_string(),
@@ -622,14 +632,14 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
                     .add_modifier(Modifier::BOLD)
                     .fg(global_color),
             ),
-            Span::styled(global_policy_hint, Style::default().fg(t.text_muted)),
+            Span::styled(global_policy_hint, Style::default().fg(muted)),
         ];
         let avg_spans = vec![
             Span::raw(format!("    {}: ", m.grade)),
             Span::styled(global_grade_text, Style::default().fg(global_color)),
             Span::styled(
                 format!(" · {}{}", progress, needed_hint),
-                Style::default().fg(t.text_muted),
+                Style::default().fg(muted),
             ),
         ];
         items.push(ListItem::new(vec![
@@ -658,5 +668,5 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     let mut state = ListState::default();
     state.select(app.selected_category);
 
-    frame.render_stateful_widget(list, chunks[3], &mut state);
+    frame.render_stateful_widget(list, chunks[2], &mut state);
 }

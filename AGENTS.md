@@ -32,12 +32,14 @@ src/
 │   ├── input.rs     # InputField enum and form-field focus/toggle cycling
 │   ├── status.rs    # StatusSeverity and the status-message setters
 │   ├── history.rs   # Undo/redo snapshots (captures all semesters)
+│   ├── backup.rs    # Export / import of the whole library
 │   └── import.rs    # AI import wizard
 ├── model/
-│   ├── mod.rs       # Evaluation, Course, CourseOutcome, NeededGrade, WeightValidation, templates
+│   ├── mod.rs       # Evaluation, Course, CourseOutcome, WeightValidation, templates
+│   ├── needed.rs    # NeededGrade and the single-evaluation solver
 │   ├── category.rs  # Category, CategoryRules, AveragingMethod, MinimumNotMetAction
 │   ├── semester.rs  # Semester, SemesterMetrics, cumulative_average
-│   ├── outlook.rs   # Best case, margin, pending weight, next ungraded
+│   ├── outlook.rs   # Best case, margin, pending weight, grade needed across what is left
 │   ├── attendance.rs # Attendance record, percentage and consequence
 │   ├── global.rs    # Global exam grade computation
 │   └── tests.rs     # All model unit tests (cfg(test) only)
@@ -46,10 +48,12 @@ src/
 │   ├── home.rs      # Home screen: semester list, dashboard metrics, semester popups
 │   ├── welcome.rs   # First-run wizard rendering
 │   ├── attendance_popup.rs # Attendance popup rendering
+│   ├── backup_popup.rs # Backup import popup
 │   ├── panels.rs    # Evaluations panel and footer rendering
 │   ├── popups.rs    # Popup dialogs (template, course, category, delete, language, save-template)
 │   ├── eval_popups.rs # Evaluation popup, global grade entry, bulk-add evaluations
 │   └── helpers.rs   # Shared rendering helpers (input fields, toggles) and formatting functions
+├── backup.rs        # Backup file format, paths and validation
 ├── templates.rs     # Built-in course templates (language-aware)
 ├── events.rs        # Keyboard event handling and dispatch
 ├── i18n/
@@ -85,10 +89,17 @@ src/
 - **`needed_grade_for_evaluation` must never promise a rescue a ceiling
   forbids.** It wraps the solver and downgrades an achievable answer to
   `Failure` when even full marks could not pass.
+- **The UI asks `needed_grade_ahead` / `needed_across_open`, not the
+  single-evaluation solver.** With other evaluations still open, solving for one
+  while the rest count as zero asks for 200+; the spread answer is the even
+  grade needed on everything left.
+- **A `data.json` that fails to load is copied aside before anything is
+  saved**, and saving is blocked if the copy fails. Never fall back to an empty
+  library that the next save writes over the user's data.
 - **`data.json` is versioned.** Changing the on-disk shape means bumping
   `DATA_SCHEMA_VERSION` and extending `migrate()` in `persistence.rs`.
 - **Domain logic lives in `model/`** — grade calculations, averages, weight validation, needed-grade formulas. Never put math in `ui/`.
-- **`model/mod.rs`** owns Course, Evaluation, NeededGrade, WeightValidation, and template structs.
+- **`model/mod.rs`** owns Course, Evaluation, WeightValidation, and template structs; **`model/needed.rs`** owns NeededGrade and the single-evaluation solver.
 - **`model/category.rs`** owns Category, CategoryRules, and related enums (AveragingMethod, MinimumNotMetAction).
 - **`model/tests.rs`** contains all model unit tests — tests are separated from production code.
 - **`ui/` only renders** — it reads state from `App` and formats for display. No mutations, no calculations beyond formatting strings.

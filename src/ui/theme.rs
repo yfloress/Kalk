@@ -41,7 +41,7 @@ const TEXT: Color = Color::Rgb(0xcd, 0xd6, 0xf4);
 const FLAMINGO: Color = Color::Rgb(0xf2, 0xcd, 0xcd);
 const RED: Color = Color::Rgb(0xf3, 0x8b, 0xa8);
 const PEACH: Color = Color::Rgb(0xfa, 0xb3, 0x87);
-const YELLOW: Color = Color::Rgb(0xf9, 0xe2, 0xaf);
+const AMBER: Color = Color::Rgb(0xf5, 0xb9, 0x5f);
 const GREEN: Color = Color::Rgb(0xa6, 0xe3, 0xa1);
 const SAPPHIRE: Color = Color::Rgb(0x74, 0xc7, 0xec);
 const BLUE: Color = Color::Rgb(0x89, 0xb4, 0xfa);
@@ -50,7 +50,6 @@ const MAUVE: Color = Color::Rgb(0xcb, 0xa6, 0xf7);
 
 /// A complete semantic colour theme used by every UI component.
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
 pub struct Theme {
     // -- Borders ----------------------------------------------------------
     /// Border colour for the currently focused panel.
@@ -75,6 +74,8 @@ pub struct Theme {
     pub status_fail: Color,
     /// Warning colour (weights under 100%, approaching limits).
     pub status_warn: Color,
+    /// A grade still to reach, such as the one needed to pass.
+    pub status_target: Color,
     /// Informational / accent colour (active rules, toggles).
     pub status_info: Color,
 
@@ -85,8 +86,6 @@ pub struct Theme {
     // -- Highlight --------------------------------------------------------
     /// Background colour for the selected/highlighted item in lists.
     pub highlight_bg: Color,
-    /// Foreground colour when an item is highlighted.
-    pub highlight_fg: Color,
 
     /// Subtle alternating row background for tabular views (zebra striping).
     pub zebra_bg: Color,
@@ -140,7 +139,8 @@ pub const DEFAULT_THEME: Theme = Theme {
     // Semantic status — standard Catppuccin accent mapping
     status_pass: GREEN,
     status_fail: RED,
-    status_warn: YELLOW,
+    status_warn: AMBER,
+    status_target: LAVENDER,
     status_info: SAPPHIRE,
 
     // Special — Peach (orange) for rule overrides (alarm/warning semantics)
@@ -148,7 +148,6 @@ pub const DEFAULT_THEME: Theme = Theme {
 
     // Highlight — Surface 2 bg keeps items readable
     highlight_bg: SURFACE2,
-    highlight_fg: TEXT,
 
     // Zebra striping — a touch lighter than the terminal base so alternating
     // rows are scannable without looking selected.
@@ -180,6 +179,18 @@ pub const DEFAULT_THEME: Theme = Theme {
 ///
 /// Currently only `DEFAULT_THEME` exists; this function is the single point of
 /// access so that future theme-switching only requires changing this function.
+impl Theme {
+    /// Muted text for a list row. On the selected row it steps up to the
+    /// secondary colour: muted on the highlight background is unreadable.
+    pub fn muted_on(&self, selected: bool) -> Color {
+        if selected {
+            self.text_secondary
+        } else {
+            self.text_muted
+        }
+    }
+}
+
 pub fn theme() -> &'static Theme {
     &DEFAULT_THEME
 }

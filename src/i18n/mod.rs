@@ -68,6 +68,8 @@ pub struct Messages {
 
     // Weight validation
     pub weights_ok: &'static str,
+    pub header_passes_with: &'static str,
+    pub header_weights: &'static str,
     pub weights_warning: &'static str,
     pub weights_error: &'static str,
     pub no_categories: &'static str,
@@ -162,6 +164,9 @@ pub struct Messages {
     pub save_template_error: &'static str,
     pub config_save_error: &'static str,
     pub load_error: &'static str,
+    pub load_error_newer: &'static str,
+    pub load_error_copied_to: &'static str,
+    pub save_blocked: &'static str,
     pub load_template_error: &'static str,
     pub config_load_warning: &'static str,
 
@@ -174,6 +179,8 @@ pub struct Messages {
     pub need_grade_impossible: &'static str,
     pub need_grade_any: &'static str,
     pub need_grade_in_eval: &'static str,
+    pub need_grade_in_each_open: &'static str,
+    pub need_grade_global_only: &'static str,
 
     // Category rules labels
     pub advanced_rules: &'static str,
@@ -307,6 +314,7 @@ pub struct Messages {
     pub import_err_schema_version: &'static str,
     pub import_err_empty_name: &'static str,
     pub import_err_no_categories: &'static str,
+    pub import_err_unsupported_scale: &'static str,
     pub import_imported_ok: &'static str,
     pub import_copy_suffix: &'static str,
     pub import_renamed_to: &'static str,
@@ -348,6 +356,7 @@ pub struct Messages {
     pub metric_unrecoverable: &'static str,
     pub metric_needs: &'static str,
     pub metric_in: &'static str,
+    pub metric_in_each_open: &'static str,
     pub metric_lost: &'static str,
     pub semester_manage: &'static str,
     pub home_open: &'static str,
@@ -378,6 +387,28 @@ pub struct Messages {
     pub metric_critical: &'static str,
     pub metric_cumulative: &'static str,
     pub metric_no_data: &'static str,
+
+    // Backup (export / import everything)
+    pub backup_export: &'static str,
+    pub backup_import: &'static str,
+    pub backup_manage: &'static str,
+    pub backup_path_label: &'static str,
+    pub backup_import_explain: &'static str,
+    pub backup_read: &'static str,
+    pub backup_replace: &'static str,
+    pub backup_replace_warning: &'static str,
+    pub backup_semesters: &'static str,
+    pub backup_templates: &'static str,
+    pub backup_exported_to: &'static str,
+    pub backup_imported: &'static str,
+    pub backup_previous_kept_in: &'static str,
+    pub backup_err_not_found: &'static str,
+    pub backup_err_not_a_backup: &'static str,
+    pub backup_err_newer: &'static str,
+    pub backup_err_empty: &'static str,
+    pub backup_err_no_home: &'static str,
+    pub backup_err_write: &'static str,
+    pub backup_err_safety_copy: &'static str,
 }
 
 mod en;
@@ -434,6 +465,10 @@ mod tests {
                 m.semester_delete,
                 m.welcome_next,
                 m.welcome_start,
+                m.backup_export,
+                m.backup_import,
+                m.backup_read,
+                m.backup_replace,
             ] {
                 assert!(!label.contains(':'), "`{label}` embeds its key");
                 for key in ["Enter", "Esc", "Ctrl", "Tab", "Space"] {
