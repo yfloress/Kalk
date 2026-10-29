@@ -46,7 +46,7 @@ pub struct Snapshot {
 
 impl App {
     /// Capture the current state into a snapshot.
-    fn snapshot(&self) -> Snapshot {
+    pub(super) fn snapshot(&self) -> Snapshot {
         Snapshot {
             semesters: self.semesters.clone(),
             selected_semester: self.selected_semester,
@@ -58,7 +58,7 @@ impl App {
     }
 
     /// Restore data and selection from a snapshot.
-    fn restore(&mut self, snap: Snapshot) {
+    pub(super) fn restore(&mut self, snap: Snapshot) {
         self.semesters = snap.semesters;
         self.selected_semester = snap
             .selected_semester

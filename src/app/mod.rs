@@ -31,6 +31,8 @@ mod history;
 pub mod import;
 mod input;
 mod semesters;
+mod share;
+mod simulation;
 mod status;
 mod welcome;
 
@@ -159,6 +161,8 @@ pub struct App {
     pub status_message: Option<String>,
     /// Severity of the current `status_message` — controls its colour.
     pub status_severity: StatusSeverity,
+    /// When the message appeared, so a keypress cannot clear it unread.
+    pub status_since: Option<std::time::Instant>,
 
     /// Undo stack: snapshots taken before each mutating action.
     pub undo_stack: Vec<Snapshot>,
@@ -262,6 +266,9 @@ pub struct App {
     pub backup_preview: Option<crate::backup::Backup>,
     /// Why the last read failed, shown under the path.
     pub backup_error: Option<String>,
+
+    /// Set while in "what if" mode: nothing is saved until it ends.
+    pub simulation: Option<simulation::Simulation>,
 }
 
 impl Default for App {
@@ -287,6 +294,7 @@ impl Default for App {
             clipboard_evaluation: None,
             status_message: None,
             status_severity: StatusSeverity::Info,
+            status_since: None,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             language,
@@ -337,6 +345,7 @@ impl Default for App {
             backup_path: String::new(),
             backup_preview: None,
             backup_error: None,
+            simulation: None,
         }
     }
 }
@@ -426,6 +435,7 @@ impl App {
             selected_semester,
             selected_course,
             selected_category,
+            status_since: status_message.as_ref().map(|_| std::time::Instant::now()),
             status_message,
             status_severity,
             language,
@@ -476,6 +486,9 @@ impl App {
 
     /// Persist state to disk. Shows error to user via status message on failure.
     pub(crate) fn persist(&mut self) {
+        if self.is_simulating() {
+            return;
+        }
         if self.save_blocked {
             let msg = self.messages().save_blocked.to_string();
             self.set_error(msg);

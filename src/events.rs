@@ -282,7 +282,6 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
         },
 
         // Delete selected item (no-op on virtual global category)
-        // Delete selected item (no-op on virtual global category)
         KeyCode::Char('d') if !app.is_on_virtual_global() => {
             app.request_delete();
         }
@@ -306,6 +305,14 @@ fn handle_main_keys(app: &mut App, key: KeyCode, modifiers: KeyModifiers) {
         KeyCode::Char('y') if app.focus == Focus::Evaluations && !app.is_on_virtual_global() => {
             app.yank_evaluation();
         }
+
+        // Share the course's structure, without grades
+        KeyCode::Char('e') if app.focus == Focus::Courses && app.current_course().is_some() => {
+            app.share_course();
+        }
+
+        // "What if" mode: edit freely, nothing is saved until it ends
+        KeyCode::Char('s') => app.toggle_simulation(),
 
         // Paste the yanked evaluation into the current category
         KeyCode::Char('p') if app.focus == Focus::Evaluations && !app.is_on_virtual_global() => {

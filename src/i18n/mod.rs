@@ -388,6 +388,20 @@ pub struct Messages {
     pub metric_cumulative: &'static str,
     pub metric_no_data: &'static str,
 
+    // "What if" simulation
+    pub simulation_badge: &'static str,
+    pub simulation_start: &'static str,
+    pub simulation_exit: &'static str,
+    pub simulation_started: &'static str,
+    pub simulation_ended: &'static str,
+    pub simulation_blocks: &'static str,
+
+    // Sharing a course
+    pub share_course: &'static str,
+    pub share_saved_to: &'static str,
+    pub share_copied: &'static str,
+    pub share_err_write: &'static str,
+
     // Backup (export / import everything)
     pub backup_export: &'static str,
     pub backup_import: &'static str,
@@ -469,6 +483,8 @@ mod tests {
                 m.backup_import,
                 m.backup_read,
                 m.backup_replace,
+                m.simulation_start,
+                m.simulation_exit,
             ] {
                 assert!(!label.contains(':'), "`{label}` embeds its key");
                 for key in ["Enter", "Esc", "Ctrl", "Tab", "Space"] {

@@ -72,7 +72,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        self.clear_status();
+        self.dismiss_status();
         self.persist();
     }
 

@@ -91,6 +91,11 @@ semestres y plantillas quedan en `~/kalk-backup-AAAA-MM-DD.json`. Copia ese
 archivo y presiona `i` en el computador nuevo. Antes de reemplazar nada, Kalk
 guarda una copia de tus datos actuales.
 
+Presiona `s` dentro de un semestre para simular: cambia notas libremente y mira
+cómo quedaría cada ramo; nada se guarda, y otra `s` deja todo como estaba. `e`
+sobre un ramo comparte su estructura, sin tus notas, como un archivo que un
+compañero puede arrastrar a la importación.
+
 ## Contribuir
 
 [`AGENTS.md`](AGENTS.md) documenta la arquitectura y las convenciones que el

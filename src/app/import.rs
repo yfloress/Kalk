@@ -24,7 +24,7 @@
 //! with freshly generated UUIDs.  Name collisions are resolved by appending
 //! a localisable "(copia)" / "(copy)" suffix.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::i18n::Messages;
 use crate::model::{
@@ -42,7 +42,7 @@ pub const IMPORT_SCHEMA_VERSION: u32 = 1;
 // Schema
 // =============================================================================
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportSchema {
     #[serde(default = "default_schema_version")]
     pub schema_version: u32,
@@ -66,7 +66,7 @@ fn default_passing_grade() -> f64 {
     DEFAULT_PASSING_GRADE
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportGlobal {
     /// One of `"none"`, `"weighted"`, `"replaces_worst"`.
     pub policy: String,
@@ -85,7 +85,7 @@ pub struct ImportGlobal {
     pub cap_if_failed: Option<f64>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportAttendance {
     #[serde(default)]
     pub required_percent: Option<f64>,
@@ -94,13 +94,13 @@ pub struct ImportAttendance {
     pub if_not_met: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportCategoryThreshold {
     pub category: String,
     pub below_average: f64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportCategory {
     pub name: String,
     pub weight: f64,
@@ -136,7 +136,7 @@ pub struct ImportCategory {
     pub evaluations: Vec<ImportEvaluation>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportEvaluation {
     pub name: String,
     #[serde(default)]

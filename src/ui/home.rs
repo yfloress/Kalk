@@ -686,7 +686,12 @@ fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
         ("?", m.help_open),
     ];
 
-    let line = styled_keybindings(&keys, t, area.width.saturating_sub(2));
+    let badge = super::panels::simulation_badge(app);
+    let width = area
+        .width
+        .saturating_sub(2)
+        .saturating_sub(badge.as_ref().map_or(0, |b| b.width() as u16 + 1));
+    let line = super::panels::with_badge(styled_keybindings(&keys, t, width), badge);
 
     let footer = Paragraph::new(line).block(
         Block::default()

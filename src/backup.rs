@@ -129,6 +129,29 @@ pub fn default_export_path() -> Option<PathBuf> {
     home_dir().map(|home| home.join(name))
 }
 
+/// Where a shared course goes: `~/kalk-course-<name>.json`, with anything
+/// that is awkward in a file name turned into dashes.
+pub fn course_share_path(course_name: &str) -> Option<PathBuf> {
+    home_dir().map(|home| home.join(format!("kalk-course-{}.json", file_slug(course_name))))
+}
+
+fn file_slug(name: &str) -> String {
+    let dashed: String = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect();
+    let slug = dashed
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if slug.is_empty() {
+        "course".to_string()
+    } else {
+        slug
+    }
+}
+
 /// The newest export in the home folder, to prefill the import path.
 pub fn latest_in_home() -> Option<PathBuf> {
     let home = home_dir()?;
@@ -221,6 +244,12 @@ mod tests {
     fn an_empty_backup_is_refused() {
         let text = r#"{"kalk_backup":1,"semesters":[]}"#;
         assert_eq!(parse(text).unwrap_err(), BackupError::Empty);
+    }
+
+    #[test]
+    fn course_names_become_tidy_file_names() {
+        assert_eq!(file_slug("Cálculo III (2026)"), "Cálculo-III-2026");
+        assert_eq!(file_slug("  / "), "course");
     }
 
     #[test]

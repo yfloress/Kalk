@@ -32,7 +32,7 @@ impl App {
             return;
         };
 
-        let data = Backup::new(&self.semesters, &self.user_templates);
+        let data = Backup::new(self.real_semesters(), &self.user_templates);
         match backup::export(&path, &data) {
             Ok(()) => self.set_status(format!(
                 "{} {}",
@@ -46,6 +46,9 @@ impl App {
     /// Open the import popup, prefilled with the newest export in the home
     /// folder: after copying the file over, that is usually the one.
     pub fn start_import_backup(&mut self) {
+        if self.refuse_while_simulating() {
+            return;
+        }
         self.backup_path = backup::latest_in_home()
             .map(|path| backup::display_path(&path))
             .unwrap_or_else(|| "~/".to_string());

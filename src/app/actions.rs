@@ -354,7 +354,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        self.clear_status();
+        self.dismiss_status();
         self.persist();
     }
 
@@ -564,6 +564,10 @@ impl App {
     /// Enter the AI import wizard at step 1 (prompt).  Called from the
     /// template selector when the synthetic AI entry is confirmed.
     pub fn start_ai_import(&mut self) {
+        if self.refuse_while_simulating() {
+            self.screen = Screen::Main;
+            return;
+        }
         self.screen = Screen::ImportPrompt;
         self.import_copied = false;
         self.import_prompt_fullscreen = false;
@@ -643,6 +647,7 @@ impl App {
     /// transitions to step 3 (preview); on failure leaves the user on step 2
     /// with `import_paste_error` populated for display.
     pub fn import_handle_paste(&mut self, raw: String) {
+        let raw = crate::app::share::read_if_path(&raw).unwrap_or(raw);
         let m = self.messages();
         match crate::app::import::parse(&raw) {
             Ok(schema) => {

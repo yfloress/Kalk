@@ -257,7 +257,7 @@ impl Course {
 
         // If already graded and we're NOT ignoring current grade, report status
         if !ignore_current_grade && let Some(grade) = eval.grade {
-            return if grade >= self.passing_grade {
+            return if self.is_passing_grade(grade) {
                 NeededGrade::success(grade)
             } else {
                 NeededGrade::failure(Some(grade))

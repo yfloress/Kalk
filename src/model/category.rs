@@ -472,9 +472,11 @@ impl Category {
         }
     }
 
-    /// Check if category average is passing, using the course's passing grade.
+    /// Check if category average is passing, using the course's passing grade
+    /// and the same rounding as the course verdict (54.5 passes at 55).
     pub fn is_passing(&self, passing_grade: f64) -> Option<bool> {
-        self.average_grade().map(|avg| avg >= passing_grade)
+        self.average_grade()
+            .map(|avg| super::Course::round_grade(avg) >= passing_grade)
     }
 
     /// Check if the minimum average requirement is met.

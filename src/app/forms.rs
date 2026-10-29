@@ -199,7 +199,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        self.clear_status();
+        self.dismiss_status();
         self.persist();
     }
 
@@ -408,7 +408,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        self.clear_status();
+        self.dismiss_status();
         self.persist();
     }
 
@@ -507,7 +507,7 @@ impl App {
         }
 
         self.screen = Screen::Main;
-        self.clear_status();
+        self.dismiss_status();
         self.persist();
     }
 
@@ -572,7 +572,7 @@ impl App {
             }
         }
         self.screen = Screen::Main;
-        self.clear_status();
+        self.dismiss_status();
         self.persist();
     }
 
@@ -590,7 +590,7 @@ impl App {
             if let Some(course) = self.courses_mut().get_mut(course_idx) {
                 course.auto_balance_weights();
             }
-            self.clear_status();
+            self.dismiss_status();
             self.persist();
         }
     }

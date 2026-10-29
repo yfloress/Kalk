@@ -21,6 +21,8 @@
 //! palette can be swapped by switching to a different `Theme` instance.
 //! The default theme uses the Catppuccin Mocha palette with rounded borders.
 
+use std::sync::OnceLock;
+
 use ratatui::style::Color;
 use ratatui::widgets::BorderType;
 
@@ -175,10 +177,6 @@ pub const DEFAULT_THEME: Theme = Theme {
     user_template: FLAMINGO,
 };
 
-/// Return a reference to the active theme.
-///
-/// Currently only `DEFAULT_THEME` exists; this function is the single point of
-/// access so that future theme-switching only requires changing this function.
 impl Theme {
     /// Muted text for a list row. On the selected row it steps up to the
     /// secondary colour: muted on the highlight background is unreadable.
@@ -189,8 +187,118 @@ impl Theme {
             self.text_muted
         }
     }
+
+    /// The same theme in the 256-colour palette, for terminals that would
+    /// otherwise render the RGB values as unrelated colours.
+    fn to_256(self) -> Self {
+        Self {
+            border_focused: indexed(self.border_focused),
+            border_unfocused: indexed(self.border_unfocused),
+            text_primary: indexed(self.text_primary),
+            text_secondary: indexed(self.text_secondary),
+            text_muted: indexed(self.text_muted),
+            status_pass: indexed(self.status_pass),
+            status_fail: indexed(self.status_fail),
+            status_warn: indexed(self.status_warn),
+            status_target: indexed(self.status_target),
+            status_info: indexed(self.status_info),
+            status_override: indexed(self.status_override),
+            highlight_bg: indexed(self.highlight_bg),
+            zebra_bg: indexed(self.zebra_bg),
+            input_active: indexed(self.input_active),
+            input_inactive: indexed(self.input_inactive),
+            footer_key: indexed(self.footer_key),
+            footer_desc: indexed(self.footer_desc),
+            footer_border: indexed(self.footer_border),
+            popup_border: indexed(self.popup_border),
+            popup_border_danger: indexed(self.popup_border_danger),
+            popup_separator: indexed(self.popup_separator),
+            weight_label: indexed(self.weight_label),
+            user_template: indexed(self.user_template),
+            border_type: self.border_type,
+        }
+    }
 }
 
+/// Map an RGB colour to the nearest of the 256 indexed colours: the 6x6x6
+/// cube or the 24-step grey ramp, whichever is closer.
+fn indexed(color: Color) -> Color {
+    match color {
+        Color::Rgb(r, g, b) => Color::Indexed(nearest_256(r, g, b)),
+        other => other,
+    }
+}
+
+fn nearest_256(r: u8, g: u8, b: u8) -> u8 {
+    const STEPS: [u8; 6] = [0, 95, 135, 175, 215, 255];
+    let level = |v: u8| {
+        STEPS
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, s)| (i32::from(**s) - i32::from(v)).abs())
+            .map_or(0, |(i, _)| i as u8)
+    };
+    let dist = |(r2, g2, b2): (u8, u8, u8)| {
+        let d = |a: u8, b: u8| (i32::from(a) - i32::from(b)).pow(2);
+        d(r, r2) + d(g, g2) + d(b, b2)
+    };
+
+    let (ri, gi, bi) = (level(r), level(g), level(b));
+    let cube = (STEPS[ri as usize], STEPS[gi as usize], STEPS[bi as usize]);
+    let cube_index = 16 + 36 * ri + 6 * gi + bi;
+
+    let mean = (u16::from(r) + u16::from(g) + u16::from(b)) / 3;
+    let grey_step = (mean.saturating_sub(8) / 10).min(23) as u8;
+    let grey = 8 + 10 * grey_step;
+    let grey_index = 232 + grey_step;
+
+    if dist((grey, grey, grey)) < dist(cube) {
+        grey_index
+    } else {
+        cube_index
+    }
+}
+
+/// Whether the terminal advertises 24-bit colour. Most that support it set
+/// `COLORTERM`; Windows Terminal does not, but sets `WT_SESSION`.
+fn supports_truecolor() -> bool {
+    let advertises = |var: &str| {
+        std::env::var(var).is_ok_and(|v| {
+            let v = v.to_ascii_lowercase();
+            v.contains("truecolor") || v.contains("24bit") || v.contains("direct")
+        })
+    };
+    advertises("COLORTERM") || advertises("TERM") || std::env::var_os("WT_SESSION").is_some()
+}
+
+/// Return a reference to the active theme: the RGB palette where the
+/// terminal supports it, its 256-colour approximation elsewhere.
 pub fn theme() -> &'static Theme {
-    &DEFAULT_THEME
+    static ACTIVE: OnceLock<Theme> = OnceLock::new();
+    ACTIVE.get_or_init(|| {
+        if supports_truecolor() {
+            DEFAULT_THEME
+        } else {
+            DEFAULT_THEME.to_256()
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_cube_and_grey_colours_map_to_themselves() {
+        assert_eq!(nearest_256(0, 0, 0), 16);
+        assert_eq!(nearest_256(255, 255, 255), 231);
+        assert_eq!(nearest_256(255, 0, 0), 196);
+        assert_eq!(nearest_256(0x58, 0x58, 0x58), 240);
+    }
+
+    #[test]
+    fn the_palette_keeps_its_hue_in_256_colours() {
+        // Catppuccin green and red must not collapse into the same index.
+        assert_ne!(nearest_256(0xa6, 0xe3, 0xa1), nearest_256(0xf3, 0x8b, 0xa8));
+    }
 }

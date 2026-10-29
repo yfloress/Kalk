@@ -233,7 +233,7 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(t.status_override)
             } else {
                 match e.grade {
-                    Some(g) if g >= passing_grade => Style::default().fg(t.status_pass),
+                    Some(g) if course.is_passing_grade(g) => Style::default().fg(t.status_pass),
                     Some(_) => Style::default().fg(t.status_fail),
                     None => Style::default().fg(t.text_muted),
                 }
@@ -538,11 +538,44 @@ pub(super) fn draw_status_banner(frame: &mut Frame, app: &App, area: Rect) -> bo
     true
 }
 
+/// The "what if" badge that leads the footer while a simulation runs, so it
+/// is never mistaken for the real, saved state.
+pub(super) fn simulation_badge(app: &App) -> Option<Span<'static>> {
+    let t = theme();
+    app.is_simulating().then(|| {
+        Span::styled(
+            format!(" {} ", app.messages().simulation_badge),
+            Style::default()
+                .fg(t.footer_border)
+                .bg(t.status_target)
+                .add_modifier(Modifier::BOLD),
+        )
+    })
+}
+
+/// Put `badge` in front of a keybinding row built for the remaining width.
+pub(super) fn with_badge<'a>(mut line: Line<'a>, badge: Option<Span<'a>>) -> Line<'a> {
+    if let Some(badge) = badge {
+        line.spans.insert(0, Span::raw(" "));
+        line.spans.insert(0, badge);
+    }
+    line
+}
+
 pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let m = app.messages();
     let t = theme();
-    // Inner width = total width minus 2 border columns
-    let available_width = area.width.saturating_sub(2);
+    let badge = simulation_badge(app);
+    // Inner width = total width minus 2 border columns, minus the badge
+    let available_width = area
+        .width
+        .saturating_sub(2)
+        .saturating_sub(badge.as_ref().map_or(0, |b| b.width() as u16 + 1));
+    let simulate = if app.is_simulating() {
+        m.simulation_exit
+    } else {
+        m.simulation_start
+    };
 
     if draw_status_banner(frame, app, area) {
         return;
@@ -561,6 +594,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("a", m.attendance_open),
                     ("Enter", m.edit),
                     ("d", m.delete),
+                    ("s", simulate),
                     ("?", m.help_open),
                 ],
                 t,
@@ -583,6 +617,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("q", m.quit),
                     ("n", m.new_eval),
                     ("Enter", m.edit),
+                    ("s", simulate),
                     ("d", m.delete),
                     ("y", m.yank),
                     ("p", m.paste),
@@ -727,7 +762,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ),
     };
 
-    let footer = Paragraph::new(line).block(
+    let footer = Paragraph::new(with_badge(line, badge)).block(
         Block::default()
             .borders(Borders::ALL)
             .border_type(t.border_type)

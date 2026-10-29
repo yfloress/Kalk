@@ -3828,3 +3828,19 @@ fn test_needed_across_open_has_nothing_to_say_when_all_is_graded() {
         NeededGradeStatus::Info
     );
 }
+
+#[test]
+fn test_category_and_graded_eval_use_the_course_rounding() {
+    // 54.5 rounds to 55, so it passes everywhere the verdict is shown.
+    let mut cat = Category::new("C".to_string(), 100.0);
+    cat.evaluations
+        .push(Evaluation::with_grade("E".to_string(), 54.5));
+    assert_eq!(cat.is_passing(55.0), Some(true));
+
+    let mut course = Course::new("X".to_string(), 55.0);
+    course.categories.push(cat);
+    assert_eq!(
+        course.needed_grade_for_evaluation(0, 0, false).status,
+        NeededGradeStatus::Success
+    );
+}

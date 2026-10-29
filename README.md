@@ -91,6 +91,11 @@ template goes into `~/kalk-backup-YYYY-MM-DD.json`. Copy that file over and
 press `i` on the new machine. Your current data is copied aside before it is
 replaced.
 
+Press `s` in a semester to simulate: change grades freely and see where each
+course would land; nothing is saved, and pressing `s` again puts everything
+back. `e` on a course shares its structure, without your grades, as a file a
+classmate can drag into the import.
+
 ## Contributing
 
 [`AGENTS.md`](AGENTS.md) documents the architecture and the conventions the

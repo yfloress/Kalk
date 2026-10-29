@@ -127,7 +127,7 @@ impl App {
         }
 
         self.screen = Screen::Home;
-        self.clear_status();
+        self.dismiss_status();
         self.persist();
     }
 

@@ -33,6 +33,8 @@ src/
 │   ├── status.rs    # StatusSeverity and the status-message setters
 │   ├── history.rs   # Undo/redo snapshots (captures all semesters)
 │   ├── backup.rs    # Export / import of the whole library
+│   ├── share.rs     # Share a course's structure (no grades) as import JSON
+│   ├── simulation.rs # "What if" mode: edits are never saved, restored on exit
 │   └── import.rs    # AI import wizard
 ├── model/
 │   ├── mod.rs       # Evaluation, Course, CourseOutcome, WeightValidation, templates
@@ -93,6 +95,9 @@ src/
   single-evaluation solver.** With other evaluations still open, solving for one
   while the rest count as zero asks for 200+; the spread answer is the even
   grade needed on everything left.
+- **Nothing is saved during a simulation.** `persist` is a no-op while
+  `App.simulation` is set; anything that reads saved data (export) must use
+  `real_semesters()`, and actions whose result would be lost refuse to run.
 - **A `data.json` that fails to load is copied aside before anything is
   saved**, and saving is blocked if the copy fails. Never fall back to an empty
   library that the next save writes over the user's data.
