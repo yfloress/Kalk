@@ -253,6 +253,7 @@ pub struct Messages {
     pub settings_nerd_fonts: &'static str,
     pub settings_nerd_fonts_desc: &'static str,
     pub settings_language: &'static str,
+    pub settings_language_desc: &'static str,
     pub settings_mouse_scroll: &'static str,
     pub settings_mouse_scroll_desc: &'static str,
     pub enabled: &'static str,

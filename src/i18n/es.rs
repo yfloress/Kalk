@@ -224,6 +224,7 @@ pub const ES: Messages = Messages {
     settings_nerd_fonts: "Iconos Nerd Font",
     settings_nerd_fonts_desc: "Usar glifos Nerd Font (requiere fuente parcheada)",
     settings_language: "Idioma",
+    settings_language_desc: "Elige el idioma de toda la interfaz de Kalk.",
     settings_mouse_scroll: "Rueda del Mouse",
     settings_mouse_scroll_desc: "Desplaza las listas con la rueda del mouse; la captura bloquea la selección de texto de la terminal.",
     enabled: "Activado",

@@ -29,12 +29,14 @@ mod eval_popups;
 mod help_popup;
 pub(crate) mod helpers;
 mod home;
+mod home_metrics;
 pub(crate) mod icons;
 pub(crate) mod keyhints;
 pub(crate) mod panels;
 mod popups;
 mod popups_import;
 mod settings_popup;
+mod surfaces;
 pub(crate) mod theme;
 mod welcome;
 

@@ -19,7 +19,7 @@ use super::*;
 use crate::app::Screen;
 use crate::i18n::Language;
 use crate::model::{Category, Evaluation};
-use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, widgets::Widget};
 
 fn render(app: &App, width: u16, height: u16) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
@@ -155,4 +155,82 @@ fn preview_scroll_accounts_for_wrapping_and_terminal_resize() {
     app.import_scroll_preview(i32::MIN, resized_limit);
     assert_eq!(app.import_preview_scroll, 0);
     assert_eq!(import_preview_max_scroll(&app, 0, 0), 0);
+}
+
+#[test]
+fn popup_surfaces_have_padding_and_a_clipped_native_shadow() {
+    let t = theme();
+    let mut buffer = Buffer::empty(Rect::new(0, 0, 24, 12));
+    let area = Rect::new(3, 2, 16, 7);
+    let popup = surfaces::popup_block("Dialog");
+    assert_eq!(popup.inner(area).x, area.x + 2);
+    popup.render(area, &mut buffer);
+    assert_eq!(buffer[(5, 4)].bg, t.popup_bg);
+    assert_eq!(buffer[(19, 5)].bg, t.shadow_bg);
+    assert_eq!(buffer[(6, 9)].bg, t.shadow_bg);
+    assert_eq!(buffer[(0, 0)], ratatui::buffer::Cell::default());
+
+    for width in 0..5 {
+        for height in 0..5 {
+            let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
+            surfaces::popup_block("Dialog").render(buffer.area, &mut buffer);
+        }
+    }
+}
+
+#[test]
+fn settings_show_aligned_values_and_keep_the_cancel_hint() {
+    for language in [Language::English, Language::Spanish] {
+        for selected_setting in 0..3 {
+            let app = App {
+                screen: Screen::Settings,
+                language,
+                selected_setting,
+                use_nerd_fonts: false,
+                mouse_scroll: true,
+                ..Default::default()
+            };
+            let buffer = render(&app, 100, 28);
+            let lines: Vec<String> = (0..28).map(|y| row_text(&buffer, y)).collect();
+            let text = lines.join("\n");
+            assert!(text.contains(app.messages().settings_nerd_fonts));
+            assert!(text.contains(app.messages().settings_mouse_scroll));
+            assert!(text.contains("[ ]"));
+            assert!(text.contains("[x]"));
+            assert!(text.contains(app.language.display_name()));
+            assert!(text.contains("Esc"));
+
+            // The native table keeps the selected setting in view on resize.
+            let buffer = render(&app, 40, 12);
+            assert!((0..12).any(|y| row_text(&buffer, y).contains("Esc")));
+        }
+    }
+}
+
+#[test]
+fn home_keeps_progress_numbers_and_course_grades_with_native_widgets() {
+    let mut course = Course::new("Mechanics".to_string(), 55.0);
+    let mut category = Category::new("Exams".to_string(), 100.0);
+    category.evaluations = (0..4)
+        .map(|i| Evaluation::new(format!("Exam {i}")))
+        .collect();
+    category.evaluations[0].grade = Some(80.0);
+    course.categories.push(category);
+    let mut app = App {
+        screen: Screen::Home,
+        ..Default::default()
+    };
+    app.courses_mut().push(course);
+    for language in [Language::English, Language::Spanish] {
+        app.language = language;
+        let buffer = render(&app, 120, 36);
+        let text = (0..36)
+            .map(|y| row_text(&buffer, y))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("1/4"));
+        assert!(text.contains("Mechanics"));
+        assert!(text.contains("20.0"));
+        assert!(text.contains("95.0"));
+    }
 }

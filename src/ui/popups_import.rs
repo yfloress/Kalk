@@ -26,6 +26,7 @@
 
 use super::helpers::centered_rect;
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::{Theme, theme};
 use crate::app::App;
 use crate::i18n::Messages;
@@ -56,16 +57,12 @@ pub fn draw_import_prompt(frame: &mut Frame, app: &App) {
     let area = centered_rect(80, 80, frame.area());
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(Line::from(Span::styled(
-            format!(" {} ", m.import_step1_title),
-            Style::default()
-                .fg(t.text_primary)
-                .add_modifier(Modifier::BOLD),
-        )))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(Line::from(Span::styled(
+        format!(" {} ", m.import_step1_title),
+        Style::default()
+            .fg(t.text_primary)
+            .add_modifier(Modifier::BOLD),
+    )));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -166,16 +163,12 @@ pub fn draw_import_paste(frame: &mut Frame, app: &App) {
     let area = centered_rect(70, 50, frame.area());
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(Line::from(Span::styled(
-            format!(" {} ", m.import_step2_title),
-            Style::default()
-                .fg(t.text_primary)
-                .add_modifier(Modifier::BOLD),
-        )))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(Line::from(Span::styled(
+        format!(" {} ", m.import_step2_title),
+        Style::default()
+            .fg(t.text_primary)
+            .add_modifier(Modifier::BOLD),
+    )));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -218,7 +211,7 @@ pub fn draw_import_paste(frame: &mut Frame, app: &App) {
 
 fn preview_areas(terminal: Rect) -> (Rect, Rect, Rect) {
     let area = centered_rect(70, 75, terminal);
-    let inner = Block::default().borders(Borders::ALL).inner(area);
+    let inner = popup_block(Line::default()).inner(area);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
@@ -426,16 +419,12 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
     let (area, body_area, hint_area) = preview_areas(frame.area());
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(Line::from(Span::styled(
-            format!(" {} ", m.import_step3_title),
-            Style::default()
-                .fg(t.text_primary)
-                .add_modifier(Modifier::BOLD),
-        )))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(Line::from(Span::styled(
+        format!(" {} ", m.import_step3_title),
+        Style::default()
+            .fg(t.text_primary)
+            .add_modifier(Modifier::BOLD),
+    )));
     frame.render_widget(block, area);
 
     let body = preview_body(app);

@@ -24,7 +24,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Clear, Paragraph},
 };
 
 use crate::app::{App, InputField};
@@ -32,20 +32,16 @@ use crate::model::AttendanceAction;
 
 use super::helpers::{centered_rect, render_input_field, render_toggle_field};
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
 
 pub fn draw_attendance_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
-    let t = theme();
 
     let area = centered_rect(55, 60, frame.area());
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(format!(" {} ", m.attendance_title))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(format!(" {} ", m.attendance_title));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 

@@ -23,6 +23,7 @@ use super::helpers::{
 };
 use super::icons::icons;
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
 use crate::app::{App, Focus, InputField};
 use crate::i18n::{Language, Messages};
@@ -32,7 +33,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
 pub fn draw_template_popup(frame: &mut Frame, app: &App) {
@@ -42,11 +43,7 @@ pub fn draw_template_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(60, 70, frame.area());
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(format!(" {} ", m.select_course_template))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(format!(" {} ", m.select_course_template));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -163,11 +160,7 @@ pub fn draw_course_popup(frame: &mut Frame, app: &App, is_new: bool) {
         format!(" {} ", m.edit_course)
     };
 
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(title);
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -388,11 +381,7 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
     } else {
         format!(" {} ", m.edit_category)
     };
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(title);
     frame.render_widget(block, area);
 
     let mut constraints = vec![
@@ -639,11 +628,7 @@ pub fn draw_save_template_popup(frame: &mut Frame, app: &App) {
     let t = theme();
     let area = centered_rect(60, 40, frame.area());
     frame.render_widget(Clear, area);
-    let block = Block::default()
-        .title(format!(" {} ", m.save_as_template_title))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(format!(" {} ", m.save_as_template_title));
     frame.render_widget(block, area);
     let inner = Layout::default()
         .direction(Direction::Vertical)
@@ -784,11 +769,7 @@ pub fn draw_language_popup(frame: &mut Frame, app: &App) {
     let ic = icons(app.use_nerd_fonts);
     let area = centered_rect(40, 30, frame.area());
     frame.render_widget(Clear, area);
-    let block = Block::default()
-        .title(format!(" {}{} ", ic.language, m.select_language))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(format!(" {}{} ", ic.language, m.select_language));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);

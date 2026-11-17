@@ -15,157 +15,110 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/agpl-3.0.html>.
 //
 
-//! Settings popup for the UI layer.
-//!
-//! Extracted from `popups.rs` to keep file sizes under the ~900-line limit.
+//! Settings rendered with Ratatui's selectable Table and shared popup surface.
 
 use crate::app::App;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Cell, Clear, Paragraph, Row, Table, TableState, Wrap},
 };
 
 use super::icons::icons;
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
-
-// =============================================================================
-// Settings Popup
-// =============================================================================
 
 pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
     let ic = icons(app.use_nerd_fonts);
-
-    let popup_w = 56u16;
-    let popup_h = 19u16;
-    let term = frame.area();
-    let x = term.x + term.width.saturating_sub(popup_w) / 2;
-    let y = term.y + term.height.saturating_sub(popup_h) / 2;
-    let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
+    let area = frame
+        .area()
+        .centered(Constraint::Length(62), Constraint::Length(16));
     frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title(format!(" {}{} ", ic.settings, m.settings))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
-
+    let block = popup_block(format!(" {}{} ", ic.settings, m.settings));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1), // padding
-            Constraint::Length(1), // setting 0: nerd fonts
-            Constraint::Length(1), // setting 1: language
-            Constraint::Length(1), // setting 2: mouse wheel
-            Constraint::Length(1), // separator
-            Constraint::Length(2), // description of selected setting
-            Constraint::Min(0),    // spacer
-            Constraint::Length(1), // hint
-        ])
-        .split(inner);
+    let chunks = Layout::vertical([
+        Constraint::Min(0),
+        Constraint::Length(1),
+        Constraint::Max(3),
+        Constraint::Length(1),
+    ])
+    .split(inner);
 
-    // --- Setting rows ---
-    struct SettingRow<'a> {
-        label: &'a str,
-        value: String,
-        value_color: ratatui::style::Color,
-    }
-
-    let rows = [
-        SettingRow {
-            label: m.settings_nerd_fonts,
-            value: if app.use_nerd_fonts {
-                m.enabled
-            } else {
-                m.disabled
-            }
-            .to_string(),
-            value_color: if app.use_nerd_fonts {
-                t.status_pass
-            } else {
-                t.text_muted
-            },
-        },
-        SettingRow {
-            label: m.settings_language,
-            value: app.language.display_name().to_string(),
-            value_color: t.status_info,
-        },
-        SettingRow {
-            label: m.settings_mouse_scroll,
-            value: if app.mouse_scroll {
-                m.enabled
-            } else {
-                m.disabled
-            }
-            .to_string(),
-            value_color: if app.mouse_scroll {
-                t.status_pass
-            } else {
-                t.text_muted
-            },
-        },
+    let boolean = |enabled: bool| {
+        let (marker, label, color) = if enabled {
+            ("[x]", m.enabled, t.status_pass)
+        } else {
+            ("[ ]", m.disabled, t.text_secondary)
+        };
+        Line::from(Span::styled(
+            format!("{marker} {label}"),
+            Style::default().fg(color),
+        ))
+    };
+    let values = [
+        boolean(app.use_nerd_fonts),
+        Line::from(Span::styled(
+            format!("< {} >", app.language.display_name()),
+            Style::default().fg(t.status_info),
+        )),
+        boolean(app.mouse_scroll),
     ];
-
-    for (i, row) in rows.iter().enumerate() {
-        let is_selected = app.selected_setting == i;
-        let row_style = if is_selected {
+    let value_width = values.iter().map(Line::width).max().unwrap_or(0) as u16;
+    let labels = [
+        m.settings_nerd_fonts,
+        m.settings_language,
+        m.settings_mouse_scroll,
+    ];
+    let rows = labels.into_iter().zip(values).map(|(label, value)| {
+        Row::new([
+            Cell::from(label).style(Style::default().fg(t.text_primary)),
+            Cell::from(value.alignment(Alignment::Right)),
+        ])
+        .bottom_margin(1)
+    });
+    let table = Table::new(rows, [Constraint::Min(0), Constraint::Length(value_width)])
+        .column_spacing(2)
+        .row_highlight_style(
             Style::default()
                 .bg(t.highlight_bg)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default()
-        };
-        let prefix = if is_selected { ic.highlight } else { "  " };
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(ic.highlight);
+    let mut state = TableState::default().with_selected(app.selected_setting);
+    frame.render_stateful_widget(table, chunks[0], &mut state);
 
-        let line = Line::from(vec![
-            Span::styled(prefix, row_style),
-            Span::styled(format!("{}: ", row.label), row_style.fg(t.text_primary)),
-            Span::styled(
-                format!("< {} >", row.value),
-                Style::default().fg(row.value_color),
-            ),
-        ]);
-        // chunks[1], chunks[2], chunks[3] for the 3 settings
-        frame.render_widget(Paragraph::new(line), chunks[1 + i]);
-    }
-
-    // --- Separator ---
-    let sep = Paragraph::new(Line::from(Span::styled(
-        "  ──────────────────────────────────────────────",
-        Style::default().fg(t.popup_separator),
-    )));
-    frame.render_widget(sep, chunks[4]);
-
-    // --- Description of selected setting ---
-    let desc_text = match app.selected_setting {
+    frame.render_widget(
+        Paragraph::new("─".repeat(chunks[1].width as usize))
+            .style(Style::default().fg(t.popup_separator)),
+        chunks[1],
+    );
+    let description = match app.selected_setting {
         0 => m.settings_nerd_fonts_desc,
-        1 => app.language.display_name(),
+        1 => m.settings_language_desc,
         2 => m.settings_mouse_scroll_desc,
         _ => "",
     };
-    let desc = Paragraph::new(Line::from(Span::styled(
-        format!("  {}", desc_text),
-        Style::default().fg(t.text_secondary),
-    )))
-    .wrap(Wrap { trim: true });
-    frame.render_widget(desc, chunks[5]);
-
+    frame.render_widget(
+        Paragraph::new(description)
+            .style(Style::default().fg(t.text_secondary))
+            .wrap(Wrap { trim: true }),
+        chunks[2],
+    );
     render_hint(
         frame,
         &[
-            ("Space/\u{2190}\u{2192}", m.toggle),
+            ("↑↓", m.help_move_updown),
+            ("Space/←→", m.toggle),
             ("Enter", m.confirm),
             ("Esc", m.cancel),
         ],
-        chunks[7],
+        chunks[3],
     );
 }

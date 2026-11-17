@@ -90,6 +90,7 @@ use ratatui::{
 
 use super::icons::icons;
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
 
 // =============================================================================
@@ -142,10 +143,7 @@ pub fn render_delete_confirmation(
     let area = Rect::new(x, y, popup_w, popup_h);
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(title_str)
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
+    let block = popup_block(title_str)
         .border_style(Style::default().fg(t.popup_border_danger))
         // Uniform breathing room: 2 cols each side, 1 row on top.
         .padding(Padding::new(2, 2, 1, 0));
@@ -427,17 +425,17 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
         ]),
     ];
 
-    let block = Block::default()
-        .title(format!(" {} ", m.help_toggle))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
+    let block = popup_block(format!(" {} ", m.help_toggle))
         .border_style(Style::default().fg(t.status_info));
 
-    let paragraph = Paragraph::new(help_lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let rows = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(inner);
+    frame.render_widget(
+        Paragraph::new(help_lines).wrap(Wrap { trim: true }),
+        rows[0],
+    );
+    render_hint(frame, &[("?", m.help_toggle)], rows[1]);
 }
 
 /// Draw a full-screen help overlay explaining every course field.
@@ -493,17 +491,17 @@ pub fn draw_course_help_overlay(frame: &mut Frame, m: &Messages) {
         ]),
     ];
 
-    let block = Block::default()
-        .title(format!(" {} ", m.help_toggle))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
+    let block = popup_block(format!(" {} ", m.help_toggle))
         .border_style(Style::default().fg(t.status_info));
 
-    let paragraph = Paragraph::new(help_lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let rows = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(inner);
+    frame.render_widget(
+        Paragraph::new(help_lines).wrap(Wrap { trim: true }),
+        rows[0],
+    );
+    render_hint(frame, &[("?", m.help_toggle)], rows[1]);
 }
 
 // =============================================================================
