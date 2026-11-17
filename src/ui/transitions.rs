@@ -19,15 +19,17 @@
 
 use super::theme::theme;
 use crate::app::{App, Screen};
-use ratatui::{Frame, style::Color};
+use ratatui::{Frame, buffer::Buffer, layout::Rect, style::Color};
 use std::time::{Duration, Instant};
-use tachyonfx::{CellFilter, Effect, Interpolation, fx};
+use tachyonfx::{Effect, Interpolation, fx};
 
 #[derive(Default)]
 pub struct Transitions {
     previous: Option<Screen>,
-    effect: Option<Effect>,
+    effect: Option<(Effect, Rect)>,
     last_frame: Option<Instant>,
+    /// Last frame as drawn, before any effect, to find what a popup covers.
+    last_buffer: Option<Buffer>,
 }
 
 impl Transitions {
@@ -41,6 +43,8 @@ impl Transitions {
     }
 
     fn advance(&mut self, frame: &mut Frame, app: &App, elapsed: Duration) {
+        let drawn = frame.buffer_mut().clone();
+        let previous_buffer = self.last_buffer.replace(drawn);
         let t = theme();
         let enabled = app.animations && !matches!(t.text_primary, Color::Indexed(_));
         let changed = self.previous.as_ref() != Some(&app.screen);
@@ -59,13 +63,16 @@ impl Transitions {
                 Screen::Main | Screen::Home | Screen::Welcome | Screen::WelcomeFonts
             )
         {
-            self.effect = Some(
-                fx::fade_from_fg(t.text_secondary, (120, Interpolation::QuadOut))
-                    .with_filter(CellFilter::BgColor(t.popup_bg)),
-            );
+            let area = previous_buffer
+                .and_then(|before| changed_area(&before, frame.buffer_mut()))
+                .unwrap_or(frame.area());
+            self.effect = Some((
+                fx::fade_from_fg(t.text_secondary, (120, Interpolation::QuadOut)),
+                area,
+            ));
         }
-        let area = frame.area();
-        if let Some(effect) = &mut self.effect {
+        if let Some((effect, area)) = &mut self.effect {
+            let area = area.intersection(frame.area());
             // Do not consume the time spent waiting for the key that opened the dialog.
             effect.process(
                 if entering { Duration::ZERO } else { elapsed },
@@ -81,6 +88,26 @@ impl Transitions {
     pub fn poll_interval(&self) -> Duration {
         Duration::from_millis(if self.effect.is_some() { 16 } else { 100 })
     }
+}
+
+/// Bounding box of the cells that differ: the popup that just opened.
+fn changed_area(before: &Buffer, after: &Buffer) -> Option<Rect> {
+    if before.area != after.area {
+        return None;
+    }
+    let area = after.area;
+    let (mut left, mut top, mut right, mut bottom) = (u16::MAX, u16::MAX, 0, 0);
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            if before[(x, y)] != after[(x, y)] {
+                left = left.min(x);
+                top = top.min(y);
+                right = right.max(x + 1);
+                bottom = bottom.max(y + 1);
+            }
+        }
+    }
+    (left < right).then(|| Rect::new(left, top, right - left, bottom - top))
 }
 
 #[cfg(test)]
@@ -116,5 +143,15 @@ mod tests {
             .draw(|frame| transitions.advance(frame, &app, Duration::ZERO))
             .unwrap();
         assert!(transitions.effect.is_none());
+    }
+
+    #[test]
+    fn the_fade_covers_only_what_the_popup_changed() {
+        let before = Buffer::empty(Rect::new(0, 0, 20, 10));
+        let mut after = before.clone();
+        after[(4, 3)].set_symbol("a");
+        after[(9, 6)].set_symbol("b");
+        assert_eq!(changed_area(&before, &after), Some(Rect::new(4, 3, 6, 4)));
+        assert_eq!(changed_area(&before, &before), None);
     }
 }

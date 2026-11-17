@@ -34,7 +34,6 @@ use ratatui::widgets::BorderType;
 /// alternating "zebra" rows in the evaluations table.  Distinct enough to
 /// be perceptible but far softer than a regular Catppuccin surface.
 const ZEBRA: Color = Color::Rgb(0x2a, 0x2b, 0x3c);
-const BASE: Color = Color::Rgb(0x1e, 0x1e, 0x2e);
 const CRUST: Color = Color::Rgb(0x11, 0x11, 0x1b);
 const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
 const SURFACE2: Color = Color::Rgb(0x58, 0x5b, 0x70);
@@ -109,7 +108,7 @@ pub struct Theme {
     pub footer_border: Color,
 
     // -- Popup specific ---------------------------------------------------
-    /// Opaque surface that separates dialogs from the terminal background.
+    /// Dialog background; the terminal's own, the border and shadow set it apart.
     pub popup_bg: Color,
     /// Shadow behind floating dialogs.
     pub shadow_bg: Color,
@@ -171,7 +170,7 @@ pub const DEFAULT_THEME: Theme = Theme {
     footer_border: SURFACE1,
 
     // Popups — Lavender border, Red for danger, Surface 1 separators
-    popup_bg: BASE,
+    popup_bg: Color::Reset,
     shadow_bg: CRUST,
     popup_border: LAVENDER,
     popup_border_danger: RED,
