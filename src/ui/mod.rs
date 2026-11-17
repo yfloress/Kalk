@@ -55,6 +55,7 @@ use popups::{
     draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
     draw_language_popup, draw_save_template_popup, draw_template_popup,
 };
+pub(crate) use popups_import::import_preview_max_scroll;
 use popups_import::{draw_import_paste, draw_import_preview, draw_import_prompt};
 use ratatui::{
     Frame,
@@ -65,6 +66,9 @@ use ratatui::{
 };
 use settings_popup::draw_settings_popup;
 use theme::theme;
+
+#[cfg(test)]
+mod tests;
 
 // =============================================================================
 // Main Draw
@@ -79,18 +83,28 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     // Home replaces the whole layout rather than overlaying it, and its own
     // popups belong on top of Home — not on top of the three-panel view.
-    if matches!(
-        app.screen,
-        Screen::Home
-            | Screen::EditingSemester { .. }
-            | Screen::ConfirmDeleteSemester
-            | Screen::ImportBackup
-    ) {
+    let home_overlay = app.return_screen == Screen::Home
+        && matches!(
+            app.screen,
+            Screen::Settings | Screen::SelectingLanguage | Screen::Help
+        );
+    if home_overlay
+        || matches!(
+            app.screen,
+            Screen::Home
+                | Screen::EditingSemester { .. }
+                | Screen::ConfirmDeleteSemester
+                | Screen::ImportBackup
+        )
+    {
         home::draw_home(frame, app);
         match &app.screen {
             Screen::EditingSemester { is_new } => draw_semester_popup(frame, app, *is_new),
             Screen::ConfirmDeleteSemester => draw_delete_semester_popup(frame, app),
             Screen::ImportBackup => backup_popup::draw_import_backup_popup(frame, app),
+            Screen::Settings => draw_settings_popup(frame, app),
+            Screen::SelectingLanguage => draw_language_popup(frame, app),
+            Screen::Help => draw_help_popup(frame, app),
             _ => {}
         }
         return;
@@ -98,7 +112,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(3)])
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(panels::footer_height(app, frame.area())),
+        ])
         .split(frame.area());
 
     // Main area: 3-column layout for Course -> Category -> Evaluation hierarchy.

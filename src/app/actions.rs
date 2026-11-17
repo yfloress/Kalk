@@ -598,53 +598,13 @@ impl App {
         self.import_prompt_scroll = new_scroll as u16;
     }
 
-    /// Scroll the step-3 preview by `delta` lines.
-    ///
-    /// Clamped between 0 and the number of lines the renderer builds from the
-    /// parsed course, so scrolling past the end cannot show blank space. It is
-    /// a soft bound like the step-1 prompt: a name long enough to wrap adds
-    /// rendered rows this count does not see.
-    pub fn import_scroll_preview(&mut self, delta: i32) {
-        let max = self.import_preview_line_count() as i32;
-        let new = (self.import_preview_scroll as i32 + delta).clamp(0, max);
+    /// Scroll within the wrapped preview's measured viewport limit.
+    pub fn import_scroll_preview(&mut self, delta: i32, max_scroll: u16) {
+        let current = i32::from(self.import_preview_scroll.min(max_scroll));
+        let new = current
+            .saturating_add(delta)
+            .clamp(0, i32::from(max_scroll));
         self.import_preview_scroll = new as u16;
-    }
-
-    /// How many lines `draw_import_preview` (`ui/popups_import.rs`) builds
-    /// from the parsed course. Structural mirror of that renderer — keep the
-    /// two in sync if the preview layout changes.
-    fn import_preview_line_count(&self) -> usize {
-        let Some(course) = &self.import_parsed else {
-            return 0;
-        };
-        let mut lines = 1; // course name
-        if self.import_renamed_from.is_some() {
-            lines += 1;
-        }
-        lines += 1; // passing grade + credits header
-        lines += 1; // global exam line
-        if course.attendance.required_percent.is_some() {
-            lines += 1;
-        }
-        lines += 1; // weight summary
-        if (self.import_total_weight - 100.0).abs() >= 0.01 {
-            lines += 1;
-        }
-        lines += 1; // blank separator
-        for cat in &course.categories {
-            lines += 1; // category header
-            // Mirrors `minimum_rules`: one line per configured rule.
-            lines += usize::from(cat.rules.minimum_average.is_some());
-            lines += usize::from(cat.rules.minimum_per_evaluation.is_some());
-            lines += usize::from(!cat.rules.requires_categories.is_empty());
-            lines += usize::from(cat.rules.cap_final_grade.is_some());
-            lines += usize::from(cat.rules.minimum_one_eval.is_some());
-            lines += cat.evaluations.len();
-            if cat.evaluations.is_empty() {
-                lines += 1;
-            }
-        }
-        lines
     }
 
     /// Jump the step-1 prompt view back to the top.

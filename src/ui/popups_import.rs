@@ -32,7 +32,7 @@ use crate::i18n::Messages;
 use crate::model::{AveragingMethod, Category, Course, GlobalExamPolicy, MinimumNotMetAction};
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
@@ -216,30 +216,36 @@ pub fn draw_import_paste(frame: &mut Frame, app: &App) {
 // Step 3 — Preview
 // =============================================================================
 
-pub fn draw_import_preview(frame: &mut Frame, app: &App) {
+fn preview_areas(terminal: Rect) -> (Rect, Rect, Rect) {
+    let area = centered_rect(70, 75, terminal);
+    let inner = Block::default().borders(Borders::ALL).inner(area);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(inner);
+    (area, chunks[0], chunks[1])
+}
+
+fn preview_scroll_limit(body: &Paragraph<'_>, area: Rect) -> u16 {
+    if area.is_empty() {
+        return 0;
+    }
+    body.line_count(area.width)
+        .saturating_sub(usize::from(area.height))
+        .min(usize::from(u16::MAX)) as u16
+}
+
+/// Measure the same wrapped paragraph and viewport used by the renderer.
+pub(crate) fn import_preview_max_scroll(app: &App, width: u16, height: u16) -> u16 {
+    let (_, body_area, _) = preview_areas(Rect::new(0, 0, width, height));
+    preview_scroll_limit(&preview_body(app), body_area)
+}
+
+fn preview_body(app: &App) -> Paragraph<'static> {
     let m = app.messages();
     let t = theme();
-    let area = centered_rect(70, 75, frame.area());
-    frame.render_widget(Clear, area);
-
-    let block = Block::default()
-        .title(Line::from(Span::styled(
-            format!(" {} ", m.import_step3_title),
-            Style::default()
-                .fg(t.text_primary)
-                .add_modifier(Modifier::BOLD),
-        )))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
     let Some(course) = &app.import_parsed else {
-        let p = Paragraph::new("…").style(Style::default().fg(t.text_muted));
-        frame.render_widget(p, inner);
-        return;
+        return Paragraph::new("…").style(Style::default().fg(t.text_muted));
     };
 
     let mut lines: Vec<Line> = Vec::new();
@@ -411,15 +417,32 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
         }
     }
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(1)])
-        .split(inner);
+    Paragraph::new(lines).wrap(Wrap { trim: false })
+}
 
-    let body = Paragraph::new(lines)
-        .wrap(Wrap { trim: false })
-        .scroll((app.import_preview_scroll, 0));
-    frame.render_widget(body, chunks[0]);
+pub fn draw_import_preview(frame: &mut Frame, app: &App) {
+    let m = app.messages();
+    let t = theme();
+    let (area, body_area, hint_area) = preview_areas(frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(Line::from(Span::styled(
+            format!(" {} ", m.import_step3_title),
+            Style::default()
+                .fg(t.text_primary)
+                .add_modifier(Modifier::BOLD),
+        )))
+        .borders(Borders::ALL)
+        .border_type(t.border_type)
+        .border_style(Style::default().fg(t.popup_border));
+    frame.render_widget(block, area);
+
+    let body = preview_body(app);
+    let scroll = app
+        .import_preview_scroll
+        .min(preview_scroll_limit(&body, body_area));
+    frame.render_widget(body.scroll((scroll, 0)), body_area);
 
     render_hint(
         frame,
@@ -429,7 +452,7 @@ pub fn draw_import_preview(frame: &mut Frame, app: &App) {
             ("t", m.import_step3_save_as_template),
             ("Enter", m.import_step3_confirm),
         ],
-        chunks[1],
+        hint_area,
     );
 }
 

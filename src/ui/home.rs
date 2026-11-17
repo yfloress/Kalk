@@ -70,7 +70,10 @@ const ACCENT: &str = "\u{258E} ";
 pub fn draw_home(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(3)])
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(super::panels::footer_height(app, frame.area())),
+        ])
         .split(frame.area());
 
     let columns = Layout::default()

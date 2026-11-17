@@ -192,7 +192,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             Screen::Help => handle_help_keys(app, key.code),
             Screen::ImportPrompt => handle_import_prompt_keys(app, key.code),
             Screen::ImportPaste => handle_import_paste_keys(app, key.code),
-            Screen::ImportPreview => handle_import_preview_keys(app, key.code),
+            Screen::ImportPreview => handle_import_preview_keys(app, key.code)?,
             Screen::ImportBackup => handle_import_backup_keys(app, key.code),
         }
     }
@@ -557,18 +557,26 @@ fn handle_import_paste_keys(app: &mut App, key: KeyCode) {
 }
 
 /// Step 3 of the AI import wizard — preview and confirm/back/cancel.
-fn handle_import_preview_keys(app: &mut App, key: KeyCode) {
+fn handle_import_preview_keys(app: &mut App, key: KeyCode) -> color_eyre::Result<()> {
     match key {
         KeyCode::Esc => app.import_cancel(),
         KeyCode::Char('b') => app.import_back_to_paste(),
         KeyCode::Char('t') => app.import_preview_save_template(),
         KeyCode::Enter => app.import_confirm(),
-        KeyCode::Down | KeyCode::Char('j') => app.import_scroll_preview(1),
-        KeyCode::Up | KeyCode::Char('k') => app.import_scroll_preview(-1),
-        KeyCode::PageDown => app.import_scroll_preview(10),
-        KeyCode::PageUp => app.import_scroll_preview(-10),
+        KeyCode::Down | KeyCode::Char('j') => scroll_import_preview(app, 1)?,
+        KeyCode::Up | KeyCode::Char('k') => scroll_import_preview(app, -1)?,
+        KeyCode::PageDown => scroll_import_preview(app, 10)?,
+        KeyCode::PageUp => scroll_import_preview(app, -10)?,
         _ => {}
     }
+    Ok(())
+}
+
+fn scroll_import_preview(app: &mut App, delta: i32) -> color_eyre::Result<()> {
+    let (width, height) = crossterm::terminal::size()?;
+    let max_scroll = crate::ui::import_preview_max_scroll(app, width, height);
+    app.import_scroll_preview(delta, max_scroll);
+    Ok(())
 }
 
 /// Home screen: semester list plus the dashboard.

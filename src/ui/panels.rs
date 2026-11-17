@@ -549,15 +549,25 @@ pub(super) fn draw_status_banner(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(footer, area);
 }
 
+/// Reserve a bordered row for the footer, plus another for a pending status.
+pub(super) fn footer_height(app: &App, area: Rect) -> u16 {
+    // Leave at least three rows for the main content.
+    if app.status_message.is_some() && area.height >= 9 {
+        6
+    } else {
+        3
+    }
+}
+
 /// Split `area` into a status strip and a keybinding row, or `None` when the
 /// terminal is too short to show both at once.
 pub(super) fn status_and_footer_rows(area: Rect) -> Option<(Rect, Rect)> {
-    if area.height < 4 {
+    if area.height < 6 {
         return None;
     }
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(1)])
+        .constraints([Constraint::Length(3), Constraint::Min(3)])
         .split(area);
     Some((rows[0], rows[1]))
 }

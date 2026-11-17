@@ -63,16 +63,18 @@ pub(crate) fn draw_scrollbar(
     visible_len: usize,
     position: usize,
 ) {
-    if area.height == 0 || content_len <= visible_len {
+    if area.is_empty() || visible_len == 0 || content_len <= visible_len {
         return;
     }
     let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
         .begin_symbol(None)
         .end_symbol(None)
         .style(Style::default().fg(theme().text_muted));
-    let mut state = ScrollbarState::new(content_len)
-        .position(position)
-        .viewport_content_length(visible_len.max(1));
+    // Ratatui expects the number of possible offsets, including zero.
+    let max_offset = content_len - visible_len;
+    let mut state = ScrollbarState::new(max_offset + 1)
+        .position(position.min(max_offset))
+        .viewport_content_length(visible_len);
     frame.render_stateful_widget(scrollbar, area, &mut state);
 }
 use ratatui::{
@@ -80,7 +82,10 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Wrap,
+    },
 };
 
 use super::icons::icons;
