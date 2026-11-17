@@ -32,17 +32,14 @@ impl App {
     pub fn welcome_next_language(&mut self) {
         let count = Language::all().len();
         if count > 0 {
-            self.selected_language = (self.selected_language + 1) % count;
+            self.selected_language = (self.selected_language + 1).min(count - 1);
             self.apply_previewed_language();
         }
     }
 
     pub fn welcome_previous_language(&mut self) {
-        let count = Language::all().len();
-        if count > 0 {
-            self.selected_language = (self.selected_language + count - 1) % count;
-            self.apply_previewed_language();
-        }
+        self.selected_language = self.selected_language.saturating_sub(1);
+        self.apply_previewed_language();
     }
 
     /// Switch to the highlighted language immediately, so moving the cursor

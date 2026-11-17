@@ -24,6 +24,20 @@ use crate::model::{AttendanceAction, AveragingMethod, GlobalExamPolicy};
 /// Maximum value for the "drop lowest" toggle cycle (0..=MAX_DROP_LOWEST).
 const MAX_DROP_LOWEST: usize = 5;
 
+/// Keep only the characters a numeric text field accepts: digits and the two
+/// decimal separators the parser understands. Mirrors the per-character
+/// filter in the key handlers.
+fn filter_numeric(text: &str) -> String {
+    text.chars()
+        .filter(|c| c.is_ascii_digit() || *c == '.' || *c == ',')
+        .collect()
+}
+
+/// Keep only digits (integer-only fields, like the bulk-add count).
+fn filter_digits(text: &str) -> String {
+    text.chars().filter(|c| c.is_ascii_digit()).collect()
+}
+
 /// Input field being edited.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputField {
@@ -227,6 +241,61 @@ impl App {
             | InputField::WeightedEvals
             | InputField::AttendanceAction
             | InputField::GlobalPolicy => None,
+        }
+    }
+
+    /// Insert bracketed-paste text into the focused text field.
+    ///
+    /// A paste arrives as one event carrying everything the clipboard held;
+    /// only the first line is taken, control characters are dropped, and
+    /// numeric fields keep their usual filter. Routing is by screen, not by
+    /// `InputField`: BulkAdd reuses `Grade` as its count field and the global
+    /// grade entry edits its own buffer, so the shared form machinery must
+    /// not touch their fields.
+    pub fn paste_into_focused_field(&mut self, text: &str) {
+        let first = text.lines().next().unwrap_or("");
+        let clean: String = first.chars().filter(|c| !c.is_control()).collect();
+
+        match self.screen {
+            // The import screens consume whole paste events in their own
+            // handlers (multi-line JSON); the dispatcher never sends these.
+            Screen::ImportPaste | Screen::ImportBackup => {}
+            // Bulk-add: the base name takes text, the count digits only.
+            Screen::BulkAddEvaluations => {
+                if self.input_field == InputField::Name {
+                    self.edit_name.push_str(&clean);
+                } else {
+                    let digits = filter_digits(&clean);
+                    self.edit_bulk_count.push_str(&digits);
+                }
+            }
+            // Global grade entry owns its buffer.
+            Screen::EnteringGlobalGrade => {
+                let digits = filter_numeric(&clean);
+                self.edit_global_grade.push_str(&digits);
+            }
+            // Semester editing has no shared form machinery.
+            Screen::EditingSemester { .. } => self.edit_name.push_str(&clean),
+            // Every other form routes through the shared input machinery.
+            Screen::EditingCourse { .. }
+            | Screen::EditingCategory { .. }
+            | Screen::EditingEvaluation { .. }
+            | Screen::EditingAttendance
+            | Screen::SavingTemplate => {
+                // Read the field kind first: the buffer borrow below takes
+                // `self` mutably.
+                let numeric = self.input_field.is_numeric();
+                if let Some(buffer) = self.current_input_buffer() {
+                    if numeric {
+                        let digits = filter_numeric(&clean);
+                        buffer.push_str(&digits);
+                    } else {
+                        buffer.push_str(&clean);
+                    }
+                }
+            }
+            // No text field on this screen.
+            _ => {}
         }
     }
 

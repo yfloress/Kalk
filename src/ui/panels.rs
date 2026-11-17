@@ -20,7 +20,7 @@
 //! Contains `draw_evaluations_panel` and `draw_footer`, split out from
 //! `ui/mod.rs` to keep file sizes under the ~600-line guideline.
 
-use super::helpers::{fmt_grade, focused_border_style};
+use super::helpers::{draw_scrollbar, fmt_grade, focused_border_style};
 use super::icons::icons;
 use super::keyhints::styled_keybindings;
 use super::theme::theme;
@@ -344,6 +344,15 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
     // above still own the highlight look; the state only tracks the offset.
     let mut table_state = TableState::default().with_selected(app.selected_evaluation);
     frame.render_stateful_widget(table, chunks[1], &mut table_state);
+    // The header row and the two borders are not scrollable content, so they
+    // leave the viewport when the scrollbar sizes its thumb.
+    draw_scrollbar(
+        frame,
+        chunks[1],
+        category.evaluations.len(),
+        chunks[1].height.saturating_sub(3) as usize,
+        table_state.offset(),
+    );
 }
 
 // =============================================================================

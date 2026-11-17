@@ -40,6 +40,11 @@ pub struct Config {
     /// only for a brand-new install, so a first run lands on the dashboard.
     #[serde(default)]
     pub start_on_home: bool,
+    /// Whether the mouse wheel scrolls list selection. Off by default: mouse
+    /// capture takes over the terminal's own text selection, so the feature
+    /// is opt-in.
+    #[serde(default)]
+    pub mouse_scroll: bool,
     /// Semester open when the last session ended.
     #[serde(default)]
     pub last_semester: Option<Uuid>,
@@ -62,6 +67,7 @@ impl Default for Config {
             language: Language::English,
             use_nerd_fonts: true,
             start_on_home: true,
+            mouse_scroll: false,
             last_semester: None,
             configured: false,
         }

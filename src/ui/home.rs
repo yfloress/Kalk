@@ -33,7 +33,8 @@ use crate::model::{
 };
 
 use super::helpers::{
-    centered_rect, focused_border_style, render_delete_confirmation, render_input_field,
+    centered_rect, draw_scrollbar, focused_border_style, render_delete_confirmation,
+    render_input_field,
 };
 use super::icons::icons;
 use super::keyhints::{render_hint, styled_keybindings};
@@ -119,6 +120,14 @@ fn draw_semester_list(frame: &mut Frame, app: &App, area: Rect) {
     let mut state = ListState::default();
     state.select(Some(app.selected_semester));
     frame.render_stateful_widget(list, area, &mut state);
+    // Marks how far into the semester list the window sits.
+    draw_scrollbar(
+        frame,
+        area,
+        app.semesters.len(),
+        area.height.saturating_sub(2) as usize,
+        state.offset(),
+    );
 }
 
 fn draw_metrics(frame: &mut Frame, app: &App, area: Rect) {

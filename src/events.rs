@@ -21,7 +21,9 @@
 //! to the appropriate handlers based on the current screen.
 
 use crate::app::{App, Focus, Screen};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+};
 use std::time::Duration;
 
 /// Poll for events and handle them.
@@ -33,13 +35,15 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
 
     match event::read()? {
         Event::Paste(s) => {
-            // Only step 2 of the import wizard consumes paste events.  Other
-            // screens silently ignore them so a stray paste doesn't clobber
-            // form fields.
+            // The import screens consume whole paste events (they parse
+            // multi-line JSON).  Everywhere else the first line goes into the
+            // focused form field, as if typed.
             if app.screen == Screen::ImportPaste {
                 app.import_handle_paste(s);
             } else if app.screen == Screen::ImportBackup {
                 app.import_backup_paste(s);
+            } else {
+                app.paste_into_focused_field(&s);
             }
             Ok(app.should_quit)
         }
@@ -51,8 +55,28 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
 
             handle_key_event(app, key)
         }
+        Event::Mouse(mouse) => handle_mouse_event(app, &mouse),
         _ => Ok(app.should_quit),
     }
+}
+
+/// Handle a mouse event.
+///
+/// Only the wheel is consumed, and only when the mouse-scroll setting is on:
+/// enabling capture stops the terminal's own text selection, so the feature
+/// is opt-in. The wheel maps to Up/Down key events fed through the regular
+/// dispatch, so every screen navigates exactly as it does with the keyboard
+/// — there is no per-screen mouse code to keep in sync.
+fn handle_mouse_event(app: &mut App, mouse: &MouseEvent) -> color_eyre::Result<bool> {
+    if !app.mouse_scroll {
+        return Ok(app.should_quit);
+    }
+    let code = match mouse.kind {
+        MouseEventKind::ScrollUp => KeyCode::Up,
+        MouseEventKind::ScrollDown => KeyCode::Down,
+        _ => return Ok(app.should_quit),
+    };
+    handle_key_event(app, KeyEvent::new(code, KeyModifiers::NONE))
 }
 
 /// Dispatch a key-press event to the correct handler based on the current
@@ -84,10 +108,10 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             return Ok(app.should_quit);
         }
 
-        // Global: Shift+S for settings (works from main screen)
+        // Global: Shift+S for settings (works from main screen and Home)
         if key.code == KeyCode::Char('S')
             && key.modifiers.contains(KeyModifiers::SHIFT)
-            && app.screen == Screen::Main
+            && matches!(app.screen, Screen::Main | Screen::Home)
         {
             app.show_settings();
             return Ok(app.should_quit);

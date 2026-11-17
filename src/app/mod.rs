@@ -223,6 +223,10 @@ pub struct App {
 
     /// Whether to use Nerd Font icons (persisted in config).
     pub use_nerd_fonts: bool,
+    /// Whether the mouse wheel scrolls lists (persisted in config). Mouse
+    /// capture takes over the terminal's own text selection, so this is off
+    /// by default.
+    pub mouse_scroll: bool,
     /// False until the first-run wizard is finished; quitting midway keeps it
     /// false so the wizard comes back.
     pub configured: bool,
@@ -330,6 +334,7 @@ impl Default for App {
             show_advanced_rules: false,
             show_field_help: false,
             use_nerd_fonts: true,
+            mouse_scroll: false,
             configured: true,
             selected_setting: 0,
             save_blocked: false,
@@ -361,6 +366,7 @@ impl App {
         let (config, config_warning) = persistence::load_config();
         let language = config.language;
         let use_nerd_fonts = config.use_nerd_fonts;
+        let mouse_scroll = config.mouse_scroll;
         let m = language.messages();
         let mut status_message: Option<String> = None;
         let mut status_severity = StatusSeverity::Info;
@@ -440,6 +446,7 @@ impl App {
             status_severity,
             language,
             use_nerd_fonts,
+            mouse_scroll,
             configured: config.configured,
             save_blocked,
             ..Default::default()
@@ -714,21 +721,20 @@ impl App {
         });
     }
 
+    /// Move to the next template in the list.  Clamped like the side panels:
+    /// at the end of the list the cursor stays put instead of wrapping.
     pub fn next_template(&mut self) {
         let count = self.selectable_templates_count();
         if count > 0 {
-            self.selected_template = (self.selected_template + 1) % count;
+            self.selected_template = (self.selected_template + 1).min(count - 1);
         }
     }
 
+    /// Move to the previous template in the list.
     pub fn previous_template(&mut self) {
         let count = self.selectable_templates_count();
         if count > 0 {
-            self.selected_template = if self.selected_template == 0 {
-                count - 1
-            } else {
-                self.selected_template - 1
-            };
+            self.selected_template = self.selected_template.saturating_sub(1);
         }
     }
 

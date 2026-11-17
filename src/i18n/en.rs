@@ -224,6 +224,8 @@ pub const EN: Messages = Messages {
     settings_nerd_fonts: "Nerd Font Icons",
     settings_nerd_fonts_desc: "Use Nerd Font glyphs (requires a patched font)",
     settings_language: "Language",
+    settings_mouse_scroll: "Mouse Wheel Scroll",
+    settings_mouse_scroll_desc: "Scroll lists with the mouse wheel; capture blocks the terminal's own text selection.",
     enabled: "Enabled",
     disabled: "Disabled",
     toggle: "Toggle",

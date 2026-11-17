@@ -43,12 +43,44 @@ fn trunc_1dp(v: f64) -> f64 {
 pub(crate) fn fmt_grade(v: f64) -> String {
     format!("{:.1}", trunc_1dp(v))
 }
+
+// =============================================================================
+// Scrollbars
+// =============================================================================
+
+/// Draw a thin scrollbar along `area`'s right border when the content
+/// outgrows the viewport.
+///
+/// The three sizes must share one unit — items for single-line lists,
+/// rendered rows for multi-line ones — and `position` is the first visible
+/// unit (the list or table state's `offset()` after rendering). A no-op when
+/// everything fits, so short lists keep a clean border; otherwise the muted
+/// track blends into the right border and only the thumb stands out.
+pub(crate) fn draw_scrollbar(
+    frame: &mut Frame,
+    area: Rect,
+    content_len: usize,
+    visible_len: usize,
+    position: usize,
+) {
+    if area.height == 0 || content_len <= visible_len {
+        return;
+    }
+    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+        .begin_symbol(None)
+        .end_symbol(None)
+        .style(Style::default().fg(theme().text_muted));
+    let mut state = ScrollbarState::new(content_len)
+        .position(position)
+        .viewport_content_length(visible_len.max(1));
+    frame.render_stateful_widget(scrollbar, area, &mut state);
+}
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
 use super::icons::icons;

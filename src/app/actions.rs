@@ -157,24 +157,18 @@ impl App {
         self.screen = Screen::SelectingLanguage;
     }
 
-    /// Move to next language in the list.
+    /// Move to next language in the list.  Clamped like the side panels: at
+    /// the end of the list the cursor stays put instead of wrapping.
     pub fn next_language(&mut self) {
         let count = Language::all().len();
         if count > 0 {
-            self.selected_language = (self.selected_language + 1) % count;
+            self.selected_language = (self.selected_language + 1).min(count - 1);
         }
     }
 
     /// Move to previous language in the list.
     pub fn previous_language(&mut self) {
-        let count = Language::all().len();
-        if count > 0 {
-            self.selected_language = if self.selected_language == 0 {
-                count - 1
-            } else {
-                self.selected_language - 1
-            };
-        }
+        self.selected_language = self.selected_language.saturating_sub(1);
     }
 
     /// Confirm language selection and save to config.
@@ -206,26 +200,24 @@ impl App {
     // =========================================================================
 
     /// Number of settings entries in the settings popup.
-    const SETTINGS_COUNT: usize = 2;
+    const SETTINGS_COUNT: usize = 3;
 
     /// Show the settings popup.
     pub fn show_settings(&mut self) {
         self.selected_setting = 0;
+        self.return_screen = self.screen.clone();
         self.screen = Screen::Settings;
     }
 
-    /// Move to the next setting in the list.
+    /// Move to the next setting in the list.  Clamped like the side panels:
+    /// at the end of the list the cursor stays put instead of wrapping.
     pub fn next_setting(&mut self) {
-        self.selected_setting = (self.selected_setting + 1) % Self::SETTINGS_COUNT;
+        self.selected_setting = (self.selected_setting + 1).min(Self::SETTINGS_COUNT - 1);
     }
 
     /// Move to the previous setting in the list.
     pub fn previous_setting(&mut self) {
-        self.selected_setting = if self.selected_setting == 0 {
-            Self::SETTINGS_COUNT - 1
-        } else {
-            self.selected_setting - 1
-        };
+        self.selected_setting = self.selected_setting.saturating_sub(1);
     }
 
     /// Toggle the currently selected setting value.
@@ -241,6 +233,8 @@ impl App {
                 self.language = langs[next];
                 self.built_in_templates = crate::templates::built_in_templates(self.language);
             }
+            // 2: Mouse wheel scroll — a plain boolean, both directions flip it
+            2 => self.mouse_scroll = !self.mouse_scroll,
             _ => {}
         }
     }
@@ -256,29 +250,32 @@ impl App {
                 self.language = langs[prev];
                 self.built_in_templates = crate::templates::built_in_templates(self.language);
             }
+            2 => self.mouse_scroll = !self.mouse_scroll,
             _ => {}
         }
     }
 
-    /// Confirm and persist settings, then return to the main screen.
+    /// Confirm and persist settings, then return to the screen they were
+    /// opened from (Main or Home).
     pub fn confirm_settings(&mut self) {
         let config = self.config();
         if persistence::save_config(&config).is_err() {
             let msg = self.messages().config_save_error.to_string();
             self.set_error(msg);
         }
-        self.screen = Screen::Main;
+        self.screen = self.return_screen.clone();
     }
 
     /// Cancel settings without saving — restore persisted values.
     pub fn cancel_settings(&mut self) {
         let (config, _) = persistence::load_config();
         self.use_nerd_fonts = config.use_nerd_fonts;
+        self.mouse_scroll = config.mouse_scroll;
         if self.language != config.language {
             self.language = config.language;
             self.built_in_templates = crate::templates::built_in_templates(self.language);
         }
-        self.screen = Screen::Main;
+        self.screen = self.return_screen.clone();
     }
 
     // =========================================================================

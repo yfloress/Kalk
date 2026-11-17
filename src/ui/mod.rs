@@ -45,7 +45,9 @@ use crate::model::{
 use attendance_popup::draw_attendance_popup;
 use eval_popups::{draw_bulk_add_popup, draw_evaluation_popup, draw_global_grade_popup};
 use help_popup::draw_help_popup;
-use helpers::{focused_border_style, format_course_average, format_weight_validation};
+use helpers::{
+    draw_scrollbar, focused_border_style, format_course_average, format_weight_validation,
+};
 use home::{draw_delete_semester_popup, draw_semester_popup};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
@@ -335,6 +337,15 @@ fn draw_courses_panel(frame: &mut Frame, app: &App, area: Rect) {
     state.select(app.selected_course);
 
     frame.render_stateful_widget(list, area, &mut state);
+    // The state's offset is known only after rendering; the scrollbar then
+    // marks how far into the course list the window sits.
+    draw_scrollbar(
+        frame,
+        area,
+        app.courses().len(),
+        area.height.saturating_sub(2) as usize,
+        state.offset(),
+    );
 }
 
 fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
@@ -669,4 +680,13 @@ fn draw_categories_panel(frame: &mut Frame, app: &App, area: Rect) {
     state.select(app.selected_category);
 
     frame.render_stateful_widget(list, chunks[2], &mut state);
+    // Category entries are two rows each, so the scrollbar counts rows, not
+    // items — double both item counts to keep the units consistent.
+    draw_scrollbar(
+        frame,
+        chunks[2],
+        visible_count * 2,
+        chunks[2].height.saturating_sub(2) as usize,
+        state.offset() * 2,
+    );
 }

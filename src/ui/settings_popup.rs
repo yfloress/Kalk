@@ -42,7 +42,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
     let ic = icons(app.use_nerd_fonts);
 
     let popup_w = 56u16;
-    let popup_h = 18u16;
+    let popup_h = 19u16;
     let term = frame.area();
     let x = term.x + term.width.saturating_sub(popup_w) / 2;
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
@@ -64,6 +64,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
             Constraint::Length(1), // padding
             Constraint::Length(1), // setting 0: nerd fonts
             Constraint::Length(1), // setting 1: language
+            Constraint::Length(1), // setting 2: mouse wheel
             Constraint::Length(1), // separator
             Constraint::Length(2), // description of selected setting
             Constraint::Min(0),    // spacer
@@ -98,6 +99,20 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
             value: app.language.display_name().to_string(),
             value_color: t.status_info,
         },
+        SettingRow {
+            label: m.settings_mouse_scroll,
+            value: if app.mouse_scroll {
+                m.enabled
+            } else {
+                m.disabled
+            }
+            .to_string(),
+            value_color: if app.mouse_scroll {
+                t.status_pass
+            } else {
+                t.text_muted
+            },
+        },
     ];
 
     for (i, row) in rows.iter().enumerate() {
@@ -119,7 +134,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
                 Style::default().fg(row.value_color),
             ),
         ]);
-        // chunks[1], chunks[2] for the 2 settings
+        // chunks[1], chunks[2], chunks[3] for the 3 settings
         frame.render_widget(Paragraph::new(line), chunks[1 + i]);
     }
 
@@ -128,12 +143,13 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
         "  ──────────────────────────────────────────────",
         Style::default().fg(t.popup_separator),
     )));
-    frame.render_widget(sep, chunks[3]);
+    frame.render_widget(sep, chunks[4]);
 
     // --- Description of selected setting ---
     let desc_text = match app.selected_setting {
         0 => m.settings_nerd_fonts_desc,
         1 => app.language.display_name(),
+        2 => m.settings_mouse_scroll_desc,
         _ => "",
     };
     let desc = Paragraph::new(Line::from(Span::styled(
@@ -141,7 +157,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
         Style::default().fg(t.text_secondary),
     )))
     .wrap(Wrap { trim: true });
-    frame.render_widget(desc, chunks[4]);
+    frame.render_widget(desc, chunks[5]);
 
     render_hint(
         frame,
@@ -150,6 +166,6 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
             ("Enter", m.confirm),
             ("Esc", m.cancel),
         ],
-        chunks[6],
+        chunks[7],
     );
 }
