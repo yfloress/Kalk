@@ -60,6 +60,11 @@ la pena saber:
 | `s` | Simular notas; otra `s` deja todo como estaba |
 | `h` | Semestres y dashboard |
 | `e` / `i` en Home | Exportar / importar todo |
+| `/` | Buscar ramos, categorías, evaluaciones o plantillas por coincidencia aproximada |
+| `Tab` / `Shift+Tab` en formularios | Campo siguiente / anterior |
+| `←` / `→`, `Home` / `End` en campos de texto | Mover el cursor de edición |
+
+Los formularios largos se desplazan para mantener visible el campo activo. La importación incluye un editor de JSON: `F2` abre la revisión y `F3` vuelve al prompt. Las transiciones breves se pueden desactivar en Ajustes (`S`).
 
 ## Contribuir
 

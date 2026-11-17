@@ -37,7 +37,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
     let ic = icons(app.use_nerd_fonts);
     let area = frame
         .area()
-        .centered(Constraint::Length(62), Constraint::Length(16));
+        .centered(Constraint::Length(62), Constraint::Length(18));
     frame.render_widget(Clear, area);
     let block = popup_block(format!(" {}{} ", ic.settings, m.settings));
     let inner = block.inner(area);
@@ -69,12 +69,14 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
             Style::default().fg(t.status_info),
         )),
         boolean(app.mouse_scroll),
+        boolean(app.animations),
     ];
     let value_width = values.iter().map(Line::width).max().unwrap_or(0) as u16;
     let labels = [
         m.settings_nerd_fonts,
         m.settings_language,
         m.settings_mouse_scroll,
+        m.settings_animations,
     ];
     let rows = labels.into_iter().zip(values).map(|(label, value)| {
         Row::new([
@@ -103,6 +105,7 @@ pub fn draw_settings_popup(frame: &mut Frame, app: &App) {
         0 => m.settings_nerd_fonts_desc,
         1 => m.settings_language_desc,
         2 => m.settings_mouse_scroll_desc,
+        3 => m.settings_animations_desc,
         _ => "",
     };
     frame.render_widget(

@@ -78,6 +78,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Grade field FIRST
     render_input_field(
         frame,
+        app,
         m.grade,
         &app.edit_grade,
         app.input_field == InputField::Grade,
@@ -89,6 +90,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Name field second
     render_input_field(
         frame,
+        app,
         m.name,
         &app.edit_name,
         app.input_field == InputField::Name,
@@ -101,6 +103,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     if has_weighted {
         render_input_field(
             frame,
+            app,
             m.eval_weight,
             &app.edit_eval_weight,
             app.input_field == InputField::EvalWeight,
@@ -255,6 +258,7 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
 
     render_input_field(
         frame,
+        app,
         m.global_grade,
         &app.edit_global_grade,
         true,
@@ -297,9 +301,10 @@ pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
         ])
         .split(area);
     let on_name = app.input_field == InputField::Name;
-    render_input_field(frame, m.name, &app.edit_name, on_name, inner[0]);
+    render_input_field(frame, app, m.name, &app.edit_name, on_name, inner[0]);
     render_input_field(
         frame,
+        app,
         m.bulk_add_count,
         &app.edit_bulk_count,
         !on_name,

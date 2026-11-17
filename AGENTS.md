@@ -35,7 +35,10 @@ src/
 │   ├── backup.rs    # Export / import of the whole library
 │   ├── share.rs     # Share a course's structure (no grades) as import JSON
 │   ├── simulation.rs # "What if" mode: edits are never saved, restored on exit
-│   └── import.rs    # AI import wizard
+│   ├── search.rs    # Fuzzy search (`/`) over the library or the templates
+│   ├── text_edit.rs # Cursor-aware editing shared by every text field
+│   ├── import_wizard.rs # AI import wizard state and its JSON editor
+│   └── import.rs    # AI import schema, parsing and validation
 ├── model/
 │   ├── mod.rs       # Evaluation, Course, CourseOutcome, WeightValidation, templates
 │   ├── needed.rs    # NeededGrade and the single-evaluation solver
@@ -52,12 +55,17 @@ src/
 │   ├── attendance_popup.rs # Attendance popup rendering
 │   ├── backup_popup.rs # Backup import popup
 │   ├── panels.rs    # Evaluations panel and footer rendering
-│   ├── popups.rs    # Popup dialogs (template, course, category, delete, language, save-template)
+│   ├── popups.rs    # Popup dialogs (template, delete, language, save-template)
+│   ├── course_category_forms.rs # Course and category forms, declared as rows
+│   ├── form_view.rs # Scrolling form layout that keeps the focused field visible
+│   ├── search_popup.rs # Fuzzy search popup
+│   ├── transitions.rs # Optional popup fade (render-only, off in 256 colours)
 │   ├── eval_popups.rs # Evaluation popup, global grade entry, bulk-add evaluations
 │   └── helpers.rs   # Shared rendering helpers (input fields, toggles) and formatting functions
 ├── backup.rs        # Backup file format, paths and validation
 ├── templates.rs     # Built-in course templates (language-aware)
 ├── events.rs        # Keyboard event handling and dispatch
+├── events_tests.rs  # Key-dispatch tests (editing, search, JSON editor)
 ├── i18n/
 │   ├── mod.rs       # Language enum and the Messages struct
 │   ├── en.rs        # English translation table
@@ -110,7 +118,13 @@ src/
 - **`ui/` only renders** — it reads state from `App` and formats for display. No mutations, no calculations beyond formatting strings.
 - **`ui/mod.rs`** handles the main layout, courses panel, and categories panel.
 - **`ui/panels.rs`** handles the evaluations panel and footer rendering (extracted to keep files manageable).
-- **`ui/popups.rs`** handles primary popup overlays (template selection, course/category editing, deletions, language, save-as-template).
+- **`ui/popups.rs`** handles primary popup overlays (template selection, deletions, language, save-as-template); course and category forms live in `ui/course_category_forms.rs` and render through `FormView`.
+- **Text fields edit through `App::edit_focused_text`.** It owns the cursor
+  (`tui-input`) and the per-field character filter; never push to an `edit_*`
+  string from `events.rs`.
+- **Transitions are render-only.** `ui/transitions.rs` must never change `App`
+  state, and it stays off when `App.animations` is false or the palette fell
+  back to 256 colours.
 - **`ui/eval_popups.rs`** handles evaluation-related popups (evaluation editing, global grade entry, bulk-add evaluations).
 - **Every popup ends in a keybinding hint** rendered by `ui/keyhints.rs`. Never
   hand-roll one, and never bake the key into an i18n string — the key belongs to
@@ -202,6 +216,11 @@ Always ask the user to run them. Use `nix develop -c` prefix for all Cargo comma
 - **directories** — XDG path resolution
 - **uuid** — unique IDs for entities
 - **color-eyre** — error handling
+- **tui-input** — cursor editing in single-line fields
+- **tui-scrollview** — scrolling forms
+- **nucleo-matcher** — fuzzy search
+- **ratatui-textarea** — JSON editor in the AI import
+- **tachyonfx** — popup transitions
 
 Do not add dependencies without discussing with the user first.
 

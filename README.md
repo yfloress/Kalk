@@ -58,6 +58,11 @@ Run `kalk` and press `?` for every shortcut. The few worth knowing first:
 | `s` | Simulate grades; `s` again puts everything back |
 | `h` | Semesters and dashboard |
 | `e` / `i` on Home | Export / import everything |
+| `/` | Fuzzy search courses, categories, evaluations or templates |
+| `Tab` / `Shift+Tab` in forms | Next / previous field |
+| `←` / `→`, `Home` / `End` in text fields | Move the editing cursor |
+
+Long forms scroll to keep the active field visible. AI import includes an editable JSON buffer: `F2` previews it and `F3` returns to the prompt. Brief popup transitions can be disabled in Settings (`S`).
 
 ## Contributing
 

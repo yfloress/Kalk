@@ -21,6 +21,10 @@ use super::Messages;
 
 /// English messages.
 pub const EN: Messages = Messages {
+    search_title: "Find",
+    search_query: "Search names",
+    search_empty: "No matches. Try fewer letters.",
+    search_open: "Find course or evaluation",
     // Panel titles
     courses: "Courses",
     categories: "Categories",
@@ -225,6 +229,8 @@ pub const EN: Messages = Messages {
     settings_nerd_fonts_desc: "Use Nerd Font glyphs (requires a patched font)",
     settings_language: "Language",
     settings_language_desc: "Choose the language used throughout Kalk.",
+    settings_animations: "Transitions",
+    settings_animations_desc: "Brief transitions when opening dialogs.",
     settings_mouse_scroll: "Mouse Wheel Scroll",
     settings_mouse_scroll_desc: "Scroll lists with the mouse wheel; capture blocks the terminal's own text selection.",
     enabled: "Enabled",
@@ -278,7 +284,8 @@ pub const EN: Messages = Messages {
     import_step1_fullscreen: "Fullscreen",
     import_step1_fullscreen_exit: "Back",
     import_step2_title: "Step 2 of 3 — Paste the AI response",
-    import_step2_hint: "Paste here the JSON returned by the AI, or drag in a shared course (Ctrl+V or right-click paste). Code fences are tolerated.",
+    import_validate: "Preview JSON",
+    import_step2_hint: "Paste JSON here or drop a shared course file. You can edit errors before previewing.",
     import_step2_back: "Back",
     import_step3_title: "Step 3 of 3 — Confirm import",
     import_step3_total_weight: "Total weight",

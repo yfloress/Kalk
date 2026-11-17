@@ -62,6 +62,7 @@ pub fn draw_attendance_popup(frame: &mut Frame, app: &App) {
 
     render_input_field(
         frame,
+        app,
         m.attendance_total,
         &app.edit_classes_total,
         app.input_field == InputField::ClassesTotal,
@@ -69,6 +70,7 @@ pub fn draw_attendance_popup(frame: &mut Frame, app: &App) {
     );
     render_input_field(
         frame,
+        app,
         m.attendance_missed,
         &app.edit_classes_missed,
         app.input_field == InputField::ClassesMissed,
@@ -76,6 +78,7 @@ pub fn draw_attendance_popup(frame: &mut Frame, app: &App) {
     );
     render_input_field(
         frame,
+        app,
         m.attendance_required,
         &app.edit_attendance_required,
         app.input_field == InputField::AttendanceRequired,

@@ -69,6 +69,7 @@ pub fn draw_import_backup_popup(frame: &mut Frame, app: &App) {
 
     render_input_field(
         frame,
+        app,
         m.backup_path_label,
         &app.backup_path,
         app.backup_preview.is_none(),

@@ -207,6 +207,7 @@ fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
         ("e", m.backup_export),
         ("i", m.backup_import),
         ("Esc", m.help_close_popup),
+        ("/", m.search_title),
         ("?", m.help_open),
     ];
 
@@ -252,7 +253,14 @@ pub fn draw_semester_popup(frame: &mut Frame, app: &App, is_new: bool) {
         .constraints([Constraint::Length(3), Constraint::Min(0)])
         .split(inner);
 
-    render_input_field(frame, m.semester_name_label, &app.edit_name, true, rows[0]);
+    render_input_field(
+        frame,
+        app,
+        m.semester_name_label,
+        &app.edit_name,
+        true,
+        rows[0],
+    );
 
     render_hint(frame, &[("Enter", m.confirm), ("Esc", m.cancel)], rows[1]);
 }

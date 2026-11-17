@@ -48,6 +48,10 @@ impl Language {
 /// All translatable messages in the application.
 #[derive(Debug, Clone)]
 pub struct Messages {
+    pub search_title: &'static str,
+    pub search_query: &'static str,
+    pub search_empty: &'static str,
+    pub search_open: &'static str,
     // Panel titles
     pub courses: &'static str,
     pub categories: &'static str,
@@ -254,6 +258,8 @@ pub struct Messages {
     pub settings_nerd_fonts_desc: &'static str,
     pub settings_language: &'static str,
     pub settings_language_desc: &'static str,
+    pub settings_animations: &'static str,
+    pub settings_animations_desc: &'static str,
     pub settings_mouse_scroll: &'static str,
     pub settings_mouse_scroll_desc: &'static str,
     pub enabled: &'static str,
@@ -307,6 +313,7 @@ pub struct Messages {
     pub import_step1_fullscreen: &'static str,
     pub import_step1_fullscreen_exit: &'static str,
     pub import_step2_title: &'static str,
+    pub import_validate: &'static str,
     pub import_step2_hint: &'static str,
     pub import_step2_back: &'static str,
     pub import_step3_title: &'static str,

@@ -33,9 +33,7 @@ mod ui;
 use app::App;
 use color_eyre::eyre::Result;
 use crossterm::{
-    event::{
-        DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-    },
+    event::{DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -106,10 +104,14 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
         execute!(stdout(), EnableMouseCapture)?;
     }
 
+    let mut transitions = ui::Transitions::default();
     loop {
-        terminal.draw(|frame| ui::draw(frame, app))?;
+        terminal.draw(|frame| {
+            ui::draw(frame, app);
+            transitions.render(frame, app);
+        })?;
 
-        if events::handle_events(app)? {
+        if events::handle_events(app, transitions.poll_interval())? {
             break;
         }
 

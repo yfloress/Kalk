@@ -18,7 +18,7 @@
 use super::*;
 use crate::app::Screen;
 use crate::i18n::Language;
-use crate::model::{Category, Evaluation};
+use crate::model::{Category, CategoryRules, Evaluation};
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, widgets::Widget};
 
 fn render(app: &App, width: u16, height: u16) -> Buffer {
@@ -181,7 +181,7 @@ fn popup_surfaces_have_padding_and_a_clipped_native_shadow() {
 #[test]
 fn settings_show_aligned_values_and_keep_the_cancel_hint() {
     for language in [Language::English, Language::Spanish] {
-        for selected_setting in 0..3 {
+        for selected_setting in 0..4 {
             let app = App {
                 screen: Screen::Settings,
                 language,
@@ -195,6 +195,7 @@ fn settings_show_aligned_values_and_keep_the_cancel_hint() {
             let text = lines.join("\n");
             assert!(text.contains(app.messages().settings_nerd_fonts));
             assert!(text.contains(app.messages().settings_mouse_scroll));
+            assert!(text.contains(app.messages().settings_animations));
             assert!(text.contains("[ ]"));
             assert!(text.contains("[x]"));
             assert!(text.contains(app.language.display_name()));
@@ -232,5 +233,173 @@ fn home_keeps_progress_numbers_and_course_grades_with_native_widgets() {
         assert!(text.contains("Mechanics"));
         assert!(text.contains("20.0"));
         assert!(text.contains("95.0"));
+    }
+}
+
+#[test]
+fn category_form_renders_every_combination_of_advanced_rules() {
+    for language in [Language::English, Language::Spanish] {
+        for mask in 0..8 {
+            let rules = CategoryRules {
+                minimum_average: (mask & 1 != 0).then_some(50.0),
+                minimum_per_evaluation: (mask & 2 != 0).then_some(30.0),
+                minimum_one_eval: (mask & 4 != 0).then_some(60.0),
+                cap_final_grade: Some(54.0),
+                round_before_weighting: true,
+                weighted_evaluations: true,
+                ..Default::default()
+            };
+            let mut course = Course::new("Course".to_string(), 55.0);
+            course.categories.push(Category::with_rules(
+                "Rules".to_string(),
+                100.0,
+                Vec::new(),
+                rules,
+            ));
+            let mut app = App {
+                language,
+                selected_course: Some(0),
+                selected_category: Some(0),
+                use_nerd_fonts: false,
+                ..Default::default()
+            };
+            app.courses_mut().push(course);
+            app.start_edit_category();
+            assert!(app.show_advanced_rules);
+            assert_eq!(app.edit_cap_final_grade, "54");
+
+            for height in [12, 24, 48, 80] {
+                let buffer = render(&app, 100, height);
+                if height == 80 {
+                    let text = (0..height)
+                        .map(|y| row_text(&buffer, y))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    assert!(text.contains(app.messages().cap_final_grade));
+                    assert!(text.contains(app.messages().round_before_weighting));
+                    assert!(text.contains(app.messages().weighted_evaluations));
+                    assert!(text.contains("Enter"));
+                    assert!(text.contains("Esc"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn new_category_can_expand_and_collapse_advanced_rules() {
+    let mut app = App {
+        selected_course: Some(0),
+        ..Default::default()
+    };
+    app.courses_mut()
+        .push(Course::new("Course".to_string(), 55.0));
+    app.start_new_category();
+    for _ in 0..4 {
+        render(&app, 80, 24);
+        app.toggle_advanced_rules();
+    }
+}
+
+#[test]
+fn long_category_forms_keep_the_focused_field_and_hints_visible() {
+    use crate::app::InputField;
+    for language in [Language::English, Language::Spanish] {
+        let mut app = App {
+            screen: Screen::EditingCategory { is_new: true },
+            language,
+            show_advanced_rules: true,
+            edit_min_average: "50".into(),
+            edit_min_per_eval: "30".into(),
+            edit_min_one_eval: "60".into(),
+            edit_cap_final_grade: "54".into(),
+            ..Default::default()
+        };
+        for height in [12, 24, 80] {
+            for (field, label) in [
+                (InputField::Name, app.messages().name),
+                (InputField::MinimumAverage, app.messages().minimum_average),
+                (InputField::CapFinalGrade, app.messages().cap_final_grade),
+                (
+                    InputField::WeightedEvals,
+                    app.messages().weighted_evaluations,
+                ),
+            ] {
+                app.input_field = field;
+                let buffer = render(&app, 100, height);
+                let text = (0..height)
+                    .map(|y| row_text(&buffer, y))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                assert!(text.contains(label), "missing {label} at {height}");
+                assert!(text.contains("Esc"));
+                assert!(text.contains("Enter"), "{height} {field:?}\n{text}");
+                assert!(
+                    buffer
+                        .content
+                        .iter()
+                        .any(|cell| cell.fg == theme().input_active)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn edited_input_scrolls_horizontally_and_positions_a_real_cursor() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = App {
+        screen: Screen::EditingCourse { is_new: true },
+        edit_name: "界".repeat(70),
+        ..Default::default()
+    };
+    app.edit_focused_text(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    let completed = terminal.draw(|frame| draw(frame, &app)).unwrap();
+    assert!(
+        !completed
+            .buffer
+            .content
+            .iter()
+            .any(|cell| cell.symbol() == "|")
+    );
+    let cursor = terminal.get_cursor_position().unwrap();
+    assert!(cursor.x < 60 && cursor.y < 20);
+}
+
+#[test]
+fn search_and_json_editor_render_at_small_sizes_and_show_native_hints() {
+    for language in [Language::English, Language::Spanish] {
+        let mut app = App {
+            language,
+            ..Default::default()
+        };
+        app.start_search();
+        for (width, height) in [(0, 0), (1, 1), (12, 5), (50, 16)] {
+            render(&app, width, height);
+        }
+        let buffer = render(&app, 90, 24);
+        let text = (0..24)
+            .map(|y| row_text(&buffer, y))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains(app.messages().search_empty));
+        assert!(text.contains("Esc"));
+        app.cancel_search();
+        app.start_ai_import();
+        app.import_goto_paste();
+        app.import_handle_paste("{broken}".into());
+        for (width, height) in [(0, 0), (1, 1), (12, 5), (50, 16)] {
+            render(&app, width, height);
+        }
+        let buffer = render(&app, 100, 30);
+        let text = (0..30)
+            .map(|y| row_text(&buffer, y))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("{broken}"));
+        assert!(text.contains("F2"));
+        assert!(text.contains("F3"));
+        assert!(text.contains("Esc"));
     }
 }

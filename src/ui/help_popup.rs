@@ -75,6 +75,7 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
         group(m.help_group_global),
         row("q", m.quit),
         row("?", m.help_open),
+        row("/", m.search_open),
         row("Esc", m.help_close_popup),
         blank(),
         group(m.semesters),

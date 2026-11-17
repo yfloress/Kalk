@@ -243,72 +243,84 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-/// Render a single-line text input field with a label border.
-/// When `is_active` the field is highlighted and a cursor pipe is appended.
+/// Render a text field with tui-input's Unicode-aware horizontal viewport.
 pub fn render_input_field(
     frame: &mut Frame,
+    app: &App,
     label: &str,
     value: &str,
     is_active: bool,
     area: Rect,
 ) {
-    let t = theme();
-    let style = if is_active {
-        Style::default().fg(t.input_active)
-    } else {
-        Style::default().fg(t.input_inactive)
-    };
-
-    // Show cursor indicator when active
-    let display_value = if is_active {
-        format!("{}|", value)
-    } else {
-        value.to_string()
-    };
-
-    let input = Paragraph::new(display_value).style(style).block(
-        Block::default()
-            .title(label)
-            .borders(Borders::ALL)
-            .border_type(t.border_type)
-            .border_style(style),
-    );
-
-    frame.render_widget(input, area);
+    let (widget, cursor) = input_widget(app, label, value, is_active, area.width);
+    frame.render_widget(widget, area);
+    if is_active && area.width > 2 && area.height >= 3 {
+        frame.set_cursor_position((area.x + 1 + cursor, area.y + 1));
+    }
 }
 
-/// Render a toggle field that cycles values with Space/Enter instead of text
-/// input.  Shows the current value in angle brackets when active (`< val >`)
-/// or square brackets when inactive (`[val]`).
-pub fn render_toggle_field(
-    frame: &mut Frame,
-    label: &str,
-    current_value: &str,
-    is_active: bool,
-    area: Rect,
-) {
+pub(super) fn input_widget<'a>(
+    app: &App,
+    label: &'a str,
+    value: &str,
+    active: bool,
+    width: u16,
+) -> (Paragraph<'a>, u16) {
     let t = theme();
-    let style = if is_active {
-        Style::default().fg(t.input_active)
+    let input = app.form_input(value);
+    let visible = width.saturating_sub(2).max(1);
+    let scroll = if active {
+        input.visual_scroll(visible as usize)
     } else {
-        Style::default().fg(t.input_inactive)
+        0
     };
-
-    let display = if is_active {
-        format!("< {} >", current_value)
+    let cursor = input
+        .visual_cursor()
+        .saturating_sub(scroll)
+        .min(visible as usize - 1) as u16;
+    let border = if active {
+        t.input_active
     } else {
-        format!("[{}]", current_value)
+        t.input_inactive
     };
+    let widget = Paragraph::new(value.to_string())
+        .style(Style::default().fg(t.text_primary))
+        .scroll((0, scroll.min(u16::MAX as usize) as u16))
+        .block(
+            Block::default()
+                .title(label)
+                .borders(Borders::ALL)
+                .border_type(t.border_type)
+                .border_style(Style::default().fg(border)),
+        );
+    (widget, cursor)
+}
 
-    let widget = Paragraph::new(display).style(style).block(
+pub(super) fn toggle_widget<'a>(label: &'a str, value: &str, active: bool) -> Paragraph<'a> {
+    let t = theme();
+    let border = if active {
+        t.input_active
+    } else {
+        t.input_inactive
+    };
+    Paragraph::new(if active {
+        format!("< {value} >")
+    } else {
+        format!("[{value}]")
+    })
+    .style(Style::default().fg(t.text_primary))
+    .block(
         Block::default()
             .title(label)
             .borders(Borders::ALL)
             .border_type(t.border_type)
-            .border_style(style),
-    );
+            .border_style(Style::default().fg(border)),
+    )
+}
 
-    frame.render_widget(widget, area);
+/// Toggle controls keep their existing keyboard semantics.
+pub fn render_toggle_field(frame: &mut Frame, label: &str, value: &str, active: bool, area: Rect) {
+    frame.render_widget(toggle_widget(label, value, active), area);
 }
 
 // =============================================================================

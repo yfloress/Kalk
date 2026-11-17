@@ -160,49 +160,47 @@ fn draw_import_prompt_fullscreen(frame: &mut Frame, app: &App) {
 pub fn draw_import_paste(frame: &mut Frame, app: &App) {
     let m = app.messages();
     let t = theme();
-    let area = centered_rect(70, 50, frame.area());
+    let area = centered_rect(85, 80, frame.area());
     frame.render_widget(Clear, area);
-
-    let block = popup_block(Line::from(Span::styled(
-        format!(" {} ", m.import_step2_title),
-        Style::default()
-            .fg(t.text_primary)
-            .add_modifier(Modifier::BOLD),
-    )));
-
+    let block = popup_block(format!(" {} ", m.import_step2_title));
     let inner = block.inner(area);
     frame.render_widget(block, area);
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // intro hint
-            Constraint::Min(0),    // error area
-            Constraint::Length(1), // footer
-        ])
-        .split(inner);
-
-    let hint = Paragraph::new(m.import_step2_hint)
-        .style(Style::default().fg(t.text_secondary))
-        .wrap(Wrap { trim: true });
-    frame.render_widget(hint, chunks[0]);
-
-    let body = if let Some(err) = &app.import_paste_error {
-        Paragraph::new(err.as_str())
-            .style(Style::default().fg(t.status_fail))
-            .wrap(Wrap { trim: true })
-    } else {
-        Paragraph::new("")
-    };
-    let paste_box = Block::default()
-        .borders(Borders::ALL)
+    let error = app.import_paste_error.as_deref().unwrap_or("");
+    let error_height = if error.is_empty() { 0 } else { 3 };
+    let chunks = Layout::vertical([
+        Constraint::Length(2),
+        Constraint::Min(0),
+        Constraint::Length(error_height),
+        Constraint::Length(1),
+    ])
+    .split(inner);
+    frame.render_widget(
+        Paragraph::new(m.import_step2_hint)
+            .style(Style::default().fg(t.text_secondary))
+            .wrap(Wrap { trim: true }),
+        chunks[0],
+    );
+    let editor_block = Block::bordered()
         .border_type(t.border_type)
-        .border_style(Style::default().fg(t.border_unfocused));
-    let paste_inner = paste_box.inner(chunks[1]);
-    frame.render_widget(paste_box, chunks[1]);
-    frame.render_widget(body, paste_inner);
-
-    render_hint(frame, &[("b/Esc", m.import_step2_back)], chunks[2]);
+        .border_style(Style::default().fg(t.input_active));
+    let editor_area = editor_block.inner(chunks[1]);
+    frame.render_widget(editor_block, chunks[1]);
+    frame.render_widget(&app.import_editor, editor_area);
+    frame.render_widget(
+        Paragraph::new(error)
+            .style(Style::default().fg(t.status_fail))
+            .wrap(Wrap { trim: true }),
+        chunks[2],
+    );
+    render_hint(
+        frame,
+        &[
+            ("F2", m.import_validate),
+            ("F3", m.import_step2_back),
+            ("Esc", m.cancel),
+        ],
+        chunks[3],
+    );
 }
 
 // =============================================================================

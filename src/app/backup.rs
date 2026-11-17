@@ -73,16 +73,6 @@ impl App {
         }
     }
 
-    pub fn import_backup_type(&mut self, c: char) {
-        self.backup_path.push(c);
-        self.backup_path_changed();
-    }
-
-    pub fn import_backup_backspace(&mut self) {
-        self.backup_path.pop();
-        self.backup_path_changed();
-    }
-
     /// A pasted or dragged-in path replaces whatever was typed.
     pub fn import_backup_paste(&mut self, text: String) {
         self.backup_path = text.trim().to_string();

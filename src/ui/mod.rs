@@ -25,7 +25,9 @@
 
 mod attendance_popup;
 mod backup_popup;
+mod course_category_forms;
 mod eval_popups;
+mod form_view;
 mod help_popup;
 pub(crate) mod helpers;
 mod home;
@@ -35,16 +37,20 @@ pub(crate) mod keyhints;
 pub(crate) mod panels;
 mod popups;
 mod popups_import;
+mod search_popup;
 mod settings_popup;
 mod surfaces;
 pub(crate) mod theme;
+mod transitions;
 mod welcome;
+pub use transitions::Transitions;
 
 use crate::app::{App, Focus, Screen};
 use crate::model::{
     Course, CourseOutcome, GlobalExamPolicy, MAX_GRADE, NeededGradeStatus, WeightValidation,
 };
 use attendance_popup::draw_attendance_popup;
+use course_category_forms::{draw_category_popup, draw_course_popup};
 use eval_popups::{draw_bulk_add_popup, draw_evaluation_popup, draw_global_grade_popup};
 use help_popup::draw_help_popup;
 use helpers::{
@@ -54,8 +60,8 @@ use home::{draw_delete_semester_popup, draw_semester_popup};
 use icons::icons;
 use panels::{draw_evaluations_panel, draw_footer};
 use popups::{
-    draw_category_popup, draw_course_popup, draw_delete_popup, draw_delete_template_popup,
-    draw_language_popup, draw_save_template_popup, draw_template_popup,
+    draw_delete_popup, draw_delete_template_popup, draw_language_popup, draw_save_template_popup,
+    draw_template_popup,
 };
 pub(crate) use popups_import::import_preview_max_scroll;
 use popups_import::{draw_import_paste, draw_import_preview, draw_import_prompt};
@@ -85,11 +91,16 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     // Home replaces the whole layout rather than overlaying it, and its own
     // popups belong on top of Home — not on top of the three-panel view.
-    let home_overlay = app.return_screen == Screen::Home
+    let home_overlay = (app.return_screen == Screen::Home
         && matches!(
             app.screen,
             Screen::Settings | Screen::SelectingLanguage | Screen::Help
-        );
+        ))
+        || (app.screen == Screen::Searching
+            && app
+                .search
+                .as_ref()
+                .is_some_and(|s| s.origin == Screen::Home));
     if home_overlay
         || matches!(
             app.screen,
@@ -107,6 +118,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
             Screen::Settings => draw_settings_popup(frame, app),
             Screen::SelectingLanguage => draw_language_popup(frame, app),
             Screen::Help => draw_help_popup(frame, app),
+            Screen::Searching => search_popup::draw_search_popup(frame, app),
             _ => {}
         }
         return;
@@ -180,6 +192,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Screen::SavingTemplate => draw_save_template_popup(frame, app),
         Screen::SelectingLanguage => draw_language_popup(frame, app),
         Screen::Settings => draw_settings_popup(frame, app),
+        Screen::Searching => search_popup::draw_search_popup(frame, app),
         Screen::BulkAddEvaluations => draw_bulk_add_popup(frame, app),
         Screen::EnteringGlobalGrade => draw_global_grade_popup(frame, app),
         Screen::EditingAttendance => draw_attendance_popup(frame, app),

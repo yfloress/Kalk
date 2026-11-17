@@ -298,10 +298,7 @@ impl App {
         self.edit_on_min_one_eval_not_met = rules.on_min_one_eval_not_met;
         self.edit_round_before_weighting = rules.round_before_weighting;
         self.edit_weighted_evaluations = rules.weighted_evaluations;
-        self.edit_cap_final_grade = rules
-            .cap_final_grade
-            .map(format_grade)
-            .unwrap_or_default();
+        self.edit_cap_final_grade = rules.cap_final_grade.map(format_grade).unwrap_or_default();
 
         // Auto-expand advanced rules if any non-default rules are configured
         self.show_advanced_rules = has_custom_rules;

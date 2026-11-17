@@ -21,6 +21,10 @@ use super::Messages;
 
 /// Spanish messages.
 pub const ES: Messages = Messages {
+    search_title: "Buscar",
+    search_query: "Buscar nombres",
+    search_empty: "Sin coincidencias. Prueba con menos letras.",
+    search_open: "Buscar ramo o evaluación",
     // Panel titles
     courses: "Ramos",
     categories: "Categorías",
@@ -225,6 +229,8 @@ pub const ES: Messages = Messages {
     settings_nerd_fonts_desc: "Usar glifos Nerd Font (requiere fuente parcheada)",
     settings_language: "Idioma",
     settings_language_desc: "Elige el idioma de toda la interfaz de Kalk.",
+    settings_animations: "Transiciones",
+    settings_animations_desc: "Transiciones breves al abrir ventanas.",
     settings_mouse_scroll: "Rueda del Mouse",
     settings_mouse_scroll_desc: "Desplaza las listas con la rueda del mouse; la captura bloquea la selección de texto de la terminal.",
     enabled: "Activado",
@@ -278,7 +284,8 @@ pub const ES: Messages = Messages {
     import_step1_fullscreen: "Pantalla completa",
     import_step1_fullscreen_exit: "Atrás",
     import_step2_title: "Paso 2 de 3 — Pegar la respuesta de la IA",
-    import_step2_hint: "Pega aquí el JSON devuelto por la IA o arrastra un ramo compartido (Ctrl+V o clic derecho → pegar). Se tolera el formato con ``` ```.",
+    import_validate: "Revisar JSON",
+    import_step2_hint: "Pega JSON aquí o arrastra un archivo de ramo compartido. Puedes corregir errores antes de revisarlo.",
     import_step2_back: "Atrás",
     import_step3_title: "Paso 3 de 3 — Confirmar importación",
     import_step3_total_weight: "Peso total",
