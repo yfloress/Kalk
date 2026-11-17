@@ -74,6 +74,8 @@ impl App {
         let description = self.edit_description.trim().to_string();
 
         if name.is_empty() {
+            let msg = self.messages().name_required.to_string();
+            self.set_warning(msg);
             return;
         }
 
@@ -428,14 +430,17 @@ impl App {
         let count: usize = match self.edit_bulk_count.trim().parse() {
             Ok(n) if n > 0 => n,
             _ => {
-                self.screen = Screen::Main;
+                // Stay open so the count can be corrected; Esc still cancels.
+                let msg = self.messages().bulk_count_invalid.to_string();
+                self.set_warning(msg);
                 return;
             }
         };
 
         let base_name = self.edit_name.trim().to_string();
         if base_name.is_empty() {
-            self.screen = Screen::Main;
+            let msg = self.messages().name_required.to_string();
+            self.set_warning(msg);
             return;
         }
 
@@ -597,9 +602,52 @@ impl App {
     }
 
     /// Scroll the step-3 preview by `delta` lines.
+    ///
+    /// Clamped between 0 and the number of lines the renderer builds from the
+    /// parsed course, so scrolling past the end cannot show blank space. It is
+    /// a soft bound like the step-1 prompt: a name long enough to wrap adds
+    /// rendered rows this count does not see.
     pub fn import_scroll_preview(&mut self, delta: i32) {
-        let new = (self.import_preview_scroll as i32 + delta).max(0);
+        let max = self.import_preview_line_count() as i32;
+        let new = (self.import_preview_scroll as i32 + delta).clamp(0, max);
         self.import_preview_scroll = new as u16;
+    }
+
+    /// How many lines `draw_import_preview` (`ui/popups_import.rs`) builds
+    /// from the parsed course. Structural mirror of that renderer — keep the
+    /// two in sync if the preview layout changes.
+    fn import_preview_line_count(&self) -> usize {
+        let Some(course) = &self.import_parsed else {
+            return 0;
+        };
+        let mut lines = 1; // course name
+        if self.import_renamed_from.is_some() {
+            lines += 1;
+        }
+        lines += 1; // passing grade + credits header
+        lines += 1; // global exam line
+        if course.attendance.required_percent.is_some() {
+            lines += 1;
+        }
+        lines += 1; // weight summary
+        if (self.import_total_weight - 100.0).abs() >= 0.01 {
+            lines += 1;
+        }
+        lines += 1; // blank separator
+        for cat in &course.categories {
+            lines += 1; // category header
+            // Mirrors `minimum_rules`: one line per configured rule.
+            lines += usize::from(cat.rules.minimum_average.is_some());
+            lines += usize::from(cat.rules.minimum_per_evaluation.is_some());
+            lines += usize::from(!cat.rules.requires_categories.is_empty());
+            lines += usize::from(cat.rules.cap_final_grade.is_some());
+            lines += usize::from(cat.rules.minimum_one_eval.is_some());
+            lines += cat.evaluations.len();
+            if cat.evaluations.is_empty() {
+                lines += 1;
+            }
+        }
+        lines
     }
 
     /// Jump the step-1 prompt view back to the top.
@@ -691,6 +739,25 @@ impl App {
         let msg = self.messages().import_imported_ok.to_string();
         self.set_status(msg);
         self.screen = Screen::Main;
+    }
+
+    /// Save the imported course's structure as a user template, without
+    /// leaving the preview. The course itself stays pending for Enter.
+    pub fn import_preview_save_template(&mut self) {
+        let Some(course) = &self.import_parsed else {
+            return;
+        };
+        let template = course.to_template(course.name.clone(), String::new());
+        self.user_templates.push(template);
+
+        if persistence::save_user_templates(&self.user_templates).is_err() {
+            let msg = self.messages().save_template_error.to_string();
+            self.set_error(msg);
+            return;
+        }
+
+        let msg = self.messages().import_saved_template.to_string();
+        self.set_status(msg);
     }
 
     /// Cancel the wizard from any step.  Clears all wizard state and returns

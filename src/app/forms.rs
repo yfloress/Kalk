@@ -147,6 +147,8 @@ impl App {
             .clamp(MIN_GRADE, MAX_GRADE);
 
         if name.is_empty() {
+            let msg = self.messages().name_required.to_string();
+            self.set_warning(msg);
             return;
         }
 
@@ -296,6 +298,10 @@ impl App {
         self.edit_on_min_one_eval_not_met = rules.on_min_one_eval_not_met;
         self.edit_round_before_weighting = rules.round_before_weighting;
         self.edit_weighted_evaluations = rules.weighted_evaluations;
+        self.edit_cap_final_grade = rules
+            .cap_final_grade
+            .map(format_grade)
+            .unwrap_or_default();
 
         // Auto-expand advanced rules if any non-default rules are configured
         self.show_advanced_rules = has_custom_rules;
@@ -314,6 +320,7 @@ impl App {
         self.edit_on_min_one_eval_not_met = Default::default();
         self.edit_round_before_weighting = false;
         self.edit_weighted_evaluations = false;
+        self.edit_cap_final_grade.clear();
     }
 
     /// Build a `CategoryRules` from the current editing state.
@@ -373,6 +380,8 @@ impl App {
             .clamp(MIN_GRADE, MAX_GRADE);
 
         if name.is_empty() {
+            let msg = self.messages().name_required.to_string();
+            self.set_warning(msg);
             return;
         }
 
@@ -466,6 +475,8 @@ impl App {
         };
 
         if name.is_empty() {
+            let msg = self.messages().name_required.to_string();
+            self.set_warning(msg);
             return;
         }
 

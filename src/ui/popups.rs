@@ -356,8 +356,8 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
 
     let base_height: u16 = 8 + 2 + help_lines_needed + 5;
     let advanced_height: u16 = if show_advanced {
-        // Base: DropLowest + AvgMethod + MinAvg + MinPerEval + MinOneEval + RoundBeforeWeight + WeightedEvals = 7
-        let mut fields: u16 = 7;
+        // Base: DropLowest + AvgMethod + MinAvg + MinPerEval + MinOneEval + CapFinalGrade + RoundBeforeWeight + WeightedEvals = 8
+        let mut fields: u16 = 8;
         if show_on_min_avg_not_met {
             fields += 1;
         }
@@ -573,6 +573,14 @@ pub fn draw_category_popup(frame: &mut Frame, app: &App, is_new: bool) {
             );
             slot += 1;
         }
+        render_input_field(
+            frame,
+            m.cap_final_grade,
+            &app.edit_cap_final_grade,
+            app.input_field == InputField::CapFinalGrade,
+            inner[slot],
+        );
+        slot += 1;
         let round_label = if app.edit_round_before_weighting {
             m.yes
         } else {

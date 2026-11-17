@@ -513,11 +513,14 @@ fn draw_course_breakdown(frame: &mut Frame, app: &App, area: Rect) {
             .add_modifier(Modifier::BOLD),
     ))];
 
-    for course in app
-        .courses()
-        .iter()
-        .take(area.height.saturating_sub(1) as usize)
-    {
+    // One row for the header; if any course would be dropped, one more row
+    // for the "and N more" line, so the count is always visible.
+    let total = app.courses().len();
+    let mut visible = area.height.saturating_sub(1) as usize;
+    if total > visible {
+        visible = visible.saturating_sub(1);
+    }
+    for course in app.courses().iter().take(visible) {
         let color = outcome_color(course.outcome());
         let grade = course.final_grade();
         let filled = grade.map_or(0, |g| scale(g.round() as usize, MAX_GRADE as usize, bar_w));
@@ -558,6 +561,15 @@ fn draw_course_breakdown(frame: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(t.status_fail),
             ),
         ]));
+    }
+
+    // The breakdown is clipped to fit: say how many courses are missing,
+    // so a long semester does not silently hide rows.
+    if total > visible {
+        lines.push(Line::from(Span::styled(
+            format!("\u{2026} {} {}", total - visible, m.metric_more),
+            Style::default().fg(t.text_muted),
+        )));
     }
 
     frame.render_widget(Paragraph::new(lines), area);
@@ -666,8 +678,20 @@ fn draw_wordmark(frame: &mut Frame, app: &App, area: Rect) {
 
 fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
     // Home is where a session starts, so a load error must surface here.
-    if super::panels::draw_status_banner(frame, app, area) {
-        return;
+    // The banner gets a strip of its own so the keymap below it stays
+    // visible; too short for both, the banner keeps the whole area.
+    let mut target = area;
+    if app.status_message.is_some() {
+        match super::panels::status_and_footer_rows(area) {
+            Some((banner_area, footer_area)) => {
+                super::panels::draw_status_banner(frame, app, banner_area);
+                target = footer_area;
+            }
+            None => {
+                super::panels::draw_status_banner(frame, app, area);
+                return;
+            }
+        }
     }
 
     let m = app.messages();
@@ -699,7 +723,7 @@ fn draw_home_footer(frame: &mut Frame, app: &App, area: Rect) {
             .border_type(t.border_type)
             .border_style(Style::default().fg(t.footer_border)),
     );
-    frame.render_widget(footer, area);
+    frame.render_widget(footer, target);
 }
 
 // =============================================================================

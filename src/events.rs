@@ -102,6 +102,27 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             return Ok(app.should_quit);
         }
 
+        // Text-entry screens have no CONTROL shortcuts: without this guard,
+        // Ctrl+X would type an `x` into the focused field. Ctrl+R above is
+        // the one exception, and bracketed paste arrives as Event::Paste,
+        // not as a key.
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(
+                app.screen,
+                Screen::EditingCourse { .. }
+                    | Screen::EditingCategory { .. }
+                    | Screen::EditingEvaluation { .. }
+                    | Screen::EditingAttendance
+                    | Screen::SavingTemplate
+                    | Screen::BulkAddEvaluations
+                    | Screen::EnteringGlobalGrade
+                    | Screen::EditingSemester { .. }
+                    | Screen::ImportBackup
+            )
+        {
+            return Ok(app.should_quit);
+        }
+
         // ? toggles field help panel in category/course edit popup
         if key.code == KeyCode::Char('?')
             && matches!(
@@ -164,7 +185,10 @@ fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: 
         match key {
             KeyCode::Esc => cancel(app),
             KeyCode::Tab => app.next_input_field(),
-            KeyCode::Enter => confirm(app),
+            // Enter cycles the toggle, as the field help and the cycle
+            // function's own doc promise; confirm from any text field
+            // (every form's Tab cycle reaches one).
+            KeyCode::Enter => app.cycle_toggle_field(),
             KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.cycle_toggle_field(),
             KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
             _ => {}
@@ -513,6 +537,7 @@ fn handle_import_preview_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Esc => app.import_cancel(),
         KeyCode::Char('b') => app.import_back_to_paste(),
+        KeyCode::Char('t') => app.import_preview_save_template(),
         KeyCode::Enter => app.import_confirm(),
         KeyCode::Down | KeyCode::Char('j') => app.import_scroll_preview(1),
         KeyCode::Up | KeyCode::Char('k') => app.import_scroll_preview(-1),

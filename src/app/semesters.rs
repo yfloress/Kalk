@@ -110,6 +110,8 @@ impl App {
     pub fn confirm_semester(&mut self) {
         let name = self.edit_name.trim().to_string();
         if name.is_empty() {
+            let msg = self.messages().name_required.to_string();
+            self.set_warning(msg);
             return;
         }
 

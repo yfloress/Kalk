@@ -39,6 +39,7 @@ pub enum InputField {
     MinimumAverage,
     MinPerEval,
     MinOneEval,
+    CapFinalGrade,
     // Category rule toggle fields (cycled with Space/Enter, not typed)
     DropLowest,
     AvgMethod,
@@ -89,6 +90,7 @@ impl InputField {
                 | InputField::MinimumAverage
                 | InputField::MinPerEval
                 | InputField::MinOneEval
+                | InputField::CapFinalGrade
                 | InputField::ClassesTotal
                 | InputField::ClassesMissed
                 | InputField::AttendanceRequired
@@ -155,10 +157,13 @@ impl App {
                 if !self.edit_min_one_eval.trim().is_empty() {
                     InputField::OnMinOneEvalNotMet
                 } else {
-                    InputField::RoundBeforeWeight
+                    InputField::CapFinalGrade
                 }
             }
             (Screen::EditingCategory { .. }, InputField::OnMinOneEvalNotMet) => {
+                InputField::CapFinalGrade
+            }
+            (Screen::EditingCategory { .. }, InputField::CapFinalGrade) => {
                 InputField::RoundBeforeWeight
             }
             (Screen::EditingCategory { .. }, InputField::RoundBeforeWeight) => {
@@ -207,6 +212,7 @@ impl App {
             InputField::MinimumAverage => Some(&mut self.edit_min_average),
             InputField::MinPerEval => Some(&mut self.edit_min_per_eval),
             InputField::MinOneEval => Some(&mut self.edit_min_one_eval),
+            InputField::CapFinalGrade => Some(&mut self.edit_cap_final_grade),
             InputField::GlobalSemesterWeight => Some(&mut self.edit_global_semester_weight),
             InputField::GlobalExamWeight => Some(&mut self.edit_global_exam_weight),
             InputField::GlobalMinGrade => Some(&mut self.edit_global_min_grade),
