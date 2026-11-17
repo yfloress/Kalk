@@ -33,7 +33,7 @@ mod ui;
 use app::App;
 use color_eyre::eyre::Result;
 use crossterm::{
-    event::{DisableBracketedPaste, EnableBracketedPaste},
+    event::{DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -84,17 +84,44 @@ fn setup_terminal() -> Result<(Terminal<CrosstermBackend<io::Stdout>>, TerminalG
 /// Restore terminal to normal state.
 fn restore_terminal() -> Result<()> {
     disable_raw_mode()?;
-    execute!(stdout(), DisableBracketedPaste, LeaveAlternateScreen)?;
+    execute!(
+        stdout(),
+        DisableBracketedPaste,
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     Ok(())
 }
 
 /// Main application loop.
 fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App) -> Result<()> {
-    loop {
-        terminal.draw(|frame| ui::draw(frame, app))?;
+    // Mouse capture is opt-in (it takes over the terminal's own text
+    // selection) and follows the setting live: toggling it in the settings
+    // popup takes effect immediately, and it is always released on the way
+    // out by `restore_terminal`.
+    let mut captured = app.mouse_scroll;
+    if captured {
+        execute!(stdout(), EnableMouseCapture)?;
+    }
 
-        if events::handle_events(app)? {
+    let mut transitions = ui::Transitions::default();
+    loop {
+        terminal.draw(|frame| {
+            ui::draw(frame, app);
+            transitions.render(frame, app);
+        })?;
+
+        if events::handle_events(app, transitions.poll_interval())? {
             break;
+        }
+
+        if app.mouse_scroll != captured {
+            captured = app.mouse_scroll;
+            if captured {
+                execute!(stdout(), EnableMouseCapture)?;
+            } else {
+                execute!(stdout(), DisableMouseCapture)?;
+            }
         }
     }
 

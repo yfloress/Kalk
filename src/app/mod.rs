@@ -29,11 +29,14 @@ mod backup;
 mod forms;
 mod history;
 pub mod import;
+mod import_wizard;
 mod input;
+mod search;
 mod semesters;
 mod share;
 mod simulation;
 mod status;
+mod text_edit;
 mod welcome;
 
 pub use input::InputField;
@@ -124,6 +127,7 @@ pub enum Screen {
     EditingAttendance,
     /// Read a backup file from disk and confirm replacing the library with it.
     ImportBackup,
+    Searching,
 }
 
 // =============================================================================
@@ -152,6 +156,7 @@ pub struct App {
     /// Screen to return to when a full-screen overlay (help, language) closes.
     pub return_screen: Screen,
     pub should_quit: bool,
+    pub search: Option<search::SearchState>,
 
     /// Clipboard for yanked evaluation (name, grade, weight).
     pub clipboard_evaluation: Option<(String, Option<f64>, Option<f64>)>,
@@ -174,6 +179,7 @@ pub struct App {
 
     // Input state for forms
     pub input_field: InputField,
+    pub text_editor: text_edit::TextEditor,
     pub edit_name: String,
     pub edit_passing_grade: String,
     /// Optional course credits, empty string means "not declared".
@@ -223,6 +229,11 @@ pub struct App {
 
     /// Whether to use Nerd Font icons (persisted in config).
     pub use_nerd_fonts: bool,
+    /// Whether the mouse wheel scrolls lists (persisted in config). Mouse
+    /// capture takes over the terminal's own text selection, so this is off
+    /// by default.
+    pub mouse_scroll: bool,
+    pub animations: bool,
     /// False until the first-run wizard is finished; quitting midway keeps it
     /// false so the wizard comes back.
     pub configured: bool,
@@ -249,6 +260,7 @@ pub struct App {
     pub import_prompt_scroll: u16,
     /// Error message produced by the last paste attempt in step 2 (if any).
     pub import_paste_error: Option<String>,
+    pub import_editor: ratatui_textarea::TextArea<'static>,
     /// Course parsed from the AI response, ready to confirm in step 3.
     pub import_parsed: Option<Course>,
     /// Whether the parsed course was renamed because of a name collision
@@ -291,6 +303,7 @@ impl Default for App {
             screen: Screen::Main,
             return_screen: Screen::Main,
             should_quit: false,
+            search: None,
             clipboard_evaluation: None,
             status_message: None,
             status_severity: StatusSeverity::Info,
@@ -299,6 +312,7 @@ impl Default for App {
             redo_stack: Vec::new(),
             language,
             input_field: InputField::Name,
+            text_editor: Default::default(),
             edit_name: String::new(),
             edit_passing_grade: String::new(),
             edit_credits: String::new(),
@@ -330,6 +344,8 @@ impl Default for App {
             show_advanced_rules: false,
             show_field_help: false,
             use_nerd_fonts: true,
+            mouse_scroll: false,
+            animations: true,
             configured: true,
             selected_setting: 0,
             save_blocked: false,
@@ -338,6 +354,7 @@ impl Default for App {
             import_prompt_scroll: 0,
             import_preview_scroll: 0,
             import_paste_error: None,
+            import_editor: Default::default(),
             import_parsed: None,
             import_renamed_from: None,
             import_total_weight: 0.0,
@@ -361,6 +378,8 @@ impl App {
         let (config, config_warning) = persistence::load_config();
         let language = config.language;
         let use_nerd_fonts = config.use_nerd_fonts;
+        let mouse_scroll = config.mouse_scroll;
+        let animations = config.animations;
         let m = language.messages();
         let mut status_message: Option<String> = None;
         let mut status_severity = StatusSeverity::Info;
@@ -440,6 +459,8 @@ impl App {
             status_severity,
             language,
             use_nerd_fonts,
+            mouse_scroll,
+            animations,
             configured: config.configured,
             save_blocked,
             ..Default::default()
@@ -714,21 +735,20 @@ impl App {
         });
     }
 
+    /// Move to the next template in the list.  Clamped like the side panels:
+    /// at the end of the list the cursor stays put instead of wrapping.
     pub fn next_template(&mut self) {
         let count = self.selectable_templates_count();
         if count > 0 {
-            self.selected_template = (self.selected_template + 1) % count;
+            self.selected_template = (self.selected_template + 1).min(count - 1);
         }
     }
 
+    /// Move to the previous template in the list.
     pub fn previous_template(&mut self) {
         let count = self.selectable_templates_count();
         if count > 0 {
-            self.selected_template = if self.selected_template == 0 {
-                count - 1
-            } else {
-                self.selected_template - 1
-            };
+            self.selected_template = self.selected_template.saturating_sub(1);
         }
     }
 

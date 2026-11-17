@@ -48,6 +48,10 @@ impl Language {
 /// All translatable messages in the application.
 #[derive(Debug, Clone)]
 pub struct Messages {
+    pub search_title: &'static str,
+    pub search_query: &'static str,
+    pub search_empty: &'static str,
+    pub search_open: &'static str,
     // Panel titles
     pub courses: &'static str,
     pub categories: &'static str,
@@ -197,6 +201,7 @@ pub struct Messages {
     pub action_fail_course: &'static str,
     pub minimum_per_evaluation: &'static str,
     pub minimum_one_eval: &'static str,
+    pub cap_final_grade: &'static str,
     pub round_before_weighting: &'static str,
     pub weighted_evaluations: &'static str,
     pub eval_weight: &'static str,
@@ -213,6 +218,7 @@ pub struct Messages {
     pub help_on_min_not_met: &'static str,
     pub help_min_per_eval: &'static str,
     pub help_min_one_eval: &'static str,
+    pub help_cap_final_grade: &'static str,
     pub help_round_before_weighting: &'static str,
     pub help_weighted_evaluations: &'static str,
     pub help_passing_grade: &'static str,
@@ -251,6 +257,11 @@ pub struct Messages {
     pub settings_nerd_fonts: &'static str,
     pub settings_nerd_fonts_desc: &'static str,
     pub settings_language: &'static str,
+    pub settings_language_desc: &'static str,
+    pub settings_animations: &'static str,
+    pub settings_animations_desc: &'static str,
+    pub settings_mouse_scroll: &'static str,
+    pub settings_mouse_scroll_desc: &'static str,
     pub enabled: &'static str,
     pub disabled: &'static str,
     pub toggle: &'static str,
@@ -302,6 +313,7 @@ pub struct Messages {
     pub import_step1_fullscreen: &'static str,
     pub import_step1_fullscreen_exit: &'static str,
     pub import_step2_title: &'static str,
+    pub import_validate: &'static str,
     pub import_step2_hint: &'static str,
     pub import_step2_back: &'static str,
     pub import_step3_title: &'static str,
@@ -316,6 +328,7 @@ pub struct Messages {
     pub import_err_no_categories: &'static str,
     pub import_err_unsupported_scale: &'static str,
     pub import_imported_ok: &'static str,
+    pub import_saved_template: &'static str,
     pub import_copy_suffix: &'static str,
     pub import_renamed_to: &'static str,
     /// Full prompt template handed to the AI (raw multi-line string).
@@ -325,6 +338,8 @@ pub struct Messages {
     /// Prefix for auto-generated semester names ("Semester 1", "Semester 2").
     pub semester_name_prefix: &'static str,
     pub unsupported_scale: &'static str,
+    pub name_required: &'static str,
+    pub bulk_count_invalid: &'static str,
     pub import_requires_first: &'static str,
     pub attendance_title: &'static str,
     pub attendance_total: &'static str,
@@ -358,6 +373,7 @@ pub struct Messages {
     pub metric_in: &'static str,
     pub metric_in_each_open: &'static str,
     pub metric_lost: &'static str,
+    pub metric_more: &'static str,
     pub semester_manage: &'static str,
     pub home_open: &'static str,
     pub metric_status: &'static str,

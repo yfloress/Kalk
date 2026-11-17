@@ -23,13 +23,14 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Clear, Paragraph, Wrap},
 };
 
 use crate::app::App;
 
 use super::helpers::render_input_field;
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
 
 pub fn draw_import_backup_popup(frame: &mut Frame, app: &App) {
@@ -52,11 +53,8 @@ pub fn draw_import_backup_popup(frame: &mut Frame, app: &App) {
     } else {
         t.popup_border
     };
-    let block = Block::default()
-        .title(format!(" {} ", m.backup_import))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(border));
+    let block =
+        popup_block(format!(" {} ", m.backup_import)).border_style(Style::default().fg(border));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -71,6 +69,7 @@ pub fn draw_import_backup_popup(frame: &mut Frame, app: &App) {
 
     render_input_field(
         frame,
+        app,
         m.backup_path_label,
         &app.backup_path,
         app.backup_preview.is_none(),

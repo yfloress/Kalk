@@ -40,6 +40,14 @@ pub struct Config {
     /// only for a brand-new install, so a first run lands on the dashboard.
     #[serde(default)]
     pub start_on_home: bool,
+    /// Whether the mouse wheel scrolls list selection. Off by default: mouse
+    /// capture takes over the terminal's own text selection, so the feature
+    /// is opt-in.
+    #[serde(default)]
+    pub mouse_scroll: bool,
+    /// Optional popup transitions; missing values preserve the default.
+    #[serde(default = "configured_by_default")]
+    pub animations: bool,
     /// Semester open when the last session ended.
     #[serde(default)]
     pub last_semester: Option<Uuid>,
@@ -62,6 +70,8 @@ impl Default for Config {
             language: Language::English,
             use_nerd_fonts: true,
             start_on_home: true,
+            mouse_scroll: false,
+            animations: true,
             last_semester: None,
             configured: false,
         }
@@ -348,6 +358,20 @@ mod tests {
         let json = r#"{"language":"Spanish","use_nerd_fonts":true}"#;
         let cfg: Config = serde_json::from_str(json).unwrap();
         assert!(cfg.configured);
+        assert!(cfg.animations);
+        assert!(!cfg.mouse_scroll);
+    }
+
+    #[test]
+    fn animation_preference_round_trips_without_changing_the_data_schema() {
+        let config = Config {
+            animations: false,
+            ..Default::default()
+        };
+        let reloaded: Config =
+            serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+        assert!(!reloaded.animations);
+        assert_eq!(DATA_SCHEMA_VERSION, 2);
     }
 
     #[test]

@@ -21,25 +21,31 @@
 //! to the appropriate handlers based on the current screen.
 
 use crate::app::{App, Focus, Screen};
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind,
+};
 use std::time::Duration;
 
 /// Poll for events and handle them.
 /// Returns true if the application should quit.
-pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
-    if !event::poll(Duration::from_millis(100))? {
+pub fn handle_events(app: &mut App, timeout: Duration) -> color_eyre::Result<bool> {
+    if !event::poll(timeout)? {
         return Ok(app.should_quit);
     }
 
     match event::read()? {
         Event::Paste(s) => {
-            // Only step 2 of the import wizard consumes paste events.  Other
-            // screens silently ignore them so a stray paste doesn't clobber
-            // form fields.
-            if app.screen == Screen::ImportPaste {
+            // The import screens consume whole paste events (they parse
+            // multi-line JSON).  Everywhere else the first line goes into the
+            // focused form field, as if typed.
+            if app.screen == Screen::Searching {
+                app.search_paste(&s);
+            } else if app.screen == Screen::ImportPaste {
                 app.import_handle_paste(s);
             } else if app.screen == Screen::ImportBackup {
                 app.import_backup_paste(s);
+            } else {
+                app.paste_into_focused_field(&s);
             }
             Ok(app.should_quit)
         }
@@ -51,14 +57,46 @@ pub fn handle_events(app: &mut App) -> color_eyre::Result<bool> {
 
             handle_key_event(app, key)
         }
+        Event::Mouse(mouse) => handle_mouse_event(app, &mouse),
         _ => Ok(app.should_quit),
     }
+}
+
+/// Handle a mouse event.
+///
+/// Only the wheel is consumed, and only when the mouse-scroll setting is on:
+/// enabling capture stops the terminal's own text selection, so the feature
+/// is opt-in. The wheel maps to Up/Down key events fed through the regular
+/// dispatch, so every screen navigates exactly as it does with the keyboard
+/// — there is no per-screen mouse code to keep in sync.
+fn handle_mouse_event(app: &mut App, mouse: &MouseEvent) -> color_eyre::Result<bool> {
+    if !app.mouse_scroll {
+        return Ok(app.should_quit);
+    }
+    let code = match mouse.kind {
+        MouseEventKind::ScrollUp => KeyCode::Up,
+        MouseEventKind::ScrollDown => KeyCode::Down,
+        _ => return Ok(app.should_quit),
+    };
+    handle_key_event(app, KeyEvent::new(code, KeyModifiers::NONE))
 }
 
 /// Dispatch a key-press event to the correct handler based on the current
 /// screen.  Returns `Ok(true)` when the application should quit.
 fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyre::Result<bool> {
     {
+        if key.code == KeyCode::Char('/')
+            && !key
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+            && matches!(
+                app.screen,
+                Screen::Main | Screen::Home | Screen::SelectingTemplate
+            )
+        {
+            app.start_search();
+            return Ok(app.should_quit);
+        }
         // Global: Ctrl+Z / Ctrl+Y for undo / redo (Main screen only — popups
         // and forms have their own Esc-based cancel semantics).
         if app.screen == Screen::Main && key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -84,10 +122,10 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             return Ok(app.should_quit);
         }
 
-        // Global: Shift+S for settings (works from main screen)
+        // Global: Shift+S for settings (works from main screen and Home)
         if key.code == KeyCode::Char('S')
             && key.modifiers.contains(KeyModifiers::SHIFT)
-            && app.screen == Screen::Main
+            && matches!(app.screen, Screen::Main | Screen::Home)
         {
             app.show_settings();
             return Ok(app.should_quit);
@@ -99,6 +137,15 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             && matches!(app.screen, Screen::EditingCategory { .. })
         {
             app.toggle_advanced_rules();
+            return Ok(app.should_quit);
+        }
+
+        if key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+            && app.is_text_entry()
+        {
+            app.edit_focused_text(key);
             return Ok(app.should_quit);
         }
 
@@ -146,12 +193,25 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> color_eyr
             Screen::EnteringGlobalGrade => handle_global_grade_keys(app, key.code),
             Screen::Help => handle_help_keys(app, key.code),
             Screen::ImportPrompt => handle_import_prompt_keys(app, key.code),
-            Screen::ImportPaste => handle_import_paste_keys(app, key.code),
-            Screen::ImportPreview => handle_import_preview_keys(app, key.code),
+            Screen::ImportPaste => handle_import_paste_keys(app, key),
+            Screen::ImportPreview => handle_import_preview_keys(app, key.code)?,
             Screen::ImportBackup => handle_import_backup_keys(app, key.code),
+            Screen::Searching => handle_search_keys(app, key),
         }
     }
     Ok(app.should_quit)
+}
+
+fn handle_search_keys(app: &mut App, key: KeyEvent) {
+    match key.code {
+        KeyCode::Esc => app.cancel_search(),
+        KeyCode::Enter => app.confirm_search(),
+        KeyCode::Up => app.search_move(-1),
+        KeyCode::Down => app.search_move(1),
+        KeyCode::PageUp => app.search_move(-10),
+        KeyCode::PageDown => app.search_move(10),
+        _ => app.search_edit(key),
+    }
 }
 
 /// Shared form input handler (Esc, Tab, Enter, Backspace, Char).
@@ -163,8 +223,12 @@ fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: 
     if app.input_field.is_toggle() {
         match key {
             KeyCode::Esc => cancel(app),
-            KeyCode::Tab => app.next_input_field(),
-            KeyCode::Enter => confirm(app),
+            KeyCode::Tab | KeyCode::Down => app.next_input_field(),
+            KeyCode::BackTab | KeyCode::Up => app.previous_input_field(),
+            // Enter cycles the toggle, as the field help and the cycle
+            // function's own doc promise; confirm from any text field
+            // (every form's Tab cycle reaches one).
+            KeyCode::Enter => app.cycle_toggle_field(),
             KeyCode::Char(' ') | KeyCode::Right | KeyCode::Char('l') => app.cycle_toggle_field(),
             KeyCode::Left | KeyCode::Char('h') => app.cycle_toggle_field_reverse(),
             _ => {}
@@ -174,21 +238,10 @@ fn handle_form_keys(app: &mut App, key: KeyCode, confirm: fn(&mut App), cancel: 
 
     match key {
         KeyCode::Esc => cancel(app),
-        KeyCode::Tab => app.next_input_field(),
+        KeyCode::Tab | KeyCode::Down => app.next_input_field(),
+        KeyCode::BackTab | KeyCode::Up => app.previous_input_field(),
         KeyCode::Enter => confirm(app),
-        KeyCode::Backspace => {
-            if let Some(buffer) = app.current_input_buffer() {
-                buffer.pop();
-            }
-        }
-        KeyCode::Char(c) => {
-            let accepted =
-                !app.input_field.is_numeric() || c.is_ascii_digit() || c == '.' || c == ',';
-            if accepted && let Some(buffer) = app.current_input_buffer() {
-                buffer.push(c);
-            }
-        }
-        _ => {}
+        _ => app.edit_focused_text(KeyEvent::new(key, KeyModifiers::NONE)),
     }
 }
 
@@ -411,28 +464,14 @@ fn handle_bulk_add_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Esc => app.cancel_bulk_add(),
         KeyCode::Enter => app.confirm_bulk_add(),
-        KeyCode::Tab => {
+        KeyCode::Tab | KeyCode::BackTab => {
             app.input_field = if on_name {
                 InputField::Grade // reuse Grade as the "count" field
             } else {
                 InputField::Name
             };
         }
-        KeyCode::Backspace => {
-            if on_name {
-                app.edit_name.pop();
-            } else {
-                app.edit_bulk_count.pop();
-            }
-        }
-        KeyCode::Char(c) => {
-            if on_name {
-                app.edit_name.push(c);
-            } else if c.is_ascii_digit() {
-                app.edit_bulk_count.push(c);
-            }
-        }
-        _ => {}
+        _ => app.edit_focused_text(KeyEvent::new(key, KeyModifiers::NONE)),
     }
 }
 
@@ -451,13 +490,7 @@ fn handle_global_grade_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Esc => app.cancel_global_grade(),
         KeyCode::Enter => app.confirm_global_grade(),
-        KeyCode::Backspace => {
-            app.edit_global_grade.pop();
-        }
-        KeyCode::Char(c) if c.is_ascii_digit() || c == '.' || c == ',' => {
-            app.edit_global_grade.push(c);
-        }
-        _ => {}
+        _ => app.edit_focused_text(KeyEvent::new(key, KeyModifiers::NONE)),
     }
 }
 
@@ -500,26 +533,36 @@ fn handle_import_prompt_keys(app: &mut App, key: KeyCode) {
 /// Step 2 of the AI import wizard — waits for a paste event.  Pure key events
 /// only support going back or cancelling; the actual paste content is fed in
 /// via [`App::import_handle_paste`] from the [`Event::Paste`] branch.
-fn handle_import_paste_keys(app: &mut App, key: KeyCode) {
-    match key {
+fn handle_import_paste_keys(app: &mut App, key: KeyEvent) {
+    match key.code {
         KeyCode::Esc => app.import_cancel(),
-        KeyCode::Char('b') => app.import_back_to_prompt(),
-        _ => {}
+        KeyCode::F(2) => app.import_validate_editor(),
+        KeyCode::F(3) => app.import_back_to_prompt(),
+        _ => app.import_edit_json(key),
     }
 }
 
 /// Step 3 of the AI import wizard — preview and confirm/back/cancel.
-fn handle_import_preview_keys(app: &mut App, key: KeyCode) {
+fn handle_import_preview_keys(app: &mut App, key: KeyCode) -> color_eyre::Result<()> {
     match key {
         KeyCode::Esc => app.import_cancel(),
         KeyCode::Char('b') => app.import_back_to_paste(),
+        KeyCode::Char('t') => app.import_preview_save_template(),
         KeyCode::Enter => app.import_confirm(),
-        KeyCode::Down | KeyCode::Char('j') => app.import_scroll_preview(1),
-        KeyCode::Up | KeyCode::Char('k') => app.import_scroll_preview(-1),
-        KeyCode::PageDown => app.import_scroll_preview(10),
-        KeyCode::PageUp => app.import_scroll_preview(-10),
+        KeyCode::Down | KeyCode::Char('j') => scroll_import_preview(app, 1)?,
+        KeyCode::Up | KeyCode::Char('k') => scroll_import_preview(app, -1)?,
+        KeyCode::PageDown => scroll_import_preview(app, 10)?,
+        KeyCode::PageUp => scroll_import_preview(app, -10)?,
         _ => {}
     }
+    Ok(())
+}
+
+fn scroll_import_preview(app: &mut App, delta: i32) -> color_eyre::Result<()> {
+    let (width, height) = crossterm::terminal::size()?;
+    let max_scroll = crate::ui::import_preview_max_scroll(app, width, height);
+    app.import_scroll_preview(delta, max_scroll);
+    Ok(())
 }
 
 /// Home screen: semester list plus the dashboard.
@@ -554,9 +597,7 @@ fn handle_import_backup_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Esc => app.cancel_import_backup(),
         KeyCode::Enter => app.confirm_import_backup(),
-        KeyCode::Backspace => app.import_backup_backspace(),
-        KeyCode::Char(c) => app.import_backup_type(c),
-        _ => {}
+        _ => app.edit_focused_text(KeyEvent::new(key, KeyModifiers::NONE)),
     }
 }
 
@@ -565,11 +606,7 @@ fn handle_edit_semester_keys(app: &mut App, key: KeyCode) {
     match key {
         KeyCode::Esc => app.show_home(),
         KeyCode::Enter => app.confirm_semester(),
-        KeyCode::Backspace => {
-            app.edit_name.pop();
-        }
-        KeyCode::Char(c) => app.edit_name.push(c),
-        _ => {}
+        _ => app.edit_focused_text(KeyEvent::new(key, KeyModifiers::NONE)),
     }
 }
 
@@ -608,3 +645,7 @@ fn handle_welcome_fonts_keys(app: &mut App, key: KeyCode) {
 fn handle_attendance_keys(app: &mut App, key: KeyCode) {
     handle_form_keys(app, key, App::confirm_attendance, App::cancel_edit);
 }
+
+#[cfg(test)]
+#[path = "events_tests.rs"]
+mod tests;

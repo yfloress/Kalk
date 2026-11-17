@@ -34,6 +34,7 @@ use ratatui::widgets::BorderType;
 /// alternating "zebra" rows in the evaluations table.  Distinct enough to
 /// be perceptible but far softer than a regular Catppuccin surface.
 const ZEBRA: Color = Color::Rgb(0x2a, 0x2b, 0x3c);
+const CRUST: Color = Color::Rgb(0x11, 0x11, 0x1b);
 const SURFACE1: Color = Color::Rgb(0x45, 0x47, 0x5a);
 const SURFACE2: Color = Color::Rgb(0x58, 0x5b, 0x70);
 const OVERLAY0: Color = Color::Rgb(0x6c, 0x70, 0x86);
@@ -107,6 +108,10 @@ pub struct Theme {
     pub footer_border: Color,
 
     // -- Popup specific ---------------------------------------------------
+    /// Dialog background; the terminal's own, the border and shadow set it apart.
+    pub popup_bg: Color,
+    /// Shadow behind floating dialogs.
+    pub shadow_bg: Color,
     /// Border colour for popup dialogs.
     pub popup_border: Color,
     /// Border colour for delete/destructive confirmation popups.
@@ -165,6 +170,8 @@ pub const DEFAULT_THEME: Theme = Theme {
     footer_border: SURFACE1,
 
     // Popups — Lavender border, Red for danger, Surface 1 separators
+    popup_bg: Color::Reset,
+    shadow_bg: CRUST,
     popup_border: LAVENDER,
     popup_border_danger: RED,
     popup_separator: SURFACE1,
@@ -211,6 +218,8 @@ impl Theme {
             footer_desc: indexed(self.footer_desc),
             footer_border: indexed(self.footer_border),
             popup_border: indexed(self.popup_border),
+            popup_bg: indexed(self.popup_bg),
+            shadow_bg: indexed(self.shadow_bg),
             popup_border_danger: indexed(self.popup_border_danger),
             popup_separator: indexed(self.popup_separator),
             weight_label: indexed(self.weight_label),

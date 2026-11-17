@@ -22,12 +22,13 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Clear, Paragraph, Wrap},
 };
 
 use crate::app::App;
 
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
 
 /// Render the global keyboard cheat-sheet overlay.
@@ -45,11 +46,7 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
     let area = Rect::new(x, y, popup_w, popup_h);
 
     frame.render_widget(Clear, area);
-    let block = Block::default()
-        .title(format!(" {} ", m.help_title))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(format!(" {} ", m.help_title));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -78,6 +75,7 @@ pub fn draw_help_popup(frame: &mut Frame, app: &App) {
         group(m.help_group_global),
         row("q", m.quit),
         row("?", m.help_open),
+        row("/", m.search_open),
         row("Esc", m.help_close_popup),
         blank(),
         group(m.semesters),

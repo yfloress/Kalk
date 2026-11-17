@@ -32,6 +32,8 @@ impl App {
         persistence::Config {
             language: self.language,
             use_nerd_fonts: self.use_nerd_fonts,
+            mouse_scroll: self.mouse_scroll,
+            animations: self.animations,
             start_on_home: self.screen == Screen::Home,
             configured: self.configured,
             last_semester: self.semesters.get(self.selected_semester).map(|s| s.id),
@@ -110,6 +112,8 @@ impl App {
     pub fn confirm_semester(&mut self) {
         let name = self.edit_name.trim().to_string();
         if name.is_empty() {
+            let msg = self.messages().name_required.to_string();
+            self.set_warning(msg);
             return;
         }
 

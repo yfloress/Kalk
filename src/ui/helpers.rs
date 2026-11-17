@@ -43,16 +43,54 @@ fn trunc_1dp(v: f64) -> f64 {
 pub(crate) fn fmt_grade(v: f64) -> String {
     format!("{:.1}", trunc_1dp(v))
 }
+
+// =============================================================================
+// Scrollbars
+// =============================================================================
+
+/// Draw a thin scrollbar along `area`'s right border when the content
+/// outgrows the viewport.
+///
+/// The three sizes must share one unit — items for single-line lists,
+/// rendered rows for multi-line ones — and `position` is the first visible
+/// unit (the list or table state's `offset()` after rendering). A no-op when
+/// everything fits, so short lists keep a clean border; otherwise the muted
+/// track blends into the right border and only the thumb stands out.
+pub(crate) fn draw_scrollbar(
+    frame: &mut Frame,
+    area: Rect,
+    content_len: usize,
+    visible_len: usize,
+    position: usize,
+) {
+    if area.is_empty() || visible_len == 0 || content_len <= visible_len {
+        return;
+    }
+    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+        .begin_symbol(None)
+        .end_symbol(None)
+        .style(Style::default().fg(theme().text_muted));
+    // Ratatui expects the number of possible offsets, including zero.
+    let max_offset = content_len - visible_len;
+    let mut state = ScrollbarState::new(max_offset + 1)
+        .position(position.min(max_offset))
+        .viewport_content_length(visible_len);
+    frame.render_stateful_widget(scrollbar, area, &mut state);
+}
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap},
+    widgets::{
+        Block, Borders, Clear, Padding, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Wrap,
+    },
 };
 
 use super::icons::icons;
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
 
 // =============================================================================
@@ -105,10 +143,7 @@ pub fn render_delete_confirmation(
     let area = Rect::new(x, y, popup_w, popup_h);
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(title_str)
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
+    let block = popup_block(title_str)
         .border_style(Style::default().fg(t.popup_border_danger))
         // Uniform breathing room: 2 cols each side, 1 row on top.
         .padding(Padding::new(2, 2, 1, 0));
@@ -208,72 +243,84 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-/// Render a single-line text input field with a label border.
-/// When `is_active` the field is highlighted and a cursor pipe is appended.
+/// Render a text field with tui-input's Unicode-aware horizontal viewport.
 pub fn render_input_field(
     frame: &mut Frame,
+    app: &App,
     label: &str,
     value: &str,
     is_active: bool,
     area: Rect,
 ) {
-    let t = theme();
-    let style = if is_active {
-        Style::default().fg(t.input_active)
-    } else {
-        Style::default().fg(t.input_inactive)
-    };
-
-    // Show cursor indicator when active
-    let display_value = if is_active {
-        format!("{}|", value)
-    } else {
-        value.to_string()
-    };
-
-    let input = Paragraph::new(display_value).style(style).block(
-        Block::default()
-            .title(label)
-            .borders(Borders::ALL)
-            .border_type(t.border_type)
-            .border_style(style),
-    );
-
-    frame.render_widget(input, area);
+    let (widget, cursor) = input_widget(app, label, value, is_active, area.width);
+    frame.render_widget(widget, area);
+    if is_active && area.width > 2 && area.height >= 3 {
+        frame.set_cursor_position((area.x + 1 + cursor, area.y + 1));
+    }
 }
 
-/// Render a toggle field that cycles values with Space/Enter instead of text
-/// input.  Shows the current value in angle brackets when active (`< val >`)
-/// or square brackets when inactive (`[val]`).
-pub fn render_toggle_field(
-    frame: &mut Frame,
-    label: &str,
-    current_value: &str,
-    is_active: bool,
-    area: Rect,
-) {
+pub(super) fn input_widget<'a>(
+    app: &App,
+    label: &'a str,
+    value: &str,
+    active: bool,
+    width: u16,
+) -> (Paragraph<'a>, u16) {
     let t = theme();
-    let style = if is_active {
-        Style::default().fg(t.input_active)
+    let input = app.form_input(value);
+    let visible = width.saturating_sub(2).max(1);
+    let scroll = if active {
+        input.visual_scroll(visible as usize)
     } else {
-        Style::default().fg(t.input_inactive)
+        0
     };
-
-    let display = if is_active {
-        format!("< {} >", current_value)
+    let cursor = input
+        .visual_cursor()
+        .saturating_sub(scroll)
+        .min(visible as usize - 1) as u16;
+    let border = if active {
+        t.input_active
     } else {
-        format!("[{}]", current_value)
+        t.input_inactive
     };
+    let widget = Paragraph::new(value.to_string())
+        .style(Style::default().fg(t.text_primary))
+        .scroll((0, scroll.min(u16::MAX as usize) as u16))
+        .block(
+            Block::default()
+                .title(label)
+                .borders(Borders::ALL)
+                .border_type(t.border_type)
+                .border_style(Style::default().fg(border)),
+        );
+    (widget, cursor)
+}
 
-    let widget = Paragraph::new(display).style(style).block(
+pub(super) fn toggle_widget<'a>(label: &'a str, value: &str, active: bool) -> Paragraph<'a> {
+    let t = theme();
+    let border = if active {
+        t.input_active
+    } else {
+        t.input_inactive
+    };
+    Paragraph::new(if active {
+        format!("< {value} >")
+    } else {
+        format!("[{value}]")
+    })
+    .style(Style::default().fg(t.text_primary))
+    .block(
         Block::default()
             .title(label)
             .borders(Borders::ALL)
             .border_type(t.border_type)
-            .border_style(style),
-    );
+            .border_style(Style::default().fg(border)),
+    )
+}
 
-    frame.render_widget(widget, area);
+/// Toggle controls keep their existing keyboard semantics.
+pub fn render_toggle_field(frame: &mut Frame, label: &str, value: &str, active: bool, area: Rect) {
+    frame.render_widget(toggle_widget(label, value, active), area);
 }
 
 // =============================================================================
@@ -293,6 +340,7 @@ pub fn contextual_field_help(app: &App, m: &Messages) -> String {
         InputField::OnMinPerEvalNotMet => m.help_on_min_not_met.to_string(),
         InputField::MinOneEval => m.help_min_one_eval.to_string(),
         InputField::OnMinOneEvalNotMet => m.help_on_min_not_met.to_string(),
+        InputField::CapFinalGrade => m.help_cap_final_grade.to_string(),
         InputField::RoundBeforeWeight => m.help_round_before_weighting.to_string(),
         InputField::WeightedEvals => m.help_weighted_evaluations.to_string(),
         InputField::PassingGrade => m.help_passing_grade.to_string(),
@@ -374,6 +422,11 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
         ]),
         Line::from(""),
         Line::from(vec![
+            Span::styled(format!("{}: ", m.cap_final_grade), label_style),
+            Span::styled(m.help_cap_final_grade, desc_style),
+        ]),
+        Line::from(""),
+        Line::from(vec![
             Span::styled(format!("{}: ", m.round_before_weighting), label_style),
             Span::styled(m.help_round_before_weighting, desc_style),
         ]),
@@ -384,17 +437,17 @@ pub fn draw_category_help_overlay(frame: &mut Frame, m: &Messages) {
         ]),
     ];
 
-    let block = Block::default()
-        .title(format!(" {} ", m.help_toggle))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
+    let block = popup_block(format!(" {} ", m.help_toggle))
         .border_style(Style::default().fg(t.status_info));
 
-    let paragraph = Paragraph::new(help_lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let rows = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(inner);
+    frame.render_widget(
+        Paragraph::new(help_lines).wrap(Wrap { trim: true }),
+        rows[0],
+    );
+    render_hint(frame, &[("?", m.help_toggle)], rows[1]);
 }
 
 /// Draw a full-screen help overlay explaining every course field.
@@ -450,17 +503,17 @@ pub fn draw_course_help_overlay(frame: &mut Frame, m: &Messages) {
         ]),
     ];
 
-    let block = Block::default()
-        .title(format!(" {} ", m.help_toggle))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
+    let block = popup_block(format!(" {} ", m.help_toggle))
         .border_style(Style::default().fg(t.status_info));
 
-    let paragraph = Paragraph::new(help_lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let rows = Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(inner);
+    frame.render_widget(
+        Paragraph::new(help_lines).wrap(Wrap { trim: true }),
+        rows[0],
+    );
+    render_hint(frame, &[("?", m.help_toggle)], rows[1]);
 }
 
 // =============================================================================

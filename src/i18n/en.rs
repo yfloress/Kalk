@@ -21,6 +21,10 @@ use super::Messages;
 
 /// English messages.
 pub const EN: Messages = Messages {
+    search_title: "Find",
+    search_query: "Search names",
+    search_empty: "No matches. Try fewer letters.",
+    search_open: "Find course or evaluation",
     // Panel titles
     courses: "Courses",
     categories: "Categories",
@@ -168,6 +172,7 @@ pub const EN: Messages = Messages {
     action_fail_course: "Fail Course",
     minimum_per_evaluation: "Min. Per Eval",
     minimum_one_eval: "Min. One Eval ≥",
+    cap_final_grade: "Final Grade Cap",
     round_before_weighting: "Round Category",
     weighted_evaluations: "Weighted Evals",
     eval_weight: "Eval Weight %",
@@ -184,6 +189,7 @@ pub const EN: Messages = Messages {
     help_minimum_average: "Minimum average required in this category (e.g. 55). Leave empty for none.",
     help_min_per_eval: "Minimum grade required on each individual evaluation. Leave empty for none.",
     help_min_one_eval: "At least one graded evaluation must reach this grade (e.g. 50). If none does, the 'If Not Met' action triggers. Leave empty for none.",
+    help_cap_final_grade: "Ceiling the course's final grade cannot exceed. Applied when an 'If Not Met' action is 'Caps the final grade'. Leave empty for none.",
     help_round_before_weighting: "Round the category average before applying weight. Useful when the university rounds per category.",
     help_weighted_evaluations: "When enabled, each evaluation has its own weight (must sum to 100%). Useful when a category has sub-components with different weights (e.g. report 40%, presentation 60%).",
     help_passing_grade: "Minimum grade to pass the course (0-100). Default is 55. Grades are rounded: 54.5 rounds up to 55 (pass).",
@@ -222,6 +228,11 @@ pub const EN: Messages = Messages {
     settings_nerd_fonts: "Nerd Font Icons",
     settings_nerd_fonts_desc: "Use Nerd Font glyphs (requires a patched font)",
     settings_language: "Language",
+    settings_language_desc: "Choose the language used throughout Kalk.",
+    settings_animations: "Transitions",
+    settings_animations_desc: "Brief transitions when opening dialogs.",
+    settings_mouse_scroll: "Mouse Wheel Scroll",
+    settings_mouse_scroll_desc: "Scroll lists with the mouse wheel; capture blocks the terminal's own text selection.",
     enabled: "Enabled",
     disabled: "Disabled",
     toggle: "Toggle",
@@ -273,7 +284,8 @@ pub const EN: Messages = Messages {
     import_step1_fullscreen: "Fullscreen",
     import_step1_fullscreen_exit: "Back",
     import_step2_title: "Step 2 of 3 — Paste the AI response",
-    import_step2_hint: "Paste here the JSON returned by the AI, or drag in a shared course (Ctrl+V or right-click paste). Code fences are tolerated.",
+    import_validate: "Preview JSON",
+    import_step2_hint: "Paste JSON here or drop a shared course file. You can edit errors before previewing.",
     import_step2_back: "Back",
     import_step3_title: "Step 3 of 3 — Confirm import",
     import_step3_total_weight: "Total weight",
@@ -287,6 +299,7 @@ pub const EN: Messages = Messages {
     import_err_no_categories: "At least one category is required",
     import_err_unsupported_scale: "Kalk only works on a 0-100 scale; ask the AI to convert the grades. Passing grade received",
     import_imported_ok: "Course imported",
+    import_saved_template: "Saved as a user template",
     import_copy_suffix: "copy",
     import_renamed_to: "Renamed to",
     import_prompt: r#"You are helping a student import a course syllabus into Kalk (a TUI grade tracker).
@@ -427,6 +440,8 @@ next to an action that names it:
     // Semesters
     semester_name_prefix: "Semester",
     unsupported_scale: "Kalk only supports the 0-100 scale for now. Convert your grades (1-7: (g-1)/6*100).",
+    name_required: "The name cannot be empty.",
+    bulk_count_invalid: "Enter a count of 1 or more.",
     import_requires_first: "Requires other categories first",
     attendance_title: "Attendance",
     attendance_total: "Classes held",
@@ -460,6 +475,7 @@ next to an action that names it:
     metric_in: "in",
     metric_in_each_open: "in each pending one",
     metric_lost: "lost",
+    metric_more: "more",
     semester_manage: "New / Rename / Delete",
     home_open: "Home",
     metric_status: "Status",

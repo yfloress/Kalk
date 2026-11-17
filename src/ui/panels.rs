@@ -20,7 +20,7 @@
 //! Contains `draw_evaluations_panel` and `draw_footer`, split out from
 //! `ui/mod.rs` to keep file sizes under the ~600-line guideline.
 
-use super::helpers::{fmt_grade, focused_border_style};
+use super::helpers::{draw_scrollbar, fmt_grade, focused_border_style};
 use super::icons::icons;
 use super::keyhints::styled_keybindings;
 use super::theme::theme;
@@ -31,7 +31,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
 };
 
 // =============================================================================
@@ -339,7 +339,20 @@ pub fn draw_evaluations_panel(frame: &mut Frame, app: &App, area: Rect) {
             .border_style(border_style),
     );
 
-    frame.render_widget(table, chunks[1]);
+    // Stateful rendering keeps the selected evaluation inside the viewport
+    // when there are more rows than the panel can show. The per-row styles
+    // above still own the highlight look; the state only tracks the offset.
+    let mut table_state = TableState::default().with_selected(app.selected_evaluation);
+    frame.render_stateful_widget(table, chunks[1], &mut table_state);
+    // The header row and the two borders are not scrollable content, so they
+    // leave the viewport when the scrollbar sizes its thumb.
+    draw_scrollbar(
+        frame,
+        chunks[1],
+        category.evaluations.len(),
+        chunks[1].height.saturating_sub(3) as usize,
+        table_state.offset(),
+    );
 }
 
 // =============================================================================
@@ -509,16 +522,15 @@ fn draw_virtual_global_panel(frame: &mut Frame, app: &App, area: Rect) {
 // Footer
 // =============================================================================
 
-/// Show the pending status message in place of the footer. Returns whether
-/// there was one, so the caller knows to skip its keybinding row.
+/// Show the pending status message in the given area.
 ///
 /// Colour is driven by `status_severity` so the banner works correctly in
 /// every supported language (a string-prefix check like `starts_with("Error")`
 /// would not match localised messages such as "Advertencia").
-pub(super) fn draw_status_banner(frame: &mut Frame, app: &App, area: Rect) -> bool {
+pub(super) fn draw_status_banner(frame: &mut Frame, app: &App, area: Rect) {
     let t = theme();
     let Some(ref status) = app.status_message else {
-        return false;
+        return;
     };
     let color = match app.status_severity {
         crate::app::StatusSeverity::Error => t.status_fail,
@@ -535,7 +547,46 @@ pub(super) fn draw_status_banner(frame: &mut Frame, app: &App, area: Rect) -> bo
                 .border_style(Style::default().fg(color)),
         );
     frame.render_widget(footer, area);
-    true
+}
+
+/// Reserve a bordered row for the footer, plus another for a pending status.
+pub(super) fn footer_height(app: &App, area: Rect) -> u16 {
+    // Leave at least three rows for the main content.
+    if app.status_message.is_some() && area.height >= 9 {
+        6
+    } else {
+        3
+    }
+}
+
+/// Split `area` into a status strip and a keybinding row, or `None` when the
+/// terminal is too short to show both at once.
+pub(super) fn status_and_footer_rows(area: Rect) -> Option<(Rect, Rect)> {
+    if area.height < 6 {
+        return None;
+    }
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(3)])
+        .split(area);
+    Some((rows[0], rows[1]))
+}
+
+/// Bordered block around a keybinding row, with the simulation badge.
+fn render_keybinding_footer<'a>(
+    frame: &mut Frame,
+    line: Line<'a>,
+    badge: Option<Span<'a>>,
+    area: Rect,
+) {
+    let t = theme();
+    let footer = Paragraph::new(with_badge(line, badge)).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(t.border_type)
+            .border_style(Style::default().fg(t.footer_border)),
+    );
+    frame.render_widget(footer, area);
 }
 
 /// The "what if" badge that leads the footer while a simulation runs, so it
@@ -577,10 +628,6 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         m.simulation_start
     };
 
-    if draw_status_banner(frame, app, area) {
-        return;
-    }
-
     let line: Line = match &app.screen {
         Screen::Main => match app.focus {
             // Minimal footer: only the most common actions per focus.
@@ -595,6 +642,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("Enter", m.edit),
                     ("d", m.delete),
                     ("s", simulate),
+                    ("/", m.search_title),
                     ("?", m.help_open),
                 ],
                 t,
@@ -607,6 +655,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("n", m.new_category),
                     ("Enter", m.edit),
                     ("d", m.delete),
+                    ("/", m.search_title),
                     ("?", m.help_open),
                 ],
                 t,
@@ -621,6 +670,7 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                     ("d", m.delete),
                     ("y", m.yank),
                     ("p", m.paste),
+                    ("/", m.search_title),
                     ("?", m.help_open),
                 ],
                 t,
@@ -750,8 +800,21 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
             t,
             available_width,
         ),
+        Screen::Searching => styled_keybindings(
+            &[
+                ("↑↓", m.help_move_updown),
+                ("Enter", m.confirm),
+                ("Esc", m.cancel),
+            ],
+            t,
+            available_width,
+        ),
         Screen::ImportPaste => styled_keybindings(
-            &[("Ctrl+V", m.paste), ("b/Esc", m.cancel)],
+            &[
+                ("F2", m.import_validate),
+                ("F3", m.import_step2_back),
+                ("Esc", m.cancel),
+            ],
             t,
             available_width,
         ),
@@ -762,12 +825,19 @@ pub fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         ),
     };
 
-    let footer = Paragraph::new(with_badge(line, badge)).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_type(t.border_type)
-            .border_style(Style::default().fg(t.footer_border)),
-    );
+    // A status message takes a strip of its own above the keybinding row, so
+    // the keymap stays readable while the message is on screen. When the
+    // terminal cannot fit both, the banner keeps the whole area.
+    if app.status_message.is_some() {
+        match status_and_footer_rows(area) {
+            Some((banner_area, footer_area)) => {
+                draw_status_banner(frame, app, banner_area);
+                render_keybinding_footer(frame, line, badge, footer_area);
+            }
+            None => draw_status_banner(frame, app, area),
+        }
+        return;
+    }
 
-    frame.render_widget(footer, area);
+    render_keybinding_footer(frame, line, badge, area);
 }

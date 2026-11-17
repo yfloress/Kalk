@@ -22,6 +22,7 @@ use super::helpers::{
 };
 use super::icons::icons;
 use super::keyhints::render_hint;
+use super::surfaces::popup_block;
 use super::theme::theme;
 use crate::app::{App, InputField};
 use crate::model::{GlobalExamPolicy, NeededGradeStatus, WeightValidation};
@@ -50,11 +51,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     } else {
         format!(" {} ", m.edit_evaluation)
     };
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(title);
     frame.render_widget(block, area);
 
     let mut constraints = vec![
@@ -81,6 +78,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Grade field FIRST
     render_input_field(
         frame,
+        app,
         m.grade,
         &app.edit_grade,
         app.input_field == InputField::Grade,
@@ -92,6 +90,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     // Name field second
     render_input_field(
         frame,
+        app,
         m.name,
         &app.edit_name,
         app.input_field == InputField::Name,
@@ -104,6 +103,7 @@ pub fn draw_evaluation_popup(frame: &mut Frame, app: &App, is_new: bool) {
     if has_weighted {
         render_input_field(
             frame,
+            app,
             m.eval_weight,
             &app.edit_eval_weight,
             app.input_field == InputField::EvalWeight,
@@ -189,11 +189,7 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
     let area = centered_rect(50, 20, frame.area());
     frame.render_widget(Clear, area);
 
-    let block = Block::default()
-        .title(format!(" {}{} ", ic.grade, m.global_exam))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(format!(" {}{} ", ic.grade, m.global_exam));
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -262,6 +258,7 @@ pub fn draw_global_grade_popup(frame: &mut Frame, app: &App) {
 
     render_input_field(
         frame,
+        app,
         m.global_grade,
         &app.edit_global_grade,
         true,
@@ -287,11 +284,7 @@ pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
     let y = term.y + term.height.saturating_sub(popup_h) / 2;
     let area = Rect::new(x, y, popup_w.min(term.width), popup_h.min(term.height));
     frame.render_widget(Clear, area);
-    let block = Block::default()
-        .title(format!(" {} ", m.bulk_add_title))
-        .borders(Borders::ALL)
-        .border_type(t.border_type)
-        .border_style(Style::default().fg(t.popup_border));
+    let block = popup_block(format!(" {} ", m.bulk_add_title));
     frame.render_widget(block, area);
     let inner = Layout::default()
         .direction(Direction::Vertical)
@@ -308,9 +301,10 @@ pub fn draw_bulk_add_popup(frame: &mut Frame, app: &App) {
         ])
         .split(area);
     let on_name = app.input_field == InputField::Name;
-    render_input_field(frame, m.name, &app.edit_name, on_name, inner[0]);
+    render_input_field(frame, app, m.name, &app.edit_name, on_name, inner[0]);
     render_input_field(
         frame,
+        app,
         m.bulk_add_count,
         &app.edit_bulk_count,
         !on_name,
